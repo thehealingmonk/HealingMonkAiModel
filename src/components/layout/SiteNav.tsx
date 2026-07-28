@@ -8,6 +8,7 @@ const LINKS = [
   { to: '/technology', label: 'Technology' },
   { to: '/assessments', label: 'Assessments' },
   { to: '/how-it-works', label: 'How it works' },
+  { to: '/pricing', label: 'Pricing' },
   { to: '/about', label: 'About' },
 ];
 
@@ -47,10 +48,10 @@ export default function SiteNav() {
             Sign in
           </button>
           <button
-            onClick={() => navigate('/assessment')}
+            onClick={() => navigate('/pricing')}
             className="group inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition-transform hover:scale-[1.03]"
           >
-            Start Assessment
+            Subscribe
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </button>
         </div>
@@ -87,11 +88,11 @@ export default function SiteNav() {
             <button
               onClick={() => {
                 setOpen(false);
-                navigate('/assessment');
+                navigate('/pricing');
               }}
               className="mt-2 inline-flex items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25"
             >
-              Start Assessment
+              Subscribe
               <ArrowRight className="h-4 w-4" />
             </button>
           </nav>

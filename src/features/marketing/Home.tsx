@@ -13,7 +13,8 @@ import { CLINICAL_ASSESSMENTS } from '@/lib/clinicalKnowledge';
 
 export default function Home() {
   const navigate = useNavigate();
-  const start = () => navigate('/assessment');
+  // The AI assessment is now a subscription feature — CTAs lead to pricing.
+  const subscribe = () => navigate('/pricing');
 
   const total = CLINICAL_ASSESSMENTS.length;
 
@@ -39,12 +40,22 @@ export default function Home() {
         </p>
 
         <div className="mt-9 flex flex-col items-center gap-3 sm:flex-row">
+          {/* Free assessment CTA — disabled; the AI assessment is now a paid subscription.
           <button
             onClick={start}
             className="group inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-7 py-3.5 text-base font-semibold text-white shadow-lg shadow-emerald-500/25 transition-transform hover:scale-[1.03]"
           >
             <Zap className="h-5 w-5" />
             Start Free Assessment
+            <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-0.5" />
+          </button>
+          */}
+          <button
+            onClick={subscribe}
+            className="group inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-7 py-3.5 text-base font-semibold text-white shadow-lg shadow-emerald-500/25 transition-transform hover:scale-[1.03]"
+          >
+            <Zap className="h-5 w-5" />
+            Subscribe &amp; Start Assessment
             <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-0.5" />
           </button>
           <Link
@@ -54,7 +65,7 @@ export default function Home() {
             See how the AI works
           </Link>
         </div>
-        <span className="mt-3 text-sm text-slate-400">No download · Runs privately in your browser</span>
+        <span className="mt-3 text-sm text-slate-400">Plans from ₹499 · Runs privately in your browser</span>
 
         {/* Product mock card */}
         <div className="mt-16 w-full max-w-3xl">
@@ -150,10 +161,10 @@ export default function Home() {
           <Stat value="100%" label="On-device & private" />
         </div>
         <button
-          onClick={start}
+          onClick={subscribe}
           className="mt-10 inline-flex items-center gap-2 rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition-transform hover:scale-[1.03]"
         >
-          Try it now
+          View plans
           <ArrowRight className="h-4 w-4" />
         </button>
       </section>

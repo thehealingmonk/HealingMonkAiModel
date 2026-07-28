@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState, ReactElement } from 'react';
 import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { Stethoscope } from 'lucide-react';
 import MarketingLayout from '@/components/layout/MarketingLayout';
@@ -11,6 +11,7 @@ import {
   updateStoredReport,
   fetchStoredReport,
 } from '@/services/report.service';
+import { isSubscribed } from '@/services/subscription.service';
 
 // Route components are lazy-loaded so each screen ships in its own chunk. In
 // particular the capture/report screens (which pull in MediaPipe and jsPDF)
@@ -21,6 +22,7 @@ const Technology = lazy(() => import('@/features/marketing/Technology'));
 const Assessments = lazy(() => import('@/features/marketing/Assessments'));
 const HowItWorks = lazy(() => import('@/features/marketing/HowItWorks'));
 const About = lazy(() => import('@/features/marketing/About'));
+const Pricing = lazy(() => import('@/features/marketing/Pricing'));
 const PatientIntake = lazy(() => import('@/features/assessment/PatientIntake'));
 const PositionSelect = lazy(() => import('@/features/assessment/PositionSelect'));
 const ClinicalCapture = lazy(() => import('@/features/assessment/ClinicalCapture'));
@@ -32,6 +34,14 @@ function RouteFallback() {
       <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-200 border-t-emerald-500" />
     </div>
   );
+}
+
+// The AI assessment is a paid feature: guests without an active subscription are
+// sent to the pricing page. Once subscribed (verified Razorpay payment stored
+// locally), the flow runs normally.
+function RequireSubscription({ children }: { children: ReactElement }) {
+  if (!isSubscribed()) return <Navigate to="/pricing" replace />;
+  return children;
 }
 
 // Loads a saved report by its URL id and renders it (doctor-editable). The
@@ -207,40 +217,47 @@ export default function PublicApp() {
             <Route path="assessments" element={<Assessments />} />
             <Route path="how-it-works" element={<HowItWorks />} />
             <Route path="about" element={<About />} />
+            <Route path="pricing" element={<Pricing />} />
           </Route>
 
           {/* Focused assessment flow */}
           <Route
             path="assessment"
             element={
-              <PatientIntake
-                initial={patient}
-                onNext={(info) => {
-                  setPatient(info);
-                  navigate('/assessment/positions');
-                }}
-              />
+              <RequireSubscription>
+                <PatientIntake
+                  initial={patient}
+                  onNext={(info) => {
+                    setPatient(info);
+                    navigate('/assessment/positions');
+                  }}
+                />
+              </RequireSubscription>
             }
           />
 
           <Route
             path="assessment/positions"
             element={
-              <PositionSelect
-                initial={assessmentIds}
-                onBack={() => navigate('/assessment')}
-                onStart={(ids) => {
-                  setAssessmentIds(ids);
-                  navigate('/assessment/capture');
-                }}
-              />
+              <RequireSubscription>
+                <PositionSelect
+                  initial={assessmentIds}
+                  onBack={() => navigate('/assessment')}
+                  onStart={(ids) => {
+                    setAssessmentIds(ids);
+                    navigate('/assessment/capture');
+                  }}
+                />
+              </RequireSubscription>
             }
           />
 
           <Route
             path="assessment/capture"
             element={
-              assessmentIds.length > 0 ? (
+              !isSubscribed() ? (
+                <Navigate to="/pricing" replace />
+              ) : assessmentIds.length > 0 ? (
                 <ClinicalCapture
                   assessments={CLINICAL_ASSESSMENTS.filter((a) => assessmentIds.includes(a.id))}
                   onBack={() => navigate('/assessment/positions')}

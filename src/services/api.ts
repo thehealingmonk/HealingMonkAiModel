@@ -155,6 +155,30 @@ export async function assignDoctor(id: string, doctorId: string | null): Promise
   });
 }
 
+// ---- Patient login accounts (admin sets a password so the patient can sign in) ----
+
+export interface PatientAccountStatus {
+  hasAccount: boolean;
+  email: string;
+  active: boolean;
+  /** True if the email belongs to a staff account and can't be a patient login. */
+  staff: boolean;
+}
+
+export async function getPatientAccount(id: string): Promise<PatientAccountStatus> {
+  return request(`/patients/${id}/account`);
+}
+
+export async function setPatientAccount(
+  id: string,
+  password: string
+): Promise<{ email: string; created: boolean }> {
+  return request(`/patients/${id}/account`, {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  });
+}
+
 // ---- Reports ----
 
 export interface ReportFinding {

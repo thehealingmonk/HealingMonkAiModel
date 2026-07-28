@@ -25,7 +25,7 @@ export default function SiteFooter() {
               { to: '/technology', label: 'Technology' },
               { to: '/assessments', label: 'Assessments' },
               { to: '/how-it-works', label: 'How it works' },
-              { to: '/assessment', label: 'Start assessment' },
+              { to: '/pricing', label: 'Pricing' },
             ]}
           />
           <FooterCol

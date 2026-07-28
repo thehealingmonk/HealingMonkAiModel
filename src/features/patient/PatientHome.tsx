@@ -45,6 +45,8 @@ export default function PatientHome() {
   const upcoming = appts.filter(
     (a) => a.status === 'scheduled' && new Date(a.scheduledAt) >= new Date()
   );
+  // Every booked appointment is a clinic session (past or upcoming).
+  const totalSessions = appts.length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -95,20 +97,29 @@ export default function PatientHome() {
               />
               <SummaryCard
                 icon={<CalendarClock className="w-5 h-5" />}
-                label="Upcoming"
-                value={`${upcoming.length}`}
+                label="Sessions"
+                value={`${totalSessions}`}
                 tint="bg-amber-50 text-amber-700"
               />
             </div>
 
-            {/* Upcoming appointments */}
+            {upcoming.length > 0 && (
+              <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                <span className="font-semibold">Next session:</span> {when(upcoming[upcoming.length - 1].scheduledAt)}
+                {typeof upcoming[upcoming.length - 1].doctor === 'object' && upcoming[upcoming.length - 1].doctor
+                  ? ` · Dr. ${(upcoming[upcoming.length - 1].doctor as { name: string }).name}`
+                  : ''}
+              </div>
+            )}
+
+            {/* All sessions (appointments) — past & upcoming */}
             <section>
-              <h3 className="font-semibold text-gray-900 mb-3">Upcoming appointments</h3>
+              <h3 className="font-semibold text-gray-900 mb-3">My sessions ({totalSessions})</h3>
               <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
-                {upcoming.length === 0 ? (
-                  <p className="text-sm text-gray-400 px-4 py-6 text-center">No upcoming appointments.</p>
+                {appts.length === 0 ? (
+                  <p className="text-sm text-gray-400 px-4 py-6 text-center">No sessions yet.</p>
                 ) : (
-                  upcoming.map((a) => (
+                  appts.map((a) => (
                     <div key={a.id} className="px-4 py-3 flex items-center justify-between">
                       <div>
                         <p className="font-medium text-gray-900">{when(a.scheduledAt)}</p>
@@ -117,9 +128,7 @@ export default function PatientHome() {
                           {a.reason ? ` · ${a.reason}` : ''}
                         </p>
                       </div>
-                      <span className="text-xs font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
-                        Scheduled
-                      </span>
+                      <StatusBadge status={a.status} />
                     </div>
                   ))
                 )}
@@ -207,6 +216,21 @@ export default function PatientHome() {
         )}
       </main>
     </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    scheduled: 'bg-blue-50 text-blue-700',
+    completed: 'bg-green-50 text-green-700',
+    cancelled: 'bg-gray-100 text-gray-500',
+    no_show: 'bg-red-50 text-red-600',
+  };
+  const label = status === 'no_show' ? 'No show' : status.charAt(0).toUpperCase() + status.slice(1);
+  return (
+    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${map[status] || 'bg-gray-100 text-gray-600'}`}>
+      {label}
+    </span>
   );
 }
 
