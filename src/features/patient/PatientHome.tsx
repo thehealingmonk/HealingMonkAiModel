@@ -6,6 +6,7 @@ import {
   CalendarClock,
   TrendingUp,
   AlertTriangle,
+  ExternalLink,
 } from 'lucide-react';
 import { useAuth } from '@/store/auth.store';
 import {
@@ -206,6 +207,19 @@ export default function PatientHome() {
                           <span className="font-medium">Doctor's note: </span>
                           {r.doctorNotes}
                         </p>
+                      )}
+
+                      {r.shareId && (
+                        <div className="mt-3 border-t border-gray-100 pt-3">
+                          <a
+                            href={`/r/${r.shareId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-sm font-semibold text-green-700 hover:text-green-900"
+                          >
+                            <ExternalLink className="w-4 h-4" /> Open full report
+                          </a>
+                        </div>
                       )}
                     </div>
                   ))
