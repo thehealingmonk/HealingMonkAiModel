@@ -1,11 +1,22 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, ExternalLink, Eye, X } from 'lucide-react';
+import { RefreshCw, ExternalLink, Eye, X, Download } from 'lucide-react';
 import { ReportListItem, listAllReports } from '@/services/api';
+import { fetchStoredReport } from '@/services/report.service';
+import { downloadReportPdf } from '@/lib/reportPdf';
 import { formatDate } from '@/utils/formatter';
 
 // Open a report's public, no-auth visual URL (name-based /r/:slug) in a new tab.
 function openReport(shareId: string | null) {
   if (shareId) window.open(`/r/${shareId}`, '_blank', 'noopener');
+}
+
+// Download the exact same PDF the original report produces. The pose images and
+// captures live in the public "stored report" (keyed by shareId), not in the DB
+// summary — so we fetch that first, then hand it to the shared PDF generator.
+async function downloadOriginalPdf(shareId: string) {
+  const stored = await fetchStoredReport(shareId);
+  if (!stored) throw new Error('Original report data not found');
+  await downloadReportPdf(stored.patient, stored.captures, stored.extraShots);
 }
 
 const SCORE_COLOR = (s: number | null) => {
@@ -26,6 +37,21 @@ const SEVERITY_BADGE: Record<string, string> = {
 // shareable link — since the row already carries the full findings/notes.
 function ReportDetailModal({ report, onClose }: { report: ReportListItem; onClose: () => void }) {
   const doctorName = report.doctor && typeof report.doctor === 'object' ? report.doctor.name : '—';
+  const [downloading, setDownloading] = useState(false);
+  const [dlError, setDlError] = useState('');
+
+  const download = async () => {
+    if (!report.shareId) return;
+    setDownloading(true);
+    setDlError('');
+    try {
+      await downloadOriginalPdf(report.shareId);
+    } catch (e) {
+      setDlError(e instanceof Error ? e.message : 'Could not download report');
+    } finally {
+      setDownloading(false);
+    }
+  };
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-y-auto"
@@ -153,14 +179,24 @@ function ReportDetailModal({ report, onClose }: { report: ReportListItem; onClos
         </div>
 
         {/* Footer actions */}
-        <div className="flex justify-end gap-2 border-t border-gray-100 p-4">
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 p-4">
+          {dlError && <span className="mr-auto text-xs text-red-600">{dlError}</span>}
           {report.shareId && (
-            <button
-              onClick={() => openReport(report.shareId)}
-              className="inline-flex items-center gap-1.5 border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium py-2 px-4 rounded-lg"
-            >
-              <ExternalLink className="w-4 h-4" /> Open shareable report
-            </button>
+            <>
+              <button
+                onClick={download}
+                disabled={downloading}
+                className="inline-flex items-center gap-1.5 border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-60 font-medium py-2 px-4 rounded-lg"
+              >
+                <Download className="w-4 h-4" /> {downloading ? 'Preparing…' : 'Download PDF'}
+              </button>
+              <button
+                onClick={() => openReport(report.shareId)}
+                className="inline-flex items-center gap-1.5 border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium py-2 px-4 rounded-lg"
+              >
+                <ExternalLink className="w-4 h-4" /> Open shareable report
+              </button>
+            </>
           )}
           <button
             onClick={onClose}
@@ -179,6 +215,7 @@ export default function ReportsList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<ReportListItem | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -204,6 +241,20 @@ export default function ReportsList() {
   const viewReport = (r: ReportListItem) => {
     if (r.shareId) openReport(r.shareId);
     else setSelected(r);
+  };
+
+  // Download the original report as a PDF straight from the list.
+  const downloadReport = async (r: ReportListItem) => {
+    if (!r.shareId) return;
+    setError('');
+    setDownloadingId(r.id);
+    try {
+      await downloadOriginalPdf(r.shareId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not download report');
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   return (
@@ -268,15 +319,31 @@ export default function ReportsList() {
                   </td>
                   <td className="px-4 py-3 text-gray-500">{formatDate(r.createdAt, true)}</td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        viewReport(r);
-                      }}
-                      className="inline-flex items-center gap-1.5 text-green-700 hover:text-green-800 text-xs font-semibold"
-                    >
-                      <Eye className="w-3.5 h-3.5" /> View report
-                    </button>
+                    <div className="inline-flex items-center gap-3">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          viewReport(r);
+                        }}
+                        className="inline-flex items-center gap-1.5 text-green-700 hover:text-green-800 text-xs font-semibold"
+                      >
+                        <Eye className="w-3.5 h-3.5" /> View report
+                      </button>
+                      {r.shareId && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            downloadReport(r);
+                          }}
+                          disabled={downloadingId === r.id}
+                          className="inline-flex items-center gap-1.5 text-gray-600 hover:text-gray-900 disabled:opacity-60 text-xs font-semibold"
+                          title="Download the original report as PDF"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          {downloadingId === r.id ? 'Preparing…' : 'Download'}
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
