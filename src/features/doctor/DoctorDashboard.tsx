@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Search, UserPlus, ChevronRight, Users } from 'lucide-react';
 import { listPatients, Patient } from '@/services/api';
+import TableSkeleton from '@/components/ui/TableSkeleton';
 
 interface Props {
   onRegister: () => void;
@@ -33,15 +34,15 @@ export default function DoctorDashboard({ onRegister, onOpenPatient }: Props) {
   }, [scope]);
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="hm-page-enter max-w-4xl mx-auto">
+      <div className="flex items-center justify-between mb-6" data-reveal="fade">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Patients</h2>
-          <p className="text-gray-600 text-sm">Register a patient or open a record to start an AI assessment.</p>
+          <h2 className="text-2xl font-bold tracking-tight text-slate-900">Patients</h2>
+          <p className="text-slate-500 text-sm">Register a patient or open a record to start an AI assessment.</p>
         </div>
         <button
           onClick={onRegister}
-          className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+          className="hm-lift inline-flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold py-2 px-4 rounded-lg"
         >
           <UserPlus className="w-4 h-4" /> Register patient
         </button>
@@ -82,21 +83,21 @@ export default function DoctorDashboard({ onRegister, onOpenPatient }: Props) {
         <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm mb-4">{error}</div>
       )}
 
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm" data-reveal>
         {loading ? (
-          <div className="p-10 text-center text-gray-500">Loading patients…</div>
+          <TableSkeleton rows={6} cols={3} />
         ) : patients.length === 0 ? (
-          <div className="p-10 text-center text-gray-500">
-            <Users className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+          <div className="p-10 text-center text-slate-400">
+            <Users className="w-8 h-8 mx-auto mb-2 text-slate-300" />
             No patients yet. Register your first patient to begin.
           </div>
         ) : (
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-slate-100">
             {patients.map((p) => (
               <li key={p.id}>
                 <button
                   onClick={() => onOpenPatient(p)}
-                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 text-left"
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-emerald-50/60 transition-colors text-left"
                 >
                   <div>
                     <p className="font-medium text-gray-900">

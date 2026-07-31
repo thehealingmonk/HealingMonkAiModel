@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
-import { RefreshCw, ExternalLink, Eye, X, Download } from 'lucide-react';
+import { useState } from 'react';
+import { ExternalLink, Eye, X, Download } from 'lucide-react';
 import { ReportListItem, listAllReports } from '@/services/api';
 import { fetchStoredReport } from '@/services/report.service';
 import { downloadReportPdf } from '@/lib/reportPdf';
 import { formatDate } from '@/utils/formatter';
+import { useLiveData } from '@/hooks/useLiveData';
+import LiveBadge from '@/features/admin/LiveBadge';
+import TableSkeleton from '@/components/ui/TableSkeleton';
 
 // Open a report's public, no-auth visual URL (name-based /r/:slug) in a new tab.
 function openReport(shareId: string | null) {
@@ -20,14 +23,14 @@ async function downloadOriginalPdf(shareId: string) {
 }
 
 const SCORE_COLOR = (s: number | null) => {
-  if (s == null) return 'text-gray-500';
-  if (s >= 80) return 'text-green-600';
+  if (s == null) return 'text-slate-500';
+  if (s >= 80) return 'text-emerald-600';
   if (s >= 60) return 'text-amber-600';
   return 'text-red-600';
 };
 
 const SEVERITY_BADGE: Record<string, string> = {
-  normal: 'bg-green-100 text-green-700',
+  normal: 'bg-emerald-100 text-emerald-700',
   mild: 'bg-amber-100 text-amber-700',
   moderate: 'bg-orange-100 text-orange-700',
   severe: 'bg-red-100 text-red-700',
@@ -200,7 +203,7 @@ function ReportDetailModal({ report, onClose }: { report: ReportListItem; onClos
           )}
           <button
             onClick={onClose}
-            className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg"
+            className="hm-lift bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold py-2 px-4 rounded-lg"
           >
             Close
           </button>
@@ -211,28 +214,14 @@ function ReportDetailModal({ report, onClose }: { report: ReportListItem; onClos
 }
 
 export default function ReportsList() {
-  const [reports, setReports] = useState<ReportListItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { data, loading, refreshing, error: loadError, lastUpdated, refresh } = useLiveData(() =>
+    listAllReports('all')
+  );
+  const reports = data?.reports ?? [];
   const [selected, setSelected] = useState<ReportListItem | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
-
-  async function load() {
-    setLoading(true);
-    setError('');
-    try {
-      const { reports } = await listAllReports('all');
-      setReports(reports);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load reports');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
+  const [dlError, setDlError] = useState('');
+  const error = dlError || loadError;
 
   const doctorName = (d: ReportListItem['doctor']) => (d && typeof d === 'object' ? d.name : '—');
 
@@ -246,39 +235,37 @@ export default function ReportsList() {
   // Download the original report as a PDF straight from the list.
   const downloadReport = async (r: ReportListItem) => {
     if (!r.shareId) return;
-    setError('');
+    setDlError('');
     setDownloadingId(r.id);
     try {
       await downloadOriginalPdf(r.shareId);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not download report');
+      setDlError(e instanceof Error ? e.message : 'Could not download report');
     } finally {
       setDownloadingId(null);
     }
   };
 
   return (
-    <div className="max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="hm-page-enter max-w-5xl mx-auto">
+      <div className="flex items-center justify-between mb-6" data-reveal="fade">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Assessment Reports</h2>
-          <p className="text-gray-600 text-sm">Every AI posture assessment saved by your doctors.</p>
+          <h2 className="text-2xl font-bold tracking-tight text-slate-900">Assessment Reports</h2>
+          <p className="text-slate-500 text-sm">Every AI posture assessment saved by your doctors.</p>
         </div>
-        <button onClick={load} className="inline-flex items-center gap-2 border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium py-2 px-3 rounded-lg">
-          <RefreshCw className="w-4 h-4" /> Refresh
-        </button>
+        <LiveBadge lastUpdated={lastUpdated} refreshing={refreshing} onRefresh={refresh} />
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm mb-4">{error}</div>}
 
-      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto shadow-sm">
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-x-auto shadow-sm" data-reveal>
         {loading ? (
-          <div className="p-10 text-center text-gray-500">Loading reports…</div>
+          <TableSkeleton rows={7} cols={7} />
         ) : reports.length === 0 ? (
-          <div className="p-10 text-center text-gray-500">No reports yet.</div>
+          <div className="p-10 text-center text-slate-400">No reports yet.</div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500 text-left">
+            <thead className="bg-slate-50 text-slate-500 text-left">
               <tr>
                 <th className="px-4 py-3 font-medium">Patient</th>
                 <th className="px-4 py-3 font-medium">Doctor</th>
@@ -294,7 +281,7 @@ export default function ReportsList() {
                 <tr
                   key={r.id}
                   onClick={() => viewReport(r)}
-                  className="cursor-pointer hover:bg-green-50/60 transition-colors"
+                  className="cursor-pointer hover:bg-emerald-50/60 transition-colors"
                   title="View this report"
                 >
                   <td className="px-4 py-3 font-medium text-gray-900">
@@ -325,7 +312,7 @@ export default function ReportsList() {
                           e.stopPropagation();
                           viewReport(r);
                         }}
-                        className="inline-flex items-center gap-1.5 text-green-700 hover:text-green-800 text-xs font-semibold"
+                        className="inline-flex items-center gap-1.5 text-emerald-700 hover:text-emerald-800 text-xs font-semibold"
                       >
                         <Eye className="w-3.5 h-3.5" /> View report
                       </button>

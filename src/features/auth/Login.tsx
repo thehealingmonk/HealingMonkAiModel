@@ -41,26 +41,26 @@ export default function Login({ onBack }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-cyan-50 flex flex-col">
       <div className="px-4 py-4">
         <button
           onClick={back}
-          className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 font-medium"
+          className="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 font-medium"
         >
           <ArrowLeft className="w-4 h-4" /> Home
         </button>
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center px-6 -mt-10">
-        <div className="max-w-sm w-full">
+        <div className="hm-page-enter max-w-sm w-full">
           <div className="text-center mb-8">
-            <div className="w-14 h-14 bg-green-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/30">
               <Activity className="w-7 h-7 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
               {mode === 'signup' ? 'Create your account' : 'Sign in to HealingMonk'}
             </h1>
-            <p className="text-gray-600 text-sm mt-1">
+            <p className="text-slate-500 text-sm mt-1">
               {mode === 'signup'
                 ? 'Patients can sign up to view reports & book sessions.'
                 : 'Patients, doctors, reception & admin sign in here.'}
@@ -116,7 +116,7 @@ export default function Login({ onBack }: Props) {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-semibold py-2.5 px-4 rounded-lg transition-colors"
+              className="hm-lift w-full bg-gradient-to-r from-emerald-500 to-teal-500 disabled:opacity-60 text-white font-semibold py-2.5 px-4 rounded-lg shadow-lg shadow-emerald-500/25"
             >
               {loading ? 'Please wait…' : mode === 'signup' ? 'Sign up' : 'Sign in'}
             </button>
@@ -128,7 +128,7 @@ export default function Login({ onBack }: Props) {
                 setMode(mode === 'signup' ? 'signin' : 'signup');
                 setError('');
               }}
-              className="text-green-600 hover:text-green-700 font-medium text-sm"
+              className="text-emerald-600 hover:text-emerald-700 font-medium text-sm"
             >
               {mode === 'signup'
                 ? 'Already have an account? Sign in'
@@ -142,7 +142,7 @@ export default function Login({ onBack }: Props) {
 }
 
 const inputCls =
-  'w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent';
+  'w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-shadow';
 
 function Field({
   icon,
@@ -155,7 +155,7 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
+      <label className="block text-sm font-medium text-slate-700 mb-2">{label}</label>
       <div className="relative">
         <span className="absolute left-3 top-1/2 -translate-y-1/2">{icon}</span>
         {children}

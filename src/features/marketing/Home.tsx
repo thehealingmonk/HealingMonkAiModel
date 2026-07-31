@@ -102,14 +102,14 @@ export default function Home() {
 
       {/* Feature grid */}
       <section className="grid gap-4 pb-14 md:grid-cols-2 lg:grid-cols-4">
-        <Feature icon={<ScanLine className="h-5 w-5" />} title="AI-Powered Analysis" desc="33-point pose detection scores your alignment frame by frame." />
-        <Feature icon={<Zap className="h-5 w-5" />} title="Instant Results" desc="Get posture, mobility, and stability scores in seconds." />
-        <Feature icon={<Gauge className="h-5 w-5" />} title="Personalized Programs" desc="Targeted routines matched to your specific findings." />
-        <Feature icon={<ShieldCheck className="h-5 w-5" />} title="Private by Design" desc="Analysis runs on-device in your browser — nothing leaves you." />
+        <Feature i={0} icon={<ScanLine className="h-5 w-5" />} title="AI-Powered Analysis" desc="33-point pose detection scores your alignment frame by frame." />
+        <Feature i={1} icon={<Zap className="h-5 w-5" />} title="Instant Results" desc="Get posture, mobility, and stability scores in seconds." />
+        <Feature i={2} icon={<Gauge className="h-5 w-5" />} title="Personalized Programs" desc="Targeted routines matched to your specific findings." />
+        <Feature i={3} icon={<ShieldCheck className="h-5 w-5" />} title="Private by Design" desc="Analysis runs on-device in your browser — nothing leaves you." />
       </section>
 
       {/* Assessment library teaser */}
-      <section className="mb-14 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section data-reveal="zoom" className="mb-14 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="grid gap-0 md:grid-cols-2">
           <div className="p-8 sm:p-10">
             <p className="text-sm font-medium uppercase tracking-widest text-emerald-600">Assessment library</p>
@@ -141,16 +141,16 @@ export default function Home() {
 
       {/* How it works */}
       <section className="border-t border-slate-200 py-16">
-        <h2 className="text-center text-3xl font-bold tracking-tight">From camera to clarity in three steps</h2>
+        <h2 data-reveal="fade" className="text-center text-3xl font-bold tracking-tight">From camera to clarity in three steps</h2>
         <div className="mt-12 grid gap-6 md:grid-cols-3">
-          <Step n="01" icon={<Camera className="h-5 w-5" />} title="Set up your camera" desc="Position yourself in frame — we guide you to the right distance and lighting." />
-          <Step n="02" icon={<ScanLine className="h-5 w-5" />} title="Hold the pose" desc="The model tracks 33 body landmarks in real time and analyzes your alignment." />
-          <Step n="03" icon={<Gauge className="h-5 w-5" />} title="Get your report" desc="See your scores, findings, and a personalized program to improve." />
+          <Step i={0} n="01" icon={<Camera className="h-5 w-5" />} title="Set up your camera" desc="Position yourself in frame — we guide you to the right distance and lighting." />
+          <Step i={1} n="02" icon={<ScanLine className="h-5 w-5" />} title="Hold the pose" desc="The model tracks 33 body landmarks in real time and analyzes your alignment." />
+          <Step i={2} n="03" icon={<Gauge className="h-5 w-5" />} title="Get your report" desc="See your scores, findings, and a personalized program to improve." />
         </div>
       </section>
 
       {/* CTA */}
-      <section className="my-8 rounded-2xl border border-slate-200 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 px-8 py-12 text-center shadow-sm">
+      <section data-reveal="zoom" className="my-8 rounded-2xl border border-slate-200 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 px-8 py-12 text-center shadow-sm">
         <p className="text-sm font-medium uppercase tracking-widest text-emerald-600">The HealingMonk Model</p>
         <h2 className="mx-auto mt-3 max-w-2xl text-2xl font-bold tracking-tight sm:text-3xl">
           Clinical-grade movement assessment, running entirely in the browser
@@ -184,19 +184,27 @@ function ScoreTile({ label, value }: { label: string; value: number }) {
   );
 }
 
-function Feature({ icon, title, desc }: { icon: React.ReactNode; title: string; desc: string }) {
+function Feature({ i = 0, icon, title, desc }: { i?: number; icon: React.ReactNode; title: string; desc: string }) {
   return (
-    <div className="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:border-emerald-300 hover:shadow-md">
-      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">{icon}</div>
+    <div
+      data-reveal
+      style={{ '--reveal-delay': `${i * 90}ms` } as React.CSSProperties}
+      className="hm-lift group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover:border-emerald-300"
+    >
+      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 transition-transform group-hover:scale-110">{icon}</div>
       <h3 className="mt-4 font-semibold">{title}</h3>
       <p className="mt-1.5 text-sm text-slate-500">{desc}</p>
     </div>
   );
 }
 
-function Step({ n, icon, title, desc }: { n: string; icon: React.ReactNode; title: string; desc: string }) {
+function Step({ i = 0, n, icon, title, desc }: { i?: number; n: string; icon: React.ReactNode; title: string; desc: string }) {
   return (
-    <div className="relative rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div
+      data-reveal
+      style={{ '--reveal-delay': `${i * 110}ms` } as React.CSSProperties}
+      className="hm-lift relative rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover:border-emerald-300"
+    >
       <span className="absolute right-5 top-5 font-mono text-sm text-slate-300">{n}</span>
       <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">{icon}</div>
       <h3 className="mt-4 font-semibold">{title}</h3>
@@ -207,7 +215,7 @@ function Step({ n, icon, title, desc }: { n: string; icon: React.ReactNode; titl
 
 function Stat({ value, label }: { value: string; label: string }) {
   return (
-    <div>
+    <div data-reveal="scale">
       <p className="bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-3xl font-bold text-transparent sm:text-4xl">{value}</p>
       <p className="mt-1 text-sm text-slate-500">{label}</p>
     </div>

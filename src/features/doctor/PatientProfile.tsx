@@ -8,15 +8,25 @@ import {
   KeyRound,
   CheckCircle2,
   Copy,
+  TrendingUp,
+  TrendingDown,
+  Minus,
 } from 'lucide-react';
 import {
   Patient,
   Report,
+  Appointment,
+  AppointmentStatus,
+  Payment,
+  PaymentStatus,
   listPatientReports,
+  listAppointments,
+  listPayments,
   getPatientAccount,
   setPatientAccount,
   PatientAccountStatus,
 } from '@/services/api';
+import { formatDate, formatMoney } from '@/utils/formatter';
 import { useAuth } from '@/store/auth.store';
 
 interface Props {
@@ -28,27 +38,51 @@ interface Props {
 const SCORE_COLOR = (score: number | null) =>
   score === null ? 'text-gray-400' : score >= 80 ? 'text-green-600' : score >= 60 ? 'text-amber-500' : 'text-red-600';
 
+const SCORE_BG = (score: number | null) =>
+  score === null ? 'bg-gray-200' : score >= 80 ? 'bg-green-500' : score >= 60 ? 'bg-amber-400' : 'bg-red-500';
+
+const APPT_BADGE: Record<AppointmentStatus, string> = {
+  scheduled: 'bg-blue-100 text-blue-700',
+  completed: 'bg-green-100 text-green-700',
+  cancelled: 'bg-gray-200 text-gray-600',
+  no_show: 'bg-red-100 text-red-700',
+};
+
+const PAY_BADGE: Record<PaymentStatus, string> = {
+  paid: 'bg-green-100 text-green-700',
+  created: 'bg-blue-100 text-blue-700',
+  failed: 'bg-red-100 text-red-700',
+  refunded: 'bg-amber-100 text-amber-700',
+};
+
 export default function PatientProfile({ patient, onBack, onStartAssessment }: Props) {
   const { hasRole } = useAuth();
+  const isAdmin = hasRole('admin');
   const [reports, setReports] = useState<Report[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        const { reports } = await listPatientReports(patient.id);
-        if (!cancelled) setReports(reports);
-      } catch {
-        /* timeline is non-critical; show empty on error */
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+      // Everything on this profile is non-critical individually — pull each in
+      // parallel and show whatever succeeds.
+      const [rep, appt, pay] = await Promise.allSettled([
+        listPatientReports(patient.id),
+        listAppointments({ patient: patient.id, scope: 'all' }),
+        isAdmin ? listPayments(patient.id) : Promise.resolve({ payments: [] as Payment[] }),
+      ]);
+      if (cancelled) return;
+      if (rep.status === 'fulfilled') setReports(rep.value.reports);
+      if (appt.status === 'fulfilled') setAppointments(appt.value.appointments);
+      if (pay.status === 'fulfilled') setPayments(pay.value.payments);
+      setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [patient.id]);
+  }, [patient.id, isAdmin]);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -72,6 +106,18 @@ export default function PatientProfile({ patient, onBack, onStartAssessment }: P
                 .filter(Boolean)
                 .join(' · ') || '—'}
             </p>
+            <div className="flex flex-wrap gap-x-5 gap-y-1 mt-2 text-xs text-gray-500">
+              {patient.email && <span>✉ {patient.email}</span>}
+              {patient.height != null && <span>Height: {patient.height} cm</span>}
+              {patient.weight != null && <span>Weight: {patient.weight} kg</span>}
+              <span>
+                Doctor:{' '}
+                {patient.assignedDoctor && typeof patient.assignedDoctor === 'object'
+                  ? patient.assignedDoctor.name
+                  : '—'}
+              </span>
+              <span>Registered: {formatDate(patient.createdAt)}</span>
+            </div>
             {patient.painAreas.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-3">
                 {patient.painAreas.map((a) => (
@@ -95,6 +141,9 @@ export default function PatientProfile({ patient, onBack, onStartAssessment }: P
       {/* Patient login — admin sets a password so the patient can sign in and
           see all their sessions & reports. */}
       {hasRole('admin') && <PatientLoginCard patient={patient} />}
+
+      {/* Progress: posture-score trend across sessions */}
+      {!loading && reports.length > 0 && <ProgressCard reports={reports} />}
 
       {/* Reports timeline */}
       <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Reports Timeline</h3>
@@ -152,6 +201,151 @@ export default function PatientProfile({ patient, onBack, onStartAssessment }: P
             </li>
           ))}
         </ol>
+      )}
+
+      {/* Schedule: this patient's appointments */}
+      <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 mt-8">Schedule</h3>
+      {loading ? (
+        <div className="p-6 text-center text-gray-500">Loading appointments…</div>
+      ) : appointments.length === 0 ? (
+        <div className="bg-white border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">
+          No appointments booked for this patient.
+        </div>
+      ) : (
+        <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto shadow-sm">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-gray-500 text-left">
+              <tr>
+                <th className="px-4 py-3 font-medium">When</th>
+                <th className="px-4 py-3 font-medium">Doctor</th>
+                <th className="px-4 py-3 font-medium">Reason</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {appointments.map((a) => (
+                <tr key={a.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 text-gray-900">{formatDate(a.scheduledAt, true)}</td>
+                  <td className="px-4 py-3 text-gray-600">
+                    {a.doctor && typeof a.doctor === 'object' ? a.doctor.name : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-gray-600">{a.reason || '—'}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium capitalize ${APPT_BADGE[a.status]}`}>
+                      {a.status.replace('_', ' ')}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Payments (admin only) */}
+      {isAdmin && (
+        <>
+          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 mt-8">Payments</h3>
+          {loading ? (
+            <div className="p-6 text-center text-gray-500">Loading payments…</div>
+          ) : payments.length === 0 ? (
+            <div className="bg-white border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">
+              No payments recorded for this patient.
+            </div>
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto shadow-sm">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-gray-500 text-left">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Amount</th>
+                    <th className="px-4 py-3 font-medium">Method</th>
+                    <th className="px-4 py-3 font-medium">Plan</th>
+                    <th className="px-4 py-3 font-medium">Status</th>
+                    <th className="px-4 py-3 font-medium">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {payments.map((p) => (
+                    <tr key={p.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-semibold text-gray-900">{formatMoney(p.amount, p.currency)}</td>
+                      <td className="px-4 py-3 text-gray-600 capitalize">{p.method}</td>
+                      <td className="px-4 py-3 text-gray-600">{p.plan || '—'}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium capitalize ${PAY_BADGE[p.status]}`}>
+                          {p.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-500">{formatDate(p.createdAt, true)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// Posture-score progress across a patient's sessions. `reports` arrive
+// newest-first; we render the trend oldest→newest so improvement reads L→R.
+function ProgressCard({ reports }: { reports: Report[] }) {
+  const scored = [...reports].reverse().filter((r) => typeof r.overallScore === 'number');
+  const latest = reports.find((r) => typeof r.overallScore === 'number')?.overallScore ?? null;
+  const scores = scored.map((r) => r.overallScore as number);
+  const best = scores.length ? Math.max(...scores) : null;
+  // Change = latest scored session vs the one before it.
+  const delta =
+    scores.length >= 2 ? scores[scores.length - 1] - scores[scores.length - 2] : null;
+
+  const Trend = delta == null || delta === 0 ? Minus : delta > 0 ? TrendingUp : TrendingDown;
+  const trendColor = delta == null || delta === 0 ? 'text-gray-400' : delta > 0 ? 'text-green-600' : 'text-red-600';
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-6">
+      <div className="flex items-center gap-2 mb-4">
+        <Activity className="w-4 h-4 text-green-600" />
+        <h3 className="font-semibold text-gray-900">Progress</h3>
+      </div>
+      <div className="grid grid-cols-3 gap-4 mb-5">
+        <div>
+          <p className="text-xs text-gray-500">Latest score</p>
+          <p className={`text-2xl font-bold ${SCORE_COLOR(latest)}`}>{latest ?? '—'}<span className="text-sm text-gray-400">/100</span></p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500">Change</p>
+          <p className={`text-2xl font-bold inline-flex items-center gap-1 ${trendColor}`}>
+            <Trend className="w-5 h-5" />
+            {delta == null ? '—' : `${delta > 0 ? '+' : ''}${delta}`}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500">Best · Sessions</p>
+          <p className="text-2xl font-bold text-gray-900">
+            {best ?? '—'}
+            <span className="text-sm text-gray-400"> · {reports.length}</span>
+          </p>
+        </div>
+      </div>
+      {/* Mini bar chart of each scored session, oldest → newest */}
+      {scored.length > 0 && (
+        <div className="flex items-end gap-1.5 h-24">
+          {scored.map((r, i) => {
+            const s = r.overallScore as number;
+            return (
+              <div
+                key={r.id ?? i}
+                className="flex-1 min-w-1.5 flex flex-col items-center gap-1"
+                title={`${s}/100 · ${r.createdAt ? formatDate(r.createdAt) : ''}`}
+              >
+                <div className="w-full rounded-t bg-gray-100 flex items-end" style={{ height: '100%' }}>
+                  <div className={`w-full rounded-t ${SCORE_BG(s)}`} style={{ height: `${Math.max(4, s)}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

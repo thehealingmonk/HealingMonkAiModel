@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarPlus, RefreshCw, Clock, CheckCircle2, XCircle, UserX } from 'lucide-react';
+import TableSkeleton from '@/components/ui/TableSkeleton';
 import {
   Appointment,
   AppointmentStatus,
@@ -12,10 +13,10 @@ interface Props {
 }
 
 const STATUS_STYLES: Record<AppointmentStatus, string> = {
-  scheduled: 'bg-blue-50 text-blue-700',
-  completed: 'bg-green-50 text-green-700',
+  scheduled: 'bg-sky-50 text-sky-700',
+  completed: 'bg-emerald-50 text-emerald-700',
   cancelled: 'bg-red-50 text-red-700',
-  no_show: 'bg-gray-100 text-gray-600',
+  no_show: 'bg-slate-100 text-slate-600',
 };
 
 function name(ref: Appointment['patient']) {
@@ -64,15 +65,15 @@ export default function ReceptionDashboard({ onBook }: Props) {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+    <div className="hm-page-enter max-w-4xl mx-auto">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6" data-reveal="fade">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Today's schedule</h2>
-          <p className="text-gray-600 text-sm">Book and manage patient appointments.</p>
+          <h2 className="text-2xl font-bold tracking-tight text-slate-900">Today's schedule</h2>
+          <p className="text-slate-500 text-sm">Book and manage patient appointments.</p>
         </div>
         <button
           onClick={onBook}
-          className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 px-4 rounded-lg transition-colors"
+          className="hm-lift inline-flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold py-2.5 px-4 rounded-lg"
         >
           <CalendarPlus className="w-4 h-4" /> Book appointment
         </button>
@@ -99,18 +100,18 @@ export default function ReceptionDashboard({ onBook }: Props) {
         </div>
       )}
 
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm divide-y divide-gray-100">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm divide-y divide-slate-100" data-reveal>
         {loading ? (
-          <p className="text-sm text-gray-400 px-4 py-10 text-center">Loading…</p>
+          <TableSkeleton rows={5} cols={4} />
         ) : appts.length === 0 ? (
-          <p className="text-sm text-gray-400 px-4 py-10 text-center">
+          <p className="text-sm text-slate-400 px-4 py-10 text-center">
             No appointments for this day.
           </p>
         ) : (
           appts.map((a) => (
-            <div key={a.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-              <div className="flex items-center gap-2 text-gray-900 font-semibold w-20">
-                <Clock className="w-4 h-4 text-gray-400" />
+            <div key={a.id} className="flex flex-wrap items-center gap-3 px-4 py-3 hover:bg-emerald-50/40 transition-colors">
+              <div className="flex items-center gap-2 text-slate-900 font-semibold w-20">
+                <Clock className="w-4 h-4 text-slate-400" />
                 {timeOf(a.scheduledAt)}
               </div>
               <div className="flex-1 min-w-[8rem]">
