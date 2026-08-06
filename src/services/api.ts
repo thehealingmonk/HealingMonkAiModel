@@ -266,6 +266,11 @@ export interface Appointment {
   status: AppointmentStatus;
   notes?: string;
   createdAt?: string;
+  // Enriched by the list endpoint (joined from the patient record).
+  patientCode?: string | null;
+  patientMobile?: string | null;
+  /** The patient's currently-assigned doctor — a fallback when the appointment has none. */
+  assignedDoctorName?: string | null;
 }
 
 export async function listAppointments(
@@ -372,6 +377,27 @@ export interface AdminStats {
 
 export async function getAdminStats(): Promise<{ stats: AdminStats }> {
   return request('/admin/stats');
+}
+
+export interface DayPoint {
+  date: string; // YYYY-MM-DD (IST)
+  count: number;
+  total?: number; // paise (revenue series only)
+}
+
+export interface AdminAnalytics {
+  days: number;
+  revenueByDay: DayPoint[];
+  patientsByDay: DayPoint[];
+  reportsByDay: DayPoint[];
+  apptStatus: Partial<Record<AppointmentStatus, number>>;
+  topDoctors: { name: string; reports: number }[];
+  revenueTotal: number; // paise
+  revenueCount: number;
+}
+
+export async function getAdminAnalytics(days = 30): Promise<{ analytics: AdminAnalytics }> {
+  return request(`/admin/analytics?days=${days}`);
 }
 
 // ---- Patient self-service (matched to clinic record by email) ----

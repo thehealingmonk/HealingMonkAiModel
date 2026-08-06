@@ -49,11 +49,25 @@ export async function GET(req: NextRequest) {
   }
 
   const appts = await Appointment.find(filter)
-    .populate('patient', 'name')
+    .populate({
+      path: 'patient',
+      select: 'name patientId mobile assignedDoctor',
+      populate: { path: 'assignedDoctor', select: 'name' },
+    })
     .populate('doctor', 'name')
     .sort({ scheduledAt: 1 })
     .limit(300);
-  return NextResponse.json({ appointments: appts.map((a: any) => a.toJSONSafe()) });
+  // Enrich each row with the patient's code/mobile and their currently-assigned
+  // doctor, so the schedule can show full details and fall back to the assigned
+  // doctor when a specific doctor wasn't picked at booking time.
+  return NextResponse.json({
+    appointments: appts.map((a: any) => ({
+      ...a.toJSONSafe(),
+      patientCode: a.patient?.patientId ?? null,
+      patientMobile: a.patient?.mobile ?? null,
+      assignedDoctorName: a.patient?.assignedDoctor?.name ?? null,
+    })),
+  });
 }
 
 // Book an appointment. Reception/doctor/admin.

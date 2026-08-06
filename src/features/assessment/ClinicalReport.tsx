@@ -663,12 +663,19 @@ function ZoomableImage({
   heightClass = 'h-72',
   badge,
 }: {
-  src: string;
+  src?: string;
   alt: string;
   heightClass?: string;
   badge?: string;
 }) {
   const [zoom, setZoom] = useState(false);
+  if (!src) {
+    return (
+      <div className={`flex w-full ${heightClass} items-center justify-center bg-slate-800 text-xs text-slate-400`}>
+        No image
+      </div>
+    );
+  }
   return (
     <>
       <button

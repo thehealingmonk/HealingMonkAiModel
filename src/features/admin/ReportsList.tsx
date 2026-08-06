@@ -7,6 +7,7 @@ import { formatDate } from '@/utils/formatter';
 import { useLiveData } from '@/hooks/useLiveData';
 import LiveBadge from '@/features/admin/LiveBadge';
 import TableSkeleton from '@/components/ui/TableSkeleton';
+import ExportButton from '@/components/ui/ExportButton';
 
 // Open a report's public, no-auth visual URL (name-based /r/:slug) in a new tab.
 function openReport(shareId: string | null) {
@@ -225,6 +226,17 @@ export default function ReportsList() {
 
   const doctorName = (d: ReportListItem['doctor']) => (d && typeof d === 'object' ? d.name : '—');
 
+  const exportColumns = [
+    { header: 'Date', value: (r: ReportListItem) => formatDate(r.createdAt, true) },
+    { header: 'Patient', value: (r: ReportListItem) => r.patientInfo?.name || '' },
+    { header: 'Patient ID', value: (r: ReportListItem) => r.patientInfo?.patientId || '' },
+    { header: 'Doctor', value: (r: ReportListItem) => doctorName(r.doctor) },
+    { header: 'Overall score', value: (r: ReportListItem) => r.overallScore ?? '' },
+    { header: 'Findings', value: (r: ReportListItem) => r.findingsCount },
+    { header: 'Flagged', value: (r: ReportListItem) => r.flaggedCount },
+    { header: 'Pain areas', value: (r: ReportListItem) => r.painAreas.join('; ') },
+  ];
+
   // Show the report exactly as it looks when created: open the full visual
   // report (/r/:slug). Old reports with no share link fall back to the summary.
   const viewReport = (r: ReportListItem) => {
@@ -253,7 +265,10 @@ export default function ReportsList() {
           <h2 className="text-2xl font-bold tracking-tight text-slate-900">Assessment Reports</h2>
           <p className="text-slate-500 text-sm">Every AI posture assessment saved by your doctors.</p>
         </div>
-        <LiveBadge lastUpdated={lastUpdated} refreshing={refreshing} onRefresh={refresh} />
+        <div className="flex items-center gap-3">
+          <ExportButton filename="reports" columns={exportColumns} rows={reports} />
+          <LiveBadge lastUpdated={lastUpdated} refreshing={refreshing} onRefresh={refresh} />
+        </div>
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm mb-4">{error}</div>}

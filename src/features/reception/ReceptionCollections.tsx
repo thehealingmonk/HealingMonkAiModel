@@ -1,9 +1,10 @@
 import { IndianRupee, Wallet, CreditCard, Receipt } from 'lucide-react';
-import { PaymentStatus, listPayments } from '@/services/api';
+import { Payment, PaymentStatus, listPayments } from '@/services/api';
 import { formatDate, formatMoney } from '@/utils/formatter';
 import { useLiveData } from '@/hooks/useLiveData';
 import LiveBadge from '@/features/admin/LiveBadge';
 import TableSkeleton from '@/components/ui/TableSkeleton';
+import ExportButton from '@/components/ui/ExportButton';
 
 const STATUS_BADGE: Record<PaymentStatus, string> = {
   paid: 'bg-emerald-100 text-emerald-700',
@@ -26,6 +27,17 @@ export default function ReceptionCollections() {
   const cashPaid = summary?.cashPaid ?? 0;
   const onlinePaid = summary?.onlinePaid ?? 0;
 
+  const exportColumns = [
+    { header: 'Date', value: (p: Payment) => formatDate(p.createdAt, true) },
+    { header: 'Patient', value: (p: Payment) => p.patientName || '' },
+    { header: 'Patient ID', value: (p: Payment) => p.patientCode || '' },
+    { header: 'Assigned doctor', value: (p: Payment) => p.doctorName || '' },
+    { header: 'Amount (INR)', value: (p: Payment) => (p.amount / 100).toFixed(2) },
+    { header: 'Method', value: (p: Payment) => p.method },
+    { header: 'Status', value: (p: Payment) => p.status },
+    { header: 'Collected by', value: (p: Payment) => p.collectedByName || '' },
+  ];
+
   return (
     <div className="hm-page-enter max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6" data-reveal="fade">
@@ -33,7 +45,10 @@ export default function ReceptionCollections() {
           <h2 className="text-2xl font-bold tracking-tight text-slate-900">Collections</h2>
           <p className="text-slate-500 text-sm">All-time money collected at reception.</p>
         </div>
-        <LiveBadge lastUpdated={lastUpdated} refreshing={refreshing} onRefresh={refresh} />
+        <div className="flex items-center gap-3">
+          <ExportButton filename="collections" columns={exportColumns} rows={payments} />
+          <LiveBadge lastUpdated={lastUpdated} refreshing={refreshing} onRefresh={refresh} />
+        </div>
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm mb-4">{error}</div>}

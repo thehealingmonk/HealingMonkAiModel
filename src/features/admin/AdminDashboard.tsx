@@ -4,6 +4,7 @@ import { formatMoney } from '@/utils/formatter';
 import { useLiveData } from '@/hooks/useLiveData';
 import LiveBadge from '@/features/admin/LiveBadge';
 import CountUp from '@/components/ui/CountUp';
+import AdminAnalytics from '@/features/admin/AdminAnalytics';
 
 interface Props {
   /** Navigate to a section (patients / reports / appointments / payments / users). */
@@ -65,6 +66,9 @@ export default function AdminDashboard({ onNavigate }: Props) {
           );
         })}
       </div>
+
+      {/* Charts: revenue / patients / reports trends, appointment mix, top doctors */}
+      <AdminAnalytics />
 
       {/* Staff modules */}
       <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-slate-500" data-reveal="fade">

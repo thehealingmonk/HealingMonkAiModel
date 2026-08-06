@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarPlus, RefreshCw, Clock, CheckCircle2, XCircle, UserX } from 'lucide-react';
+import { CalendarPlus, RefreshCw, Clock, CheckCircle2, XCircle, UserX, Stethoscope, Phone } from 'lucide-react';
 import TableSkeleton from '@/components/ui/TableSkeleton';
 import {
   Appointment,
@@ -21,6 +21,13 @@ const STATUS_STYLES: Record<AppointmentStatus, string> = {
 
 function name(ref: Appointment['patient']) {
   return ref && typeof ref === 'object' ? ref.name : '—';
+}
+
+// The doctor to display for a booking: the one picked at booking time, falling
+// back to the patient's currently-assigned doctor when none was chosen.
+function doctorOf(a: Appointment): string | null {
+  if (a.doctor && typeof a.doctor === 'object') return a.doctor.name;
+  return a.assignedDoctorName ?? null;
 }
 
 function timeOf(iso: string) {
@@ -108,18 +115,35 @@ export default function ReceptionDashboard({ onBook }: Props) {
             No appointments for this day.
           </p>
         ) : (
-          appts.map((a) => (
+          appts.map((a) => {
+            const doctor = doctorOf(a);
+            return (
             <div key={a.id} className="flex flex-wrap items-center gap-3 px-4 py-3 hover:bg-emerald-50/40 transition-colors">
               <div className="flex items-center gap-2 text-slate-900 font-semibold w-20">
                 <Clock className="w-4 h-4 text-slate-400" />
                 {timeOf(a.scheduledAt)}
               </div>
-              <div className="flex-1 min-w-[8rem]">
-                <p className="font-medium text-gray-900">{name(a.patient)}</p>
-                <p className="text-xs text-gray-500">
-                  {typeof a.doctor === 'object' && a.doctor ? `Dr. ${a.doctor.name}` : 'Unassigned'}
-                  {a.reason ? ` · ${a.reason}` : ''}
+              <div className="flex-1 min-w-[10rem]">
+                <p className="font-medium text-gray-900">
+                  {name(a.patient)}
+                  {a.patientCode && <span className="ml-2 font-mono text-[11px] text-gray-400">{a.patientCode}</span>}
                 </p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500 mt-0.5">
+                  <span className="inline-flex items-center gap-1">
+                    <Stethoscope className="w-3.5 h-3.5 text-emerald-500" />
+                    {doctor ? (
+                      <span className="font-medium text-emerald-700">Dr. {doctor}</span>
+                    ) : (
+                      <span className="text-amber-600">Unassigned</span>
+                    )}
+                  </span>
+                  {a.patientMobile && (
+                    <span className="inline-flex items-center gap-1">
+                      <Phone className="w-3.5 h-3.5 text-slate-400" /> {a.patientMobile}
+                    </span>
+                  )}
+                  {a.reason && <span className="text-gray-500">· {a.reason}</span>}
+                </div>
               </div>
               <span
                 className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${STATUS_STYLES[a.status]}`}
@@ -150,7 +174,8 @@ export default function ReceptionDashboard({ onBook }: Props) {
                 </IconBtn>
               </div>
             </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

@@ -3,6 +3,7 @@ import { formatDate } from '@/utils/formatter';
 import { useLiveData } from '@/hooks/useLiveData';
 import LiveBadge from '@/features/admin/LiveBadge';
 import TableSkeleton from '@/components/ui/TableSkeleton';
+import ExportButton from '@/components/ui/ExportButton';
 
 const STATUS_BADGE: Record<AppointmentStatus, string> = {
   scheduled: 'bg-sky-100 text-sky-700',
@@ -20,6 +21,14 @@ export default function AppointmentsList() {
   );
   const appts = data?.appointments ?? [];
 
+  const exportColumns = [
+    { header: 'When', value: (a: Appointment) => formatDate(a.scheduledAt, true) },
+    { header: 'Patient', value: (a: Appointment) => name(a.patient) },
+    { header: 'Doctor', value: (a: Appointment) => name(a.doctor) },
+    { header: 'Reason', value: (a: Appointment) => a.reason || '' },
+    { header: 'Status', value: (a: Appointment) => a.status.replace('_', ' ') },
+  ];
+
   return (
     <div className="hm-page-enter max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6" data-reveal="fade">
@@ -27,7 +36,10 @@ export default function AppointmentsList() {
           <h2 className="text-2xl font-bold tracking-tight text-slate-900">Appointments</h2>
           <p className="text-slate-500 text-sm">All bookings across doctors and reception.</p>
         </div>
-        <LiveBadge lastUpdated={lastUpdated} refreshing={refreshing} onRefresh={refresh} />
+        <div className="flex items-center gap-3">
+          <ExportButton filename="appointments" columns={exportColumns} rows={appts} />
+          <LiveBadge lastUpdated={lastUpdated} refreshing={refreshing} onRefresh={refresh} />
+        </div>
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm mb-4">{error}</div>}

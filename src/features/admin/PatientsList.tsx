@@ -6,6 +6,7 @@ import { formatDate } from '@/utils/formatter';
 import { useLiveData } from '@/hooks/useLiveData';
 import LiveBadge from '@/features/admin/LiveBadge';
 import TableSkeleton from '@/components/ui/TableSkeleton';
+import ExportButton from '@/components/ui/ExportButton';
 
 export default function PatientsList() {
   const navigate = useNavigate();
@@ -18,6 +19,18 @@ export default function PatientsList() {
 
   const doctorName = (d: Patient['assignedDoctor']) =>
     d && typeof d === 'object' ? d.name : '—';
+
+  const exportColumns = [
+    { header: 'Patient ID', value: (p: Patient) => p.patientId },
+    { header: 'Name', value: (p: Patient) => p.name },
+    { header: 'Age', value: (p: Patient) => p.age ?? '' },
+    { header: 'Gender', value: (p: Patient) => p.gender || '' },
+    { header: 'Mobile', value: (p: Patient) => p.mobile || '' },
+    { header: 'Email', value: (p: Patient) => p.email || '' },
+    { header: 'Pain areas', value: (p: Patient) => p.painAreas.join('; ') },
+    { header: 'Assigned doctor', value: (p: Patient) => doctorName(p.assignedDoctor) },
+    { header: 'Registered', value: (p: Patient) => formatDate(p.createdAt, true) },
+  ];
 
   return (
     <div className="hm-page-enter max-w-5xl mx-auto">
@@ -47,6 +60,7 @@ export default function PatientsList() {
               <Search className="w-4 h-4" />
             </button>
           </form>
+          <ExportButton filename="patients" columns={exportColumns} rows={patients} />
           <LiveBadge lastUpdated={lastUpdated} refreshing={refreshing} onRefresh={refresh} />
         </div>
       </div>
