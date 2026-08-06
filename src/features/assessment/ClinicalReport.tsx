@@ -13,7 +13,7 @@ import {
 } from '@/lib/clinicalKnowledge';
 import PoseIllustration from '@/components/common/PoseIllustration';
 import { useState, ReactNode } from 'react';
-import { FileText, Printer, RotateCcw, Activity, AlertTriangle, Stethoscope, ShieldAlert, Download, Link2, Check } from 'lucide-react';
+import { FileText, Printer, RotateCcw, Activity, AlertTriangle, Stethoscope, ShieldAlert, Download, Link2, Check, ZoomIn, X } from 'lucide-react';
 import { downloadReportPdf } from '@/lib/reportPdf';
 import type { DoctorFindingData } from '@/services/report.service';
 
@@ -268,7 +268,7 @@ export default function ClinicalReport({ patient, captures, extraShots = [], onR
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                 {extraShots.map((s) => (
                   <figure key={s.id} className="rounded-lg overflow-hidden border border-gray-200 break-inside-avoid">
-                    <img src={s.imageData} alt={s.label} className="w-full h-32 object-cover bg-gray-900" />
+                    <ZoomableImage src={s.imageData} alt={s.label} heightClass="h-40" />
                     <figcaption className="px-2 py-1 text-[11px] text-gray-600 bg-gray-50 truncate">{s.label}</figcaption>
                   </figure>
                 ))}
@@ -329,22 +329,23 @@ function FindingCard({
     <div className="border border-gray-200 rounded-xl overflow-hidden break-inside-avoid">
       <div className="flex flex-col md:flex-row">
         {/* Left: user's captured photo (ideal line + joint angles baked in) · Right: ideal-position reference */}
-        <div className="grid grid-cols-2 md:w-[28rem] flex-shrink-0">
+        <div className="grid grid-cols-[3fr_2fr] md:w-[30rem] flex-shrink-0 bg-slate-900">
           <figure className="relative">
             {/* Patient photo WITH the AI pose overlay (dots + skeleton + plumb line)
-                baked in, so the doctor sees exactly what the model measured. Falls
-                back to the raw frame only if the overlay snapshot is missing. */}
-            <img
+                baked in, so the doctor sees exactly what the model measured. Uses
+                object-contain (not cover) so the FULL body and every measured
+                point / plumb line stays visible — cropping would hide the head or
+                feet the assessment depends on. Click to view full size. Falls back
+                to the raw frame only if the overlay snapshot is missing. */}
+            <ZoomableImage
               src={capture.imageData || capture.rawImageData}
               alt={`${assessment.name} — patient photo with pose points`}
-              className="w-full h-44 object-cover bg-gray-900"
+              heightClass="h-72"
+              badge="Patient Photo · pose points"
             />
-            <figcaption className="absolute bottom-1 left-1 text-[10px] font-semibold bg-black/60 text-white px-1.5 py-0.5 rounded">
-              Patient Photo · pose points
-            </figcaption>
           </figure>
           <figure className="relative border-l border-gray-200 bg-slate-50 flex items-center justify-center">
-            <PoseIllustration pose={assessment.id} className="w-full h-44" />
+            <PoseIllustration pose={assessment.id} className="w-full h-72" />
             {/* Ideal plumb reference — the target vertical the patient's line
                 (drawn on the left photo) should match. */}
             <span
@@ -647,6 +648,71 @@ function CopyLinkButton({ url }: { url: string }) {
       {copied ? <Check className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
       {copied ? 'Link copied' : 'Copy link'}
     </button>
+  );
+}
+
+/**
+ * Report photo that never crops the pose. Shows the image with object-contain on
+ * a dark backdrop (so the whole body + baked-in points/plumb line stay visible)
+ * and, on click, opens a full-screen lightbox for maximum clarity. Lazy/async
+ * decoded so a report with many photos stays fast and scrolls smoothly.
+ */
+function ZoomableImage({
+  src,
+  alt,
+  heightClass = 'h-72',
+  badge,
+}: {
+  src: string;
+  alt: string;
+  heightClass?: string;
+  badge?: string;
+}) {
+  const [zoom, setZoom] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setZoom(true)}
+        className={`group relative block w-full ${heightClass} cursor-zoom-in bg-slate-900 print:cursor-default`}
+        aria-label={`View ${alt} full size`}
+      >
+        <img
+          src={src}
+          alt={alt}
+          loading="lazy"
+          decoding="async"
+          className="w-full h-full object-contain"
+        />
+        {badge && (
+          <span className="absolute bottom-1 left-1 text-[10px] font-semibold bg-black/70 text-white px-1.5 py-0.5 rounded">
+            {badge}
+          </span>
+        )}
+        <span className="absolute top-1 right-1 flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 print:hidden">
+          <ZoomIn className="w-3 h-3" /> Enlarge
+        </span>
+      </button>
+      {zoom && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm print:hidden"
+          onClick={() => setZoom(false)}
+          role="dialog"
+          aria-modal
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={src} alt={alt} className="max-h-full max-w-full object-contain rounded-lg shadow-2xl" />
+          <button
+            type="button"
+            onClick={() => setZoom(false)}
+            className="absolute top-4 right-4 rounded-full bg-white/10 hover:bg-white/20 p-2 text-white transition-colors"
+            aria-label="Close full-size view"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 

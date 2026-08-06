@@ -1,14 +1,16 @@
-import { Activity, LogOut, UserPlus, CalendarDays } from 'lucide-react';
+import { Activity, LogOut, UserPlus, CalendarDays, IndianRupee } from 'lucide-react';
 import { Routes, Route, Navigate, Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/store/auth.store';
 import ReceptionDashboard from '@/features/reception/ReceptionDashboard';
+import ReceptionCollections from '@/features/reception/ReceptionCollections';
 import BookAppointment from '@/features/reception/BookAppointment';
 import PatientForm from '@/features/doctor/PatientForm';
 
 // Reception URL space:
-//   /reception           → today's schedule
-//   /reception/register  → register patient (+ assign doctor)
-//   /reception/book      → book appointment
+//   /reception             → today's schedule
+//   /reception/register    → register patient (+ assign doctor)
+//   /reception/book        → book appointment
+//   /reception/collections → all-time collections
 const navCls = ({ isActive }: { isActive: boolean }) =>
   `inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${
     isActive ? 'bg-green-600 text-white' : 'text-gray-600 hover:bg-gray-100'
@@ -49,6 +51,9 @@ function Chrome() {
           <NavLink to="/reception/register" className={navCls}>
             <UserPlus className="w-4 h-4" /> Register patient
           </NavLink>
+          <NavLink to="/reception/collections" className={navCls}>
+            <IndianRupee className="w-4 h-4" /> Collections
+          </NavLink>
         </div>
       </div>
 
@@ -75,6 +80,7 @@ export default function ReceptionApp() {
             />
           }
         />
+        <Route path="collections" element={<ReceptionCollections />} />
         <Route
           path="book"
           element={<BookAppointment onBack={() => navigate('/reception')} onBooked={() => navigate('/reception')} />}

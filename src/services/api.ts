@@ -338,9 +338,23 @@ export interface Payment {
   razorpayOrderId: string | null;
   razorpayPaymentId: string | null;
   createdAt?: string;
+  // Enriched by the list endpoint (joined from the patient / staff records).
+  patientName?: string | null;
+  patientCode?: string | null;
+  doctorName?: string | null;
+  collectedByName?: string | null;
 }
 
-export async function listPayments(patientId?: string): Promise<{ payments: Payment[] }> {
+export interface PaymentSummary {
+  totalPaid: number; // paise, all-time (or per-patient when filtered)
+  paidCount: number;
+  cashPaid: number; // paise
+  onlinePaid: number; // paise
+}
+
+export async function listPayments(
+  patientId?: string
+): Promise<{ payments: Payment[]; summary?: PaymentSummary }> {
   return request(`/payments${patientId ? `?patient=${patientId}` : ''}`);
 }
 

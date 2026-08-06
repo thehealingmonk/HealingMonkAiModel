@@ -189,8 +189,19 @@ export async function downloadReportPdf(
     if (src) {
       try {
         const img = await loadImage(src);
-        imgH = Math.min(40, (imgW * img.height) / img.width);
-        doc.addImage(src, 'JPEG', margin, y, imgW, imgH);
+        // Fit inside imgW × maxH preserving aspect ratio so a portrait full-body
+        // photo is never squished — a distorted pose would misrepresent the
+        // alignment the report is measuring. Centered within the image column.
+        const maxH = 40;
+        const ratio = img.width / img.height || 1;
+        let w = imgW;
+        let h = imgW / ratio;
+        if (h > maxH) {
+          h = maxH;
+          w = maxH * ratio;
+        }
+        imgH = h;
+        doc.addImage(src, 'JPEG', margin + (imgW - w) / 2, y, w, h);
       } catch {
         /* ignore a broken image, keep the text */
       }
