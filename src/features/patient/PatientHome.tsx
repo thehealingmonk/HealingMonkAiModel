@@ -7,14 +7,19 @@ import {
   TrendingUp,
   AlertTriangle,
   ExternalLink,
+  IndianRupee,
+  Wallet,
 } from 'lucide-react';
 import { useAuth } from '@/store/auth.store';
 import {
   Report,
   Appointment,
+  Payment,
   myReports,
   myAppointments,
+  myPayments,
 } from '@/services/api';
+import { formatMoney } from '@/utils/formatter';
 
 function when(iso?: string) {
   if (!iso) return '';
@@ -27,14 +32,20 @@ export default function PatientHome() {
   const { user, logout } = useAuth();
   const [reports, setReports] = useState<Report[]>([]);
   const [appts, setAppts] = useState<Appointment[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [totalPaid, setTotalPaid] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.allSettled([myReports(), myAppointments()]).then(([r, a]) => {
+    Promise.allSettled([myReports(), myAppointments(), myPayments()]).then(([r, a, p]) => {
       if (cancelled) return;
       if (r.status === 'fulfilled') setReports(r.value.reports);
       if (a.status === 'fulfilled') setAppts(a.value.appointments);
+      if (p.status === 'fulfilled') {
+        setPayments(p.value.payments);
+        setTotalPaid(p.value.totalPaid);
+      }
       setLoading(false);
     });
     return () => {
@@ -83,7 +94,7 @@ export default function PatientHome() {
         ) : (
           <div className="space-y-8">
             {/* Summary cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <SummaryCard
                 i={0}
                 icon={<TrendingUp className="w-5 h-5" />}
@@ -104,6 +115,13 @@ export default function PatientHome() {
                 label="Sessions"
                 value={`${totalSessions}`}
                 tint="bg-amber-50 text-amber-700"
+              />
+              <SummaryCard
+                i={3}
+                icon={<Wallet className="w-5 h-5" />}
+                label="Total paid"
+                value={formatMoney(totalPaid)}
+                tint="bg-violet-50 text-violet-700"
               />
             </div>
 
@@ -133,6 +151,36 @@ export default function PatientHome() {
                         </p>
                       </div>
                       <StatusBadge status={a.status} />
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+
+            {/* Payments / receipts */}
+            <section data-reveal>
+              <h3 className="font-semibold text-slate-900 mb-3">My payments</h3>
+              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm divide-y divide-slate-100">
+                {payments.length === 0 ? (
+                  <p className="text-sm text-slate-400 px-4 py-6 text-center">No payments recorded yet.</p>
+                ) : (
+                  payments.map((p) => (
+                    <div key={p.id} className="px-4 py-3 flex items-center justify-between hover:bg-emerald-50/40 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center">
+                          <IndianRupee className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-slate-900">{p.plan || 'Consultation / service'}</p>
+                          <p className="text-xs text-slate-500">
+                            {when(p.createdAt)} · <span className="capitalize">{p.method}</span>
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold text-slate-900">{formatMoney(p.amount, p.currency)}</p>
+                        <PaymentBadge status={p.status} />
+                      </div>
                     </div>
                   ))
                 )}
@@ -247,6 +295,20 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${map[status] || 'bg-gray-100 text-gray-600'}`}>
       {label}
+    </span>
+  );
+}
+
+function PaymentBadge({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    paid: 'bg-emerald-50 text-emerald-700',
+    created: 'bg-sky-50 text-sky-700',
+    failed: 'bg-red-50 text-red-600',
+    refunded: 'bg-amber-50 text-amber-700',
+  };
+  return (
+    <span className={`inline-block mt-0.5 text-[11px] font-medium px-2 py-0.5 rounded-full capitalize ${map[status] || 'bg-gray-100 text-gray-600'}`}>
+      {status}
     </span>
   );
 }

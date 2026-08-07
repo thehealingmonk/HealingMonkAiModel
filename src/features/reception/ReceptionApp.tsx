@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, Outlet, NavLink, useNavigate } from 'react-rou
 import { useAuth } from '@/store/auth.store';
 import ReceptionDashboard from '@/features/reception/ReceptionDashboard';
 import ReceptionCollections from '@/features/reception/ReceptionCollections';
+import ReceptionBilling from '@/features/reception/ReceptionBilling';
 import BookAppointment from '@/features/reception/BookAppointment';
 import PatientForm from '@/features/doctor/PatientForm';
 
@@ -52,7 +53,7 @@ function Chrome() {
             <UserPlus className="w-4 h-4" /> Register patient
           </NavLink>
           <NavLink to="/reception/collections" className={navCls}>
-            <IndianRupee className="w-4 h-4" /> Collections
+            <IndianRupee className="w-4 h-4" /> Billing
           </NavLink>
         </div>
       </div>
@@ -81,6 +82,7 @@ export default function ReceptionApp() {
           }
         />
         <Route path="collections" element={<ReceptionCollections />} />
+        <Route path="billing" element={<ReceptionBilling />} />
         <Route
           path="book"
           element={<BookAppointment onBack={() => navigate('/reception')} onBooked={() => navigate('/reception')} />}

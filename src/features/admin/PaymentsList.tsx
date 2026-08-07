@@ -59,18 +59,23 @@ export default function PaymentsList() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-500 text-left">
               <tr>
+                <th className="px-4 py-3 font-medium">Patient</th>
                 <th className="px-4 py-3 font-medium">Amount</th>
                 <th className="px-4 py-3 font-medium">Method</th>
                 <th className="px-4 py-3 font-medium">Plan</th>
                 <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Reference</th>
+                <th className="px-4 py-3 font-medium">Collected by</th>
                 <th className="px-4 py-3 font-medium">Date</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {payments.map((p) => (
                 <tr key={p.id} className="hover:bg-emerald-50/60 transition-colors">
-                  <td className="px-4 py-3 font-semibold text-slate-900">{formatMoney(p.amount, p.currency)}</td>
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-slate-900">{p.patientName || '—'}</p>
+                    {p.patientCode && <p className="text-xs text-gray-400">{p.patientCode}</p>}
+                  </td>
+                  <td className="px-4 py-3 font-semibold text-slate-900 whitespace-nowrap">{formatMoney(p.amount, p.currency)}</td>
                   <td className="px-4 py-3 text-slate-600 capitalize">{p.method}</td>
                   <td className="px-4 py-3 text-slate-600">{p.plan || '—'}</td>
                   <td className="px-4 py-3">
@@ -78,8 +83,8 @@ export default function PaymentsList() {
                       {p.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-400">{p.razorpayPaymentId || '—'}</td>
-                  <td className="px-4 py-3 text-gray-500">{formatDate(p.createdAt, true)}</td>
+                  <td className="px-4 py-3 text-slate-600">{p.collectedByName || '—'}</td>
+                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{formatDate(p.createdAt, true)}</td>
                 </tr>
               ))}
             </tbody>

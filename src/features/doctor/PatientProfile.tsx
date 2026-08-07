@@ -11,7 +11,10 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  IndianRupee,
+  Plus,
 } from 'lucide-react';
+import RecordPaymentModal from '@/features/reception/RecordPaymentModal';
 import {
   Patient,
   Report,
@@ -62,6 +65,18 @@ export default function PatientProfile({ patient, onBack, onStartAssessment }: P
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [billing, setBilling] = useState(false);
+
+  // Doctors and admins may both view this patient's billing (the payments API
+  // allows either role); only admins can record a new one from here.
+  const loadPayments = async () => {
+    try {
+      const { payments } = await listPayments(patient.id);
+      setPayments(payments);
+    } catch {
+      /* non-critical */
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -71,7 +86,7 @@ export default function PatientProfile({ patient, onBack, onStartAssessment }: P
       const [rep, appt, pay] = await Promise.allSettled([
         listPatientReports(patient.id),
         listAppointments({ patient: patient.id, scope: 'all' }),
-        isAdmin ? listPayments(patient.id) : Promise.resolve({ payments: [] as Payment[] }),
+        listPayments(patient.id),
       ]);
       if (cancelled) return;
       if (rep.status === 'fulfilled') setReports(rep.value.reports);
@@ -82,7 +97,11 @@ export default function PatientProfile({ patient, onBack, onStartAssessment }: P
     return () => {
       cancelled = true;
     };
-  }, [patient.id, isAdmin]);
+  }, [patient.id]);
+
+  const totalPaid = payments
+    .filter((p) => p.status === 'paid')
+    .reduce((sum, p) => sum + p.amount, 0);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -242,47 +261,72 @@ export default function PatientProfile({ patient, onBack, onStartAssessment }: P
         </div>
       )}
 
-      {/* Payments (admin only) */}
-      {isAdmin && (
-        <>
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 mt-8">Payments</h3>
-          {loading ? (
-            <div className="p-6 text-center text-gray-500">Loading payments…</div>
-          ) : payments.length === 0 ? (
-            <div className="bg-white border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">
-              No payments recorded for this patient.
-            </div>
-          ) : (
-            <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto shadow-sm">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-gray-500 text-left">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Amount</th>
-                    <th className="px-4 py-3 font-medium">Method</th>
-                    <th className="px-4 py-3 font-medium">Plan</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                    <th className="px-4 py-3 font-medium">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {payments.map((p) => (
-                    <tr key={p.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-semibold text-gray-900">{formatMoney(p.amount, p.currency)}</td>
-                      <td className="px-4 py-3 text-gray-600 capitalize">{p.method}</td>
-                      <td className="px-4 py-3 text-gray-600">{p.plan || '—'}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium capitalize ${PAY_BADGE[p.status]}`}>
-                          {p.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-500">{formatDate(p.createdAt, true)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      {/* Billing — visible to doctor & admin; admin can record a new payment. */}
+      <div className="flex items-center justify-between mb-3 mt-8">
+        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+          Billing
+          {!loading && payments.length > 0 && (
+            <span className="ml-2 normal-case text-gray-900 font-bold">{formatMoney(totalPaid)} paid</span>
           )}
-        </>
+        </h3>
+        {isAdmin && (
+          <button
+            onClick={() => setBilling(true)}
+            className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" /> Record payment
+          </button>
+        )}
+      </div>
+      {loading ? (
+        <div className="p-6 text-center text-gray-500">Loading payments…</div>
+      ) : payments.length === 0 ? (
+        <div className="bg-white border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">
+          <IndianRupee className="w-6 h-6 mx-auto mb-2 text-gray-300" />
+          No payments recorded for this patient.
+        </div>
+      ) : (
+        <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto shadow-sm">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-gray-500 text-left">
+              <tr>
+                <th className="px-4 py-3 font-medium">Amount</th>
+                <th className="px-4 py-3 font-medium">Method</th>
+                <th className="px-4 py-3 font-medium">Service</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Collected by</th>
+                <th className="px-4 py-3 font-medium">Date</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {payments.map((p) => (
+                <tr key={p.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap">{formatMoney(p.amount, p.currency)}</td>
+                  <td className="px-4 py-3 text-gray-600 capitalize">{p.method}</td>
+                  <td className="px-4 py-3 text-gray-600">
+                    {p.plan || '—'}
+                    {p.notes && <span className="block text-xs text-gray-400">{p.notes}</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium capitalize ${PAY_BADGE[p.status]}`}>
+                      {p.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-gray-600">{p.collectedByName || '—'}</td>
+                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{formatDate(p.createdAt, true)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {billing && (
+        <RecordPaymentModal
+          presetPatient={patient}
+          onClose={() => setBilling(false)}
+          onRecorded={loadPayments}
+        />
       )}
     </div>
   );

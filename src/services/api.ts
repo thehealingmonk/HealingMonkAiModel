@@ -332,14 +332,19 @@ export async function bookPublic(payload: {
 
 export type PaymentStatus = 'created' | 'paid' | 'failed' | 'refunded';
 
+export type PaymentMethod = 'online' | 'cash' | 'card' | 'upi';
+/** Methods reception can bill manually at the desk (never the online gateway). */
+export type ManualPaymentMethod = 'cash' | 'card' | 'upi';
+
 export interface Payment {
   id: string;
   patient: string;
   amount: number; // paise
   currency: string;
-  method: 'online' | 'cash';
+  method: PaymentMethod;
   status: PaymentStatus;
-  plan: string;
+  plan: string; // service / plan label
+  notes: string;
   razorpayOrderId: string | null;
   razorpayPaymentId: string | null;
   createdAt?: string;
@@ -354,13 +359,25 @@ export interface PaymentSummary {
   totalPaid: number; // paise, all-time (or per-patient when filtered)
   paidCount: number;
   cashPaid: number; // paise
-  onlinePaid: number; // paise
+  onlinePaid: number; // paise — online gateway + card + UPI
+  byMethod?: Record<string, number>; // paise collected per method
 }
 
 export async function listPayments(
   patientId?: string
 ): Promise<{ payments: Payment[]; summary?: PaymentSummary }> {
   return request(`/payments${patientId ? `?patient=${patientId}` : ''}`);
+}
+
+// Reception/admin: manually record a bill the patient has paid at the desk.
+export async function recordPayment(payload: {
+  patientId: string;
+  amount: number; // rupees (converted to paise server-side)
+  method: ManualPaymentMethod;
+  plan?: string; // service / treatment label
+  notes?: string;
+}): Promise<{ payment: Payment }> {
+  return request('/payments/cash', { method: 'POST', body: JSON.stringify(payload) });
 }
 
 // ---- Admin analytics ----
@@ -391,6 +408,7 @@ export interface AdminAnalytics {
   patientsByDay: DayPoint[];
   reportsByDay: DayPoint[];
   apptStatus: Partial<Record<AppointmentStatus, number>>;
+  paymentMethods: Record<string, number>; // paise collected per method in range
   topDoctors: { name: string; reports: number }[];
   revenueTotal: number; // paise
   revenueCount: number;
@@ -408,4 +426,8 @@ export async function myReports(): Promise<{ reports: Report[] }> {
 
 export async function myAppointments(): Promise<{ appointments: Appointment[] }> {
   return request('/me/appointments');
+}
+
+export async function myPayments(): Promise<{ payments: Payment[]; totalPaid: number }> {
+  return request('/me/payments');
 }

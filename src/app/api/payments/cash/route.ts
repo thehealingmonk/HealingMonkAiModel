@@ -7,7 +7,9 @@ import { sendMail, paymentReceiptEmail } from '@/lib/server/mailer';
 
 export const dynamic = 'force-dynamic';
 
-// Record a cash payment at the desk. Reception/admin.
+// Manual desk billing: record a cash/card/UPI payment. Reception/admin.
+const MANUAL_METHODS = ['cash', 'card', 'upi'];
+
 export async function POST(req: NextRequest) {
   const { user, error } = await requireAuth(req);
   if (error) return error;
@@ -16,11 +18,14 @@ export async function POST(req: NextRequest) {
 
   try {
     await connectDB();
-    const { patientId, amount, plan, notes } = (await req.json().catch(() => ({}))) || {};
+    const { patientId, amount, method, plan, notes } = (await req.json().catch(() => ({}))) || {};
     const paise = Math.round(Number(amount) * 100);
     if (!patientId || !paise || paise <= 0) {
       return NextResponse.json({ error: 'patientId and a positive amount are required' }, { status: 400 });
     }
+    // Default to cash; only accept the desk-collectable methods (never 'online',
+    // which is reserved for the Razorpay gateway flow).
+    const payMethod = MANUAL_METHODS.includes(method) ? method : 'cash';
     const patient = await Patient.findById(patientId);
     if (!patient) return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
 
@@ -28,7 +33,7 @@ export async function POST(req: NextRequest) {
       patient: patient._id,
       amount: paise,
       currency: 'INR',
-      method: 'cash',
+      method: payMethod,
       status: 'paid',
       plan: plan || '',
       notes: notes || '',
@@ -42,7 +47,7 @@ export async function POST(req: NextRequest) {
           patientName: patient.name,
           amount: paise,
           currency: 'INR',
-          method: 'cash',
+          method: payMethod,
         }),
       });
     }

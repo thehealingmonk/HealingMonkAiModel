@@ -1,7 +1,8 @@
 import mongoose from 'mongoose';
 
 export const PAYMENT_STATUSES = ['created', 'paid', 'failed', 'refunded'];
-export const PAYMENT_METHODS = ['online', 'cash'];
+// 'online' = Razorpay gateway. cash/card/upi are entered manually at the desk.
+export const PAYMENT_METHODS = ['online', 'cash', 'card', 'upi'];
 
 const paymentSchema = new mongoose.Schema(
   {
@@ -30,6 +31,7 @@ paymentSchema.methods.toJSONSafe = function toJSONSafe(this: any) {
     method: this.method,
     status: this.status,
     plan: this.plan || '',
+    notes: this.notes || '',
     razorpayOrderId: this.razorpayOrderId,
     razorpayPaymentId: this.razorpayPaymentId,
     createdAt: this.createdAt,

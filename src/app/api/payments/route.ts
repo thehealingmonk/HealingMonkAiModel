@@ -45,14 +45,16 @@ export async function GET(req: NextRequest) {
 
   let totalPaid = 0;
   let paidCount = 0;
-  let cashPaid = 0;
-  let onlinePaid = 0;
+  const byMethodTotal: Record<string, number> = {};
   for (const m of byMethod as { _id: string; total: number; count: number }[]) {
     totalPaid += m.total;
     paidCount += m.count;
-    if (m._id === 'cash') cashPaid = m.total;
-    else if (m._id === 'online') onlinePaid = m.total;
+    byMethodTotal[m._id] = m.total;
   }
+  // Cash vs. everything digital (online gateway + card + UPI), so the two cards
+  // always add up to the grand total no matter which desk method was used.
+  const cashPaid = byMethodTotal.cash || 0;
+  const onlinePaid = totalPaid - cashPaid;
 
   return NextResponse.json({
     payments: payments.map((p: any) => ({
@@ -62,6 +64,6 @@ export async function GET(req: NextRequest) {
       doctorName: p.patient?.assignedDoctor?.name ?? null,
       collectedByName: p.collectedBy?.name ?? null,
     })),
-    summary: { totalPaid, paidCount, cashPaid, onlinePaid },
+    summary: { totalPaid, paidCount, cashPaid, onlinePaid, byMethod: byMethodTotal },
   });
 }

@@ -16,6 +16,13 @@ const STATUS_COLOR: Record<string, string> = {
   no_show: '#ef4444',
 };
 
+const METHOD_COLOR: Record<string, string> = {
+  cash: '#f59e0b',
+  upi: '#8b5cf6',
+  card: '#0ea5e9',
+  online: '#10b981',
+};
+
 // YYYY-MM-DD in the clinic timezone (matches how the API buckets days).
 function istDay(d: Date): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(d);
@@ -65,6 +72,14 @@ export default function AdminAnalytics() {
     .map(([label, value]) => ({ label: label.replace('_', ' '), value, color: STATUS_COLOR[label] }));
 
   const doctorRows = (a?.topDoctors ?? []).map((d) => ({ label: d.name, value: d.reports, color: '#8b5cf6' }));
+
+  const methodRows = (Object.entries(a?.paymentMethods ?? {}) as [string, number][])
+    .sort((x, y) => y[1] - x[1])
+    .map(([label, paise]) => ({
+      label: label === 'online' ? 'Online gateway' : label.toUpperCase(),
+      value: paise / 100,
+      color: METHOD_COLOR[label] || '#64748b',
+    }));
 
   // Merged daily rows for the CSV "download report".
   const exportRows: DayRow[] = daysArr.map((d) => ({
@@ -131,6 +146,15 @@ export default function AdminAnalytics() {
           <ChartCard title="Appointments" subtitle="Status mix in range">
             <div className="pt-2">
               <HBars rows={statusRows} />
+            </div>
+          </ChartCard>
+          <ChartCard title="Payment methods" subtitle="Collections by method">
+            <div className="pt-2">
+              {methodRows.length === 0 ? (
+                <p className="py-6 text-center text-sm text-slate-400">No payments in range.</p>
+              ) : (
+                <HBars rows={methodRows} format={(n) => formatMoney(n * 100)} />
+              )}
             </div>
           </ChartCard>
           <ChartCard title="Busiest doctors" subtitle="By reports created" className="lg:col-span-2">

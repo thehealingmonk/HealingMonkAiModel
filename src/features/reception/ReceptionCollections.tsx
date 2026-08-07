@@ -1,4 +1,5 @@
-import { IndianRupee, Wallet, CreditCard, Receipt } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { IndianRupee, Wallet, CreditCard, Receipt, Plus } from 'lucide-react';
 import { Payment, PaymentStatus, listPayments } from '@/services/api';
 import { formatDate, formatMoney } from '@/utils/formatter';
 import { useLiveData } from '@/hooks/useLiveData';
@@ -18,6 +19,7 @@ const STATUS_BADGE: Record<PaymentStatus, string> = {
 // aggregation (whole collection), so they stay accurate beyond the 300-row list.
 export default function ReceptionCollections() {
   const { data, loading, refreshing, error, lastUpdated, refresh } = useLiveData(() => listPayments());
+  const navigate = useNavigate();
   const payments = data?.payments ?? [];
   const summary = data?.summary;
 
@@ -32,9 +34,11 @@ export default function ReceptionCollections() {
     { header: 'Patient', value: (p: Payment) => p.patientName || '' },
     { header: 'Patient ID', value: (p: Payment) => p.patientCode || '' },
     { header: 'Assigned doctor', value: (p: Payment) => p.doctorName || '' },
+    { header: 'Service', value: (p: Payment) => p.plan || '' },
     { header: 'Amount (INR)', value: (p: Payment) => (p.amount / 100).toFixed(2) },
     { header: 'Method', value: (p: Payment) => p.method },
     { header: 'Status', value: (p: Payment) => p.status },
+    { header: 'Notes', value: (p: Payment) => p.notes || '' },
     { header: 'Collected by', value: (p: Payment) => p.collectedByName || '' },
   ];
 
@@ -46,6 +50,12 @@ export default function ReceptionCollections() {
           <p className="text-slate-500 text-sm">All-time money collected at reception.</p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/reception/billing')}
+            className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3.5 py-2 rounded-lg transition-colors shadow-sm"
+          >
+            <Plus className="w-4 h-4" /> Record payment
+          </button>
           <ExportButton filename="collections" columns={exportColumns} rows={payments} />
           <LiveBadge lastUpdated={lastUpdated} refreshing={refreshing} onRefresh={refresh} />
         </div>
@@ -65,7 +75,15 @@ export default function ReceptionCollections() {
         {loading ? (
           <TableSkeleton rows={6} cols={6} />
         ) : payments.length === 0 ? (
-          <div className="p-10 text-center text-slate-400">No payments recorded yet.</div>
+          <div className="p-10 text-center">
+            <p className="text-slate-400">No payments recorded yet.</p>
+            <button
+              onClick={() => navigate('/reception/billing')}
+              className="mt-3 inline-flex items-center gap-1.5 text-emerald-700 hover:text-emerald-800 text-sm font-semibold"
+            >
+              <Plus className="w-4 h-4" /> Record the first payment
+            </button>
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-500 text-left">
@@ -73,6 +91,7 @@ export default function ReceptionCollections() {
                 <th className="px-4 py-3 font-medium">Date</th>
                 <th className="px-4 py-3 font-medium">Patient</th>
                 <th className="px-4 py-3 font-medium">Assigned doctor</th>
+                <th className="px-4 py-3 font-medium">Service</th>
                 <th className="px-4 py-3 font-medium">Amount</th>
                 <th className="px-4 py-3 font-medium">Method</th>
                 <th className="px-4 py-3 font-medium">Status</th>
@@ -88,6 +107,10 @@ export default function ReceptionCollections() {
                     {p.patientCode && <p className="text-xs text-gray-400">{p.patientCode}</p>}
                   </td>
                   <td className="px-4 py-3 text-slate-600">{p.doctorName ? `Dr. ${p.doctorName}` : <span className="text-slate-400">Unassigned</span>}</td>
+                  <td className="px-4 py-3">
+                    {p.plan ? <p className="text-slate-700">{p.plan}</p> : <span className="text-slate-400">—</span>}
+                    {p.notes && <p className="text-xs text-slate-400">{p.notes}</p>}
+                  </td>
                   <td className="px-4 py-3 font-semibold text-slate-900 whitespace-nowrap">{formatMoney(p.amount, p.currency)}</td>
                   <td className="px-4 py-3 text-slate-600 capitalize">{p.method}</td>
                   <td className="px-4 py-3">

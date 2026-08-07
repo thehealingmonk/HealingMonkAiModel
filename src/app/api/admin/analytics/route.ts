@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
     const days = Math.min(365, Math.max(1, Number(req.nextUrl.searchParams.get('days')) || 30));
     const start = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-    const [revenueByDay, patientsByDay, reportsByDay, apptByStatus, revenueTotal, topDoctorsAgg] =
+    const [revenueByDay, patientsByDay, reportsByDay, apptByStatus, revenueTotal, topDoctorsAgg, methodAgg] =
       await Promise.all([
         Payment.aggregate([
           { $match: { status: 'paid', createdAt: { $gte: start } } },
@@ -65,6 +65,11 @@ export async function GET(req: NextRequest) {
           { $sort: { reports: -1 } },
           { $limit: 5 },
         ]),
+        // Payment-method mix in range (cash / card / upi / online gateway).
+        Payment.aggregate([
+          { $match: { status: 'paid', createdAt: { $gte: start } } },
+          { $group: { _id: '$method', total: { $sum: '$amount' } } },
+        ]),
       ]);
 
     // Resolve doctor names (avoids relying on a $lookup collection name).
@@ -81,6 +86,11 @@ export async function GET(req: NextRequest) {
       apptStatus[a._id] = a.count;
     });
 
+    const paymentMethods: Record<string, number> = {};
+    methodAgg.forEach((m: any) => {
+      if (m._id) paymentMethods[m._id] = m.total;
+    });
+
     return NextResponse.json({
       analytics: {
         days,
@@ -88,6 +98,7 @@ export async function GET(req: NextRequest) {
         patientsByDay: patientsByDay.map((d: any) => ({ date: d._id, count: d.count })),
         reportsByDay: reportsByDay.map((d: any) => ({ date: d._id, count: d.count })),
         apptStatus,
+        paymentMethods,
         topDoctors,
         revenueTotal: revenueTotal[0]?.total || 0,
         revenueCount: revenueTotal[0]?.count || 0,
