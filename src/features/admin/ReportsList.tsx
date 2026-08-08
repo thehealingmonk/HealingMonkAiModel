@@ -24,17 +24,17 @@ async function downloadOriginalPdf(shareId: string) {
 }
 
 const SCORE_COLOR = (s: number | null) => {
-  if (s == null) return 'text-slate-500';
-  if (s >= 80) return 'text-emerald-600';
-  if (s >= 60) return 'text-amber-600';
-  return 'text-red-600';
+  if (s == null) return 'text-slate-400';
+  if (s >= 80) return 'text-emerald-400';
+  if (s >= 60) return 'text-amber-400';
+  return 'text-rose-400';
 };
 
 const SEVERITY_BADGE: Record<string, string> = {
-  normal: 'bg-emerald-100 text-emerald-700',
-  mild: 'bg-amber-100 text-amber-700',
-  moderate: 'bg-orange-100 text-orange-700',
-  severe: 'bg-red-100 text-red-700',
+  normal: 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/20',
+  mild: 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-400/20',
+  moderate: 'bg-orange-500/15 text-orange-300 ring-1 ring-orange-400/20',
+  severe: 'bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/20',
 };
 
 // In-app report detail. Works for every report — including those with no
@@ -62,19 +62,19 @@ function ReportDetailModal({ report, onClose }: { report: ReportListItem; onClos
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-3xl my-8"
+        className="w-full max-w-3xl my-8 rounded-2xl border border-white/10 bg-[#1f2b48] text-slate-200 shadow-2xl shadow-black/50"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 border-b border-gray-100 p-6">
+        <div className="flex items-start justify-between gap-4 border-b border-white/10 p-6">
           <div>
-            <h3 className="text-xl font-bold text-gray-900">
+            <h3 className="text-xl font-bold text-white">
               {report.patientInfo?.name || 'Patient'}
               {report.patientInfo?.patientId && (
-                <span className="ml-2 font-mono text-xs text-gray-400">{report.patientInfo.patientId}</span>
+                <span className="ml-2 font-mono text-xs text-slate-400">{report.patientInfo.patientId}</span>
               )}
             </h3>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-slate-400 mt-1">
               {formatDate(report.createdAt, true)} · Dr. {doctorName}
             </p>
           </div>
@@ -82,11 +82,11 @@ function ReportDetailModal({ report, onClose }: { report: ReportListItem; onClos
             <div className="text-right">
               <p className={`text-3xl font-bold leading-none ${SCORE_COLOR(report.overallScore)}`}>
                 {report.overallScore ?? '—'}
-                <span className="text-sm text-gray-400">/100</span>
+                <span className="text-sm text-slate-400">/100</span>
               </p>
-              <p className="text-xs text-gray-400 mt-1">Overall score</p>
+              <p className="text-xs text-slate-400 mt-1">Overall score</p>
             </div>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-700" aria-label="Close">
+            <button onClick={onClose} className="text-slate-400 hover:text-white" aria-label="Close">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -96,10 +96,10 @@ function ReportDetailModal({ report, onClose }: { report: ReportListItem; onClos
           {/* Pain areas */}
           {report.painAreas.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Pain areas</h4>
+              <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Pain areas</h4>
               <div className="flex flex-wrap gap-1.5">
                 {report.painAreas.map((a) => (
-                  <span key={a} className="text-xs font-medium bg-red-50 text-red-600 px-2 py-0.5 rounded-full">
+                  <span key={a} className="text-xs font-medium bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/20 px-2 py-0.5 rounded-full">
                     {a}
                   </span>
                 ))}
@@ -109,15 +109,15 @@ function ReportDetailModal({ report, onClose }: { report: ReportListItem; onClos
 
           {/* Findings */}
           <div>
-            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
               Findings ({report.findings.length})
             </h4>
             {report.findings.length === 0 ? (
-              <p className="text-sm text-gray-400">No findings recorded.</p>
+              <p className="text-sm text-slate-400">No findings recorded.</p>
             ) : (
-              <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <div className="border border-white/10 rounded-xl overflow-hidden">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-gray-500 text-left">
+                  <thead className="bg-white/5 text-slate-400 text-left">
                     <tr>
                       <th className="px-3 py-2 font-medium">Assessment</th>
                       <th className="px-3 py-2 font-medium">Region</th>
@@ -125,19 +125,19 @@ function ReportDetailModal({ report, onClose }: { report: ReportListItem; onClos
                       <th className="px-3 py-2 font-medium">Severity</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-white/10">
                     {report.findings.map((f, i) => (
                       <tr key={i}>
-                        <td className="px-3 py-2 font-medium text-gray-900">{f.name}</td>
-                        <td className="px-3 py-2 text-gray-600">{f.bodyRegion || '—'}</td>
-                        <td className="px-3 py-2 text-gray-600">
+                        <td className="px-3 py-2 font-medium text-white">{f.name}</td>
+                        <td className="px-3 py-2 text-slate-300">{f.bodyRegion || '—'}</td>
+                        <td className="px-3 py-2 text-slate-300">
                           {f.value != null ? `${f.value}${f.unit || ''}` : '—'}
-                          {f.measurementName && <span className="text-gray-400"> · {f.measurementName}</span>}
+                          {f.measurementName && <span className="text-slate-400"> · {f.measurementName}</span>}
                         </td>
                         <td className="px-3 py-2">
                           <span
                             className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
-                              SEVERITY_BADGE[f.severity || 'normal'] || 'bg-gray-100 text-gray-600'
+                              SEVERITY_BADGE[f.severity || 'normal'] || 'bg-white/10 text-slate-300'
                             }`}
                           >
                             {f.severity || 'normal'}
@@ -154,15 +154,15 @@ function ReportDetailModal({ report, onClose }: { report: ReportListItem; onClos
           {/* Suggested exercises */}
           {report.suggestedExercises.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
                 Suggested exercises
               </h4>
               <ul className="space-y-1.5">
                 {report.suggestedExercises.map((ex, i) => (
-                  <li key={i} className="text-sm text-gray-700">
-                    <span className="font-medium text-gray-900">{ex.name}</span>
+                  <li key={i} className="text-sm text-slate-300">
+                    <span className="font-medium text-white">{ex.name}</span>
                     {(ex.sets || ex.reps || ex.frequency) && (
-                      <span className="text-gray-500">
+                      <span className="text-slate-400">
                         {' '}
                         — {[ex.sets, ex.reps, ex.frequency].filter(Boolean).join(' · ')}
                       </span>
@@ -176,27 +176,27 @@ function ReportDetailModal({ report, onClose }: { report: ReportListItem; onClos
           {/* Doctor notes */}
           {report.doctorNotes && (
             <div>
-              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Doctor notes</h4>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{report.doctorNotes}</p>
+              <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Doctor notes</h4>
+              <p className="text-sm text-slate-300 whitespace-pre-wrap">{report.doctorNotes}</p>
             </div>
           )}
         </div>
 
         {/* Footer actions */}
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 p-4">
-          {dlError && <span className="mr-auto text-xs text-red-600">{dlError}</span>}
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-white/10 p-4">
+          {dlError && <span className="mr-auto text-xs text-rose-300">{dlError}</span>}
           {report.shareId && (
             <>
               <button
                 onClick={download}
                 disabled={downloading}
-                className="inline-flex items-center gap-1.5 border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-60 font-medium py-2 px-4 rounded-lg"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 text-slate-200 hover:bg-white/10 disabled:opacity-60 font-medium py-2 px-4"
               >
                 <Download className="w-4 h-4" /> {downloading ? 'Preparing…' : 'Download PDF'}
               </button>
               <button
                 onClick={() => openReport(report.shareId)}
-                className="inline-flex items-center gap-1.5 border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium py-2 px-4 rounded-lg"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 text-slate-200 hover:bg-white/10 font-medium py-2 px-4"
               >
                 <ExternalLink className="w-4 h-4" /> Open shareable report
               </button>
@@ -204,7 +204,7 @@ function ReportDetailModal({ report, onClose }: { report: ReportListItem; onClos
           )}
           <button
             onClick={onClose}
-            className="hm-lift bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold py-2 px-4 rounded-lg"
+            className="hm-lift bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold py-2 px-4 rounded-lg shadow-lg shadow-emerald-500/30"
           >
             Close
           </button>
@@ -262,8 +262,8 @@ export default function ReportsList() {
     <div className="hm-page-enter max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6" data-reveal="fade">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900">Assessment Reports</h2>
-          <p className="text-slate-500 text-sm">Every AI posture assessment saved by your doctors.</p>
+          <h2 className="text-2xl font-bold tracking-tight text-white">Assessment Reports</h2>
+          <p className="text-slate-400 text-sm">Every AI posture assessment saved by your doctors.</p>
         </div>
         <div className="flex items-center gap-3">
           <ExportButton filename="reports" columns={exportColumns} rows={reports} />
@@ -271,16 +271,16 @@ export default function ReportsList() {
         </div>
       </div>
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm mb-4">{error}</div>}
+      {error && <div className="bg-rose-400/10 border border-rose-400/30 text-rose-200 px-3 py-2 rounded-lg text-sm mb-4">{error}</div>}
 
-      <div className="bg-white border border-slate-200 rounded-2xl overflow-x-auto shadow-sm" data-reveal>
+      <div className="glass-dark rounded-2xl overflow-x-auto" data-reveal>
         {loading ? (
           <TableSkeleton rows={7} cols={7} />
         ) : reports.length === 0 ? (
           <div className="p-10 text-center text-slate-400">No reports yet.</div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500 text-left">
+            <thead className="bg-white/5 text-slate-400 text-left">
               <tr>
                 <th className="px-4 py-3 font-medium">Patient</th>
                 <th className="px-4 py-3 font-medium">Doctor</th>
@@ -291,35 +291,35 @@ export default function ReportsList() {
                 <th className="px-4 py-3 font-medium text-right">Report</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-white/10">
               {reports.map((r) => (
                 <tr
                   key={r.id}
                   onClick={() => viewReport(r)}
-                  className="cursor-pointer hover:bg-emerald-50/60 transition-colors"
+                  className="cursor-pointer hover:bg-white/5 transition-colors"
                   title="View this report"
                 >
-                  <td className="px-4 py-3 font-medium text-gray-900">
+                  <td className="px-4 py-3 font-medium text-white">
                     {r.patientInfo?.name || '—'}
                     {r.patientInfo?.patientId && (
-                      <span className="ml-2 font-mono text-xs text-gray-400">{r.patientInfo.patientId}</span>
+                      <span className="ml-2 font-mono text-xs text-slate-400">{r.patientInfo.patientId}</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{doctorName(r.doctor)}</td>
+                  <td className="px-4 py-3 text-slate-300">{doctorName(r.doctor)}</td>
                   <td className={`px-4 py-3 font-bold ${SCORE_COLOR(r.overallScore)}`}>
                     {r.overallScore ?? '—'}
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{r.findingsCount}</td>
+                  <td className="px-4 py-3 text-slate-300">{r.findingsCount}</td>
                   <td className="px-4 py-3">
                     {r.flaggedCount > 0 ? (
-                      <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                      <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/20">
                         {r.flaggedCount}
                       </span>
                     ) : (
-                      <span className="text-gray-400">0</span>
+                      <span className="text-slate-500">0</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-gray-500">{formatDate(r.createdAt, true)}</td>
+                  <td className="px-4 py-3 text-slate-400">{formatDate(r.createdAt, true)}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="inline-flex items-center gap-3">
                       <button
@@ -327,7 +327,7 @@ export default function ReportsList() {
                           e.stopPropagation();
                           viewReport(r);
                         }}
-                        className="inline-flex items-center gap-1.5 text-emerald-700 hover:text-emerald-800 text-xs font-semibold"
+                        className="inline-flex items-center gap-1.5 text-emerald-300 hover:text-emerald-200 text-xs font-semibold"
                       >
                         <Eye className="w-3.5 h-3.5" /> View report
                       </button>
@@ -338,7 +338,7 @@ export default function ReportsList() {
                             downloadReport(r);
                           }}
                           disabled={downloadingId === r.id}
-                          className="inline-flex items-center gap-1.5 text-gray-600 hover:text-gray-900 disabled:opacity-60 text-xs font-semibold"
+                          className="inline-flex items-center gap-1.5 text-slate-300 hover:text-white disabled:opacity-60 text-xs font-semibold"
                           title="Download the original report as PDF"
                         >
                           <Download className="w-3.5 h-3.5" />

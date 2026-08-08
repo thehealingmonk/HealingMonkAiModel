@@ -112,44 +112,50 @@ export default function Pricing() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-16 md:py-24">
-      {/* Hero */}
-      <section className="text-center">
-        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs text-slate-600 shadow-sm">
-          <Sparkles className="h-3.5 w-3.5 text-emerald-500" />
-          Unlock the full AI assessment
+    <div>
+      {/* ---------- DARK AI-SCAN HERO ---------- */}
+      <section className="scan-hero scan-grid relative w-full overflow-hidden">
+        <div className="scan-sweep pointer-events-none absolute inset-x-0 top-0 h-40 opacity-40">
+          <div className="h-full w-full bg-[linear-gradient(180deg,transparent,rgba(34,211,238,0.12)_70%,rgba(110,231,183,0.35))]" />
         </div>
-        <h1 className="mx-auto max-w-3xl text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl">
-          Simple pricing for{' '}
-          <span className="bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 bg-clip-text text-transparent">
-            clinical-grade insight
-          </span>
-        </h1>
-        <p className="mx-auto mt-6 max-w-xl text-base text-slate-500 sm:text-lg">
-          Subscribe to run unlimited AI posture &amp; movement assessments, get full reports, and follow
-          personalized programs. One flat price — no hidden fees.
-        </p>
+        <div className="relative mx-auto max-w-6xl px-6 pb-16 pt-32 text-center md:pb-20 md:pt-36">
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs text-teal-200 backdrop-blur">
+            <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+            Unlock the full AI assessment
+          </div>
+          <h1 className="mx-auto max-w-3xl text-4xl font-bold leading-[1.05] tracking-tight text-white sm:text-5xl">
+            Simple pricing for{' '}
+            <span className="scan-glow-text">clinical-grade insight</span>
+          </h1>
+          <p className="mx-auto mt-6 max-w-xl text-base text-slate-300 sm:text-lg">
+            Subscribe to run unlimited AI posture &amp; movement assessments, get full reports, and follow
+            personalized programs. One flat price — no hidden fees.
+          </p>
 
-        {/* Trust row */}
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-slate-500">
-          <span className="inline-flex items-center gap-1.5">
-            <ShieldCheck className="h-4 w-4 text-emerald-500" /> Secured by Razorpay
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <Lock className="h-4 w-4 text-emerald-500" /> On-device &amp; private
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <BadgeCheck className="h-4 w-4 text-emerald-500" /> No auto-renewal
-          </span>
+          {/* Trust row */}
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-slate-300">
+            <span className="inline-flex items-center gap-1.5">
+              <ShieldCheck className="h-4 w-4 text-emerald-400" /> Secured by Razorpay
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Lock className="h-4 w-4 text-emerald-400" /> On-device &amp; private
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <BadgeCheck className="h-4 w-4 text-emerald-400" /> No auto-renewal
+            </span>
+          </div>
         </div>
       </section>
 
+      {/* ---------- BODY ---------- */}
+      <div className="mx-auto max-w-6xl px-6 pb-20">
+
       {alreadySubscribed && (
-        <div className="mx-auto mt-10 flex max-w-xl flex-col items-center justify-between gap-4 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 sm:flex-row">
-          <p className="text-sm font-medium text-emerald-800">✓ Your subscription is active.</p>
+        <div className="mx-auto mt-10 flex max-w-xl flex-col items-center justify-between gap-4 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-5 py-4 sm:flex-row">
+          <p className="text-sm font-medium text-emerald-200">✓ Your subscription is active.</p>
           <button
             onClick={() => navigate('/assessment')}
-            className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-transform hover:scale-[1.03]"
+            className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition-transform hover:scale-[1.03]"
           >
             Start assessment
             <ArrowRight className="h-4 w-4" />
@@ -158,7 +164,7 @@ export default function Pricing() {
       )}
 
       {error && (
-        <div className="mx-auto mt-8 max-w-xl rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="mx-auto mt-8 max-w-xl rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
           {error}
         </div>
       )}
@@ -168,31 +174,31 @@ export default function Pricing() {
         {PLANS.map((plan) => (
           <div
             key={plan.id}
-            className={`relative flex flex-col rounded-2xl border bg-white p-8 shadow-sm transition-shadow hover:shadow-lg ${
-              plan.featured ? 'border-emerald-300 shadow-md ring-1 ring-emerald-200' : 'border-slate-200'
+            className={`glass-dark glass-dark-lift relative flex flex-col rounded-2xl p-8 ${
+              plan.featured ? 'ring-1 ring-emerald-400/40' : ''
             }`}
           >
             {plan.featured && (
-              <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-3 py-1 text-xs font-semibold text-white shadow">
+              <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-3 py-1 text-xs font-semibold text-white shadow-lg shadow-emerald-500/30">
                 Most popular
               </span>
             )}
             <div className="flex items-center gap-2">
-              <h3 className="text-lg font-semibold">{plan.name}</h3>
-              {plan.featured && <Zap className="h-4 w-4 text-emerald-500" />}
+              <h3 className="text-lg font-semibold text-white">{plan.name}</h3>
+              {plan.featured && <Zap className="h-4 w-4 text-emerald-400" />}
             </div>
-            <p className="mt-1 text-sm text-slate-500">{plan.tagline}</p>
+            <p className="mt-1 text-sm text-slate-400">{plan.tagline}</p>
             <div className="mt-5 flex items-end gap-1">
-              <span className="text-4xl font-bold tracking-tight">₹{plan.priceINR.toLocaleString('en-IN')}</span>
-              <span className="mb-1 text-sm text-slate-500">/ {plan.durationDays} days</span>
+              <span className="text-4xl font-bold tracking-tight text-white">₹{plan.priceINR.toLocaleString('en-IN')}</span>
+              <span className="mb-1 text-sm text-slate-400">/ {plan.durationDays} days</span>
             </div>
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-xs text-slate-500">
               ≈ ₹{Math.round(plan.priceINR / (plan.durationDays / 30)).toLocaleString('en-IN')} per month
             </p>
             <ul className="mt-6 space-y-3">
               {plan.features.map((f) => (
-                <li key={f} className="flex items-start gap-2 text-sm text-slate-600">
-                  <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" />
+                <li key={f} className="flex items-start gap-2 text-sm text-slate-300">
+                  <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-400" />
                   {f}
                 </li>
               ))}
@@ -202,8 +208,8 @@ export default function Pricing() {
               disabled={busyPlan !== null}
               className={`mt-8 inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-transform hover:scale-[1.03] disabled:cursor-not-allowed disabled:opacity-60 ${
                 plan.featured
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/25'
-                  : 'bg-slate-900 text-white'
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30'
+                  : 'border border-white/15 bg-white/5 text-white hover:bg-white/10'
               }`}
             >
               {busyPlan === plan.id ? (
@@ -222,7 +228,7 @@ export default function Pricing() {
         ))}
       </section>
 
-      <p className="mx-auto mt-6 text-center text-xs text-slate-400">
+      <p className="mx-auto mt-6 text-center text-xs text-slate-500">
         Payments are processed securely by Razorpay. Your subscription unlocks the assessment on this device.
       </p>
 
@@ -270,24 +276,25 @@ export default function Pricing() {
 
       {/* FAQ */}
       <section className="mt-20">
-        <h2 className="text-center text-2xl font-bold tracking-tight sm:text-3xl">Frequently asked questions</h2>
-        <div className="mx-auto mt-8 max-w-2xl divide-y divide-slate-200 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <h2 className="text-center text-2xl font-bold tracking-tight text-white sm:text-3xl">Frequently asked questions</h2>
+        <div className="glass-dark mx-auto mt-8 max-w-2xl divide-y divide-white/10 overflow-hidden rounded-2xl">
           {FAQ.map((item, i) => (
             <div key={item.q}>
               <button
                 onClick={() => setOpenFaq(openFaq === i ? null : i)}
                 className="flex w-full items-center justify-between gap-4 px-6 py-4 text-left"
               >
-                <span className="font-medium text-slate-900">{item.q}</span>
-                <span className={`text-emerald-500 transition-transform ${openFaq === i ? 'rotate-45' : ''}`}>
+                <span className="font-medium text-white">{item.q}</span>
+                <span className={`text-emerald-400 transition-transform ${openFaq === i ? 'rotate-45' : ''}`}>
                   +
                 </span>
               </button>
-              {openFaq === i && <p className="px-6 pb-5 text-sm text-slate-500">{item.a}</p>}
+              {openFaq === i && <p className="px-6 pb-5 text-sm text-slate-400">{item.a}</p>}
             </div>
           ))}
         </div>
       </section>
+      </div>
     </div>
   );
 }

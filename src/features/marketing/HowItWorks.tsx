@@ -70,19 +70,19 @@ export default function HowItWorks() {
       <section className="mx-auto max-w-4xl px-6 pb-16">
         <div className="space-y-4">
           {STEPS.map((s, i) => (
-            <div key={s.title} className="flex gap-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div key={s.title} className="glass-dark flex gap-5 rounded-2xl p-6">
               <div className="flex flex-col items-center">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/20">
                   {s.icon}
                 </div>
-                {i < STEPS.length - 1 && <div className="mt-2 w-px flex-1 bg-slate-200" />}
+                {i < STEPS.length - 1 && <div className="mt-2 w-px flex-1 bg-white/10" />}
               </div>
               <div className="pb-1">
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs text-slate-400">STEP {i + 1}</span>
+                  <span className="font-mono text-xs text-teal-300/70">STEP {i + 1}</span>
                 </div>
-                <h3 className="mt-1 text-lg font-semibold">{s.title}</h3>
-                <p className="mt-1 text-sm leading-relaxed text-slate-500">{s.desc}</p>
+                <h3 className="mt-1 text-lg font-semibold text-white">{s.title}</h3>
+                <p className="mt-1 text-sm leading-relaxed text-slate-400">{s.desc}</p>
               </div>
             </div>
           ))}
@@ -91,17 +91,17 @@ export default function HowItWorks() {
 
       {/* Tips for a good scan */}
       <section className="mx-auto max-w-6xl px-6 pb-20">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-          <h2 className="text-xl font-bold tracking-tight">Tips for an accurate scan</h2>
-          <p className="mt-2 text-sm text-slate-500">A few seconds of setup makes the AI measurements noticeably steadier.</p>
+        <div className="glass-dark rounded-2xl p-6 shadow-2xl shadow-black/30 sm:p-8">
+          <h2 className="text-xl font-bold tracking-tight text-white">Tips for an accurate scan</h2>
+          <p className="mt-2 text-sm text-slate-400">A few seconds of setup makes the AI measurements noticeably steadier.</p>
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {TIPS.map((t) => (
-              <div key={t.title} className="rounded-xl border border-slate-200 bg-slate-50/60 p-5">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-emerald-600 shadow-sm">
+              <div key={t.title} className="rounded-xl border border-white/10 bg-white/[0.04] p-5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/20">
                   {t.icon}
                 </div>
-                <h3 className="mt-3 font-semibold text-slate-900">{t.title}</h3>
-                <p className="mt-1 text-sm text-slate-500">{t.desc}</p>
+                <h3 className="mt-3 font-semibold text-white">{t.title}</h3>
+                <p className="mt-1 text-sm text-slate-400">{t.desc}</p>
               </div>
             ))}
           </div>

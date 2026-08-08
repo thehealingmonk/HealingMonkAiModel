@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { Activity, Menu, X, ArrowRight } from 'lucide-react';
 
-/** Primary marketing navigation. Sticky, translucent, with a mobile menu. */
+/** Primary marketing navigation. Sticky and scroll-aware: it sits transparent
+ *  over the dark hero at the top of every page, then turns into a solid frosted
+ *  white bar once you scroll — so the links stay readable on both backdrops. */
 const LINKS = [
   { to: '/', label: 'Home', end: true },
   { to: '/technology', label: 'Technology' },
@@ -14,21 +16,38 @@ const LINKS = [
 
 export default function SiteNav() {
   const [open, setOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // The whole site is dark; the bar just gains a frosted panel once scrolled.
+  const solid = scrolled || open;
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `text-sm transition-colors ${
-      isActive ? 'text-slate-900 font-semibold' : 'text-slate-500 hover:text-slate-900'
+      isActive ? 'font-semibold text-white' : 'text-slate-300 hover:text-white'
     }`;
 
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-[#f6faf8]/80 backdrop-blur-xl">
+    <header
+      className={`fixed inset-x-0 top-0 z-40 transition-colors duration-300 ${
+        solid
+          ? 'border-b border-white/10 bg-[#1f2b48]/80 backdrop-blur-xl'
+          : 'border-b border-transparent bg-transparent'
+      }`}
+    >
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5">
         <Link to="/" className="flex items-center gap-2" onClick={() => setOpen(false)}>
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-sm shadow-emerald-500/30">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/30">
             <Activity className="h-5 w-5 text-white" />
           </div>
-          <span className="text-lg font-semibold tracking-tight text-slate-900">HealingMonk</span>
+          <span className="text-lg font-semibold tracking-tight text-white">HealingMonk</span>
         </Link>
 
         {/* Desktop links */}
@@ -43,7 +62,7 @@ export default function SiteNav() {
         <div className="hidden items-center gap-3 md:flex">
           <button
             onClick={() => navigate('/login')}
-            className="text-sm text-slate-500 transition-colors hover:text-slate-900"
+            className="text-sm text-slate-300 transition-colors hover:text-white"
           >
             Sign in
           </button>
@@ -58,7 +77,7 @@ export default function SiteNav() {
 
         {/* Mobile toggle */}
         <button
-          className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 md:hidden"
+          className="rounded-lg p-2 text-white transition-colors hover:bg-white/10 md:hidden"
           onClick={() => setOpen((v) => !v)}
           aria-label="Toggle menu"
         >
@@ -68,7 +87,7 @@ export default function SiteNav() {
 
       {/* Mobile menu */}
       {open && (
-        <div className="border-t border-slate-200 bg-[#f6faf8] md:hidden">
+        <div className="border-t border-white/10 bg-[#1f2b48]/95 backdrop-blur-xl md:hidden">
           <nav className="mx-auto flex max-w-6xl flex-col px-6 py-3">
             {LINKS.map((l) => (
               <NavLink
@@ -78,13 +97,22 @@ export default function SiteNav() {
                 onClick={() => setOpen(false)}
                 className={({ isActive }) =>
                   `rounded-lg px-2 py-2.5 text-sm ${
-                    isActive ? 'bg-emerald-50 font-semibold text-emerald-700' : 'text-slate-600 hover:bg-slate-100'
+                    isActive ? 'bg-white/10 font-semibold text-white' : 'text-slate-300 hover:bg-white/5'
                   }`
                 }
               >
                 {l.label}
               </NavLink>
             ))}
+            <button
+              onClick={() => {
+                setOpen(false);
+                navigate('/login');
+              }}
+              className="mt-2 rounded-lg px-2 py-2.5 text-left text-sm text-slate-300 hover:bg-white/5"
+            >
+              Sign in
+            </button>
             <button
               onClick={() => {
                 setOpen(false);

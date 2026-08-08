@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Activity, LogOut, LayoutGrid, CalendarDays, Users, FileText, IndianRupee, UserCog } from 'lucide-react';
+import { LayoutGrid, CalendarDays, Users, FileText, IndianRupee, UserCog } from 'lucide-react';
 import { Routes, Route, Navigate, Outlet, NavLink, useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { useAuth } from '@/store/auth.store';
+import DashboardShell, { dashNavCls } from '@/components/layout/DashboardShell';
 import { Role, Patient, getPatient } from '@/services/api';
 import { CLINICAL_ASSESSMENTS, AssessmentCapture } from '@/lib/clinicalKnowledge';
 import AdminDashboard from '@/features/admin/AdminDashboard';
@@ -27,13 +28,6 @@ import ClinicalCapture from '@/features/assessment/ClinicalCapture';
 //   /admin/payments     → all payments
 //   /admin/users        → user management (?role= to pre-filter)
 //   /admin/schedule     → clinic schedule (calendar) + /admin/book
-const navCls = ({ isActive }: { isActive: boolean }) =>
-  `inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg transition-all ${
-    isActive
-      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-sm shadow-emerald-500/30'
-      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-  }`;
-
 const NAV = [
   { to: '/admin', end: true, icon: LayoutGrid, label: 'Overview' },
   { to: '/admin/patients', icon: Users, label: 'Patients' },
@@ -46,44 +40,18 @@ const NAV = [
 function Chrome() {
   const { user, logout } = useAuth();
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-white/80 backdrop-blur border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center shadow-sm shadow-emerald-500/30">
-              <Activity className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <p className="font-bold text-slate-900 leading-tight">HealingMonk</p>
-              <p className="text-xs text-slate-500 leading-tight">Admin Console</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-slate-600 hidden sm:inline">{user?.name}</span>
-            <button
-              onClick={logout}
-              className="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 font-medium"
-            >
-              <LogOut className="w-4 h-4" /> Sign out
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <div className="bg-white border-b border-slate-200">
-        <div className="max-w-6xl mx-auto px-4 py-2 flex items-center gap-1.5 overflow-x-auto">
-          {NAV.map((n) => (
-            <NavLink key={n.to} to={n.to} end={n.end} className={navCls}>
-              <n.icon className="w-4 h-4" /> {n.label}
-            </NavLink>
-          ))}
-        </div>
-      </div>
-
-      <main className="px-4 py-8">
-        <Outlet />
-      </main>
-    </div>
+    <DashboardShell
+      consoleName="Admin Console"
+      userLabel={user?.name}
+      onLogout={logout}
+      nav={NAV.map((n) => (
+        <NavLink key={n.to} to={n.to} end={n.end} className={dashNavCls}>
+          <n.icon className="w-4 h-4" /> {n.label}
+        </NavLink>
+      ))}
+    >
+      <Outlet />
+    </DashboardShell>
   );
 }
 

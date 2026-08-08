@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Activity, LogOut } from 'lucide-react';
 import { Routes, Route, Navigate, Outlet, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/store/auth.store';
+import DashboardShell from '@/components/layout/DashboardShell';
 import { Patient, getPatient } from '@/services/api';
 import { CLINICAL_ASSESSMENTS, AssessmentCapture } from '@/lib/clinicalKnowledge';
 import DoctorDashboard from '@/features/doctor/DoctorDashboard';
@@ -24,33 +24,9 @@ import ClinicalCapture from '@/features/assessment/ClinicalCapture';
 function Chrome() {
   const { user, logout } = useAuth();
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-green-600 rounded-lg flex items-center justify-center">
-              <Activity className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <p className="font-bold text-gray-900 leading-tight">HealingMonk</p>
-              <p className="text-xs text-gray-500 leading-tight">Doctor Console</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600 hidden sm:inline">Dr. {user?.name}</span>
-            <button
-              onClick={logout}
-              className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 font-medium"
-            >
-              <LogOut className="w-4 h-4" /> Sign out
-            </button>
-          </div>
-        </div>
-      </header>
-      <main className="px-4 py-8">
-        <Outlet />
-      </main>
-    </div>
+    <DashboardShell consoleName="Doctor Console" userLabel={user ? `Dr. ${user.name}` : undefined} onLogout={logout} maxWidth="max-w-4xl">
+      <Outlet />
+    </DashboardShell>
   );
 }
 

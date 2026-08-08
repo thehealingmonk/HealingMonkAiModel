@@ -55,7 +55,7 @@ export default function Assessments() {
       </PageHeader>
 
       {/* Region filter */}
-      <section className="mx-auto max-w-6xl px-6">
+      <section className="mx-auto max-w-6xl px-6 pt-4">
         <div className="flex flex-wrap justify-center gap-2">
           {regions.map((r) => {
             const active = r === region;
@@ -65,8 +65,8 @@ export default function Assessments() {
                 onClick={() => setRegion(r)}
                 className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
                   active
-                    ? 'border-emerald-500 bg-emerald-500 text-white'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-emerald-300'
+                    ? 'border-emerald-400 bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                    : 'border-white/10 bg-white/5 text-slate-300 hover:border-teal-300/50 hover:text-white'
                 }`}
               >
                 {r}
@@ -84,8 +84,8 @@ export default function Assessments() {
           return (
             <div key={cat} className="mb-12">
               <div className="mb-5 flex items-center gap-3">
-                <h2 className="text-xl font-bold tracking-tight">{cat}</h2>
-                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">
+                <h2 className="text-xl font-bold tracking-tight text-white">{cat}</h2>
+                <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-medium text-slate-300">
                   {group.length}
                 </span>
               </div>
@@ -104,7 +104,7 @@ export default function Assessments() {
 
 function AssessmentCard({ a }: { a: ClinicalAssessment }) {
   return (
-    <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all hover:border-emerald-300 hover:shadow-md">
+    <div className="glass-dark glass-dark-lift flex flex-col overflow-hidden rounded-2xl">
       <div className="relative">
         <PoseIllustration pose={a.id} className="h-40 w-full bg-slate-50" />
         <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-0.5 text-[11px] font-medium capitalize text-slate-600 shadow-sm backdrop-blur">
@@ -120,13 +120,13 @@ function AssessmentCard({ a }: { a: ClinicalAssessment }) {
       </div>
 
       <div className="flex flex-1 flex-col p-5">
-        <h3 className="font-semibold leading-tight text-slate-900">{a.name}</h3>
-        <p className="mt-0.5 text-xs text-slate-400">{a.nameHi}</p>
+        <h3 className="font-semibold leading-tight text-white">{a.name}</h3>
+        <p className="mt-0.5 text-xs text-slate-500">{a.nameHi}</p>
 
         <div className="mt-3 space-y-2 text-sm">
-          <Row icon={<Target className="h-4 w-4 text-emerald-500" />} label="Measures" value={`${a.measurementName} (${a.unit})`} />
-          <Row icon={<Eye className="h-4 w-4 text-emerald-500" />} label="Body region" value={a.bodyRegion} />
-          <Row icon={<Sparkles className="h-4 w-4 text-emerald-500" />} label="Pain link" value={`${a.painArea} · ${a.painCorrelation}`} />
+          <Row icon={<Target className="h-4 w-4 text-emerald-400" />} label="Measures" value={`${a.measurementName} (${a.unit})`} />
+          <Row icon={<Eye className="h-4 w-4 text-emerald-400" />} label="Body region" value={a.bodyRegion} />
+          <Row icon={<Sparkles className="h-4 w-4 text-emerald-400" />} label="Pain link" value={`${a.painArea} · ${a.painCorrelation}`} />
         </div>
 
         {/* Normal → severe range strip */}
@@ -137,8 +137,8 @@ function AssessmentCard({ a }: { a: ClinicalAssessment }) {
           <RangePill label="Severe" value={a.ranges.severe} color="#ef4444" />
         </div>
 
-        <div className="mt-4 flex items-center gap-1.5 text-xs text-slate-500">
-          <Dumbbell className="h-3.5 w-3.5 text-slate-400" />
+        <div className="mt-4 flex items-center gap-1.5 text-xs text-slate-400">
+          <Dumbbell className="h-3.5 w-3.5 text-slate-500" />
           {a.exercises.length} recommended exercise{a.exercises.length === 1 ? '' : 's'}
         </div>
       </div>
@@ -150,9 +150,9 @@ function Row({ icon, label, value }: { icon: React.ReactNode; label: string; val
   return (
     <div className="flex items-start gap-2">
       <span className="mt-0.5 flex-shrink-0">{icon}</span>
-      <span className="text-slate-500">
-        <span className="text-slate-400">{label}: </span>
-        <span className="font-medium text-slate-700">{value}</span>
+      <span>
+        <span className="text-slate-500">{label}: </span>
+        <span className="font-medium text-slate-200">{value}</span>
       </span>
     </div>
   );
@@ -160,9 +160,9 @@ function Row({ icon, label, value }: { icon: React.ReactNode; label: string; val
 
 function RangePill({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div className="rounded border border-slate-100 bg-slate-50 p-1.5">
+    <div className="rounded border border-white/10 bg-white/[0.04] p-1.5">
       <p className="font-semibold" style={{ color }}>{label}</p>
-      <p className="mt-0.5 text-slate-500">{value}</p>
+      <p className="mt-0.5 text-slate-400">{value}</p>
     </div>
   );
 }

@@ -6,10 +6,10 @@ import TableSkeleton from '@/components/ui/TableSkeleton';
 import ExportButton from '@/components/ui/ExportButton';
 
 const STATUS_BADGE: Record<PaymentStatus, string> = {
-  paid: 'bg-emerald-100 text-emerald-700',
-  created: 'bg-sky-100 text-sky-700',
-  failed: 'bg-red-100 text-red-700',
-  refunded: 'bg-amber-100 text-amber-700',
+  paid: 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/20',
+  created: 'bg-sky-500/15 text-sky-300 ring-1 ring-sky-400/20',
+  failed: 'bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/20',
+  refunded: 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-400/20',
 };
 
 export default function PaymentsList() {
@@ -37,9 +37,9 @@ export default function PaymentsList() {
     <div className="hm-page-enter max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6" data-reveal="fade">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900">Payments</h2>
-          <p className="text-slate-500 text-sm">
-            Cash and online collections · <span className="font-semibold text-slate-900">{formatMoney(totalPaid)}</span> collected
+          <h2 className="text-2xl font-bold tracking-tight text-white">Payments</h2>
+          <p className="text-slate-400 text-sm">
+            Cash and online collections · <span className="font-semibold text-white">{formatMoney(totalPaid)}</span> collected
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -48,16 +48,16 @@ export default function PaymentsList() {
         </div>
       </div>
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm mb-4">{error}</div>}
+      {error && <div className="bg-rose-400/10 border border-rose-400/30 text-rose-200 px-3 py-2 rounded-lg text-sm mb-4">{error}</div>}
 
-      <div className="bg-white border border-slate-200 rounded-2xl overflow-x-auto shadow-sm" data-reveal>
+      <div className="glass-dark rounded-2xl overflow-x-auto" data-reveal>
         {loading ? (
           <TableSkeleton rows={6} cols={6} />
         ) : payments.length === 0 ? (
           <div className="p-10 text-center text-slate-400">No payments recorded yet.</div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500 text-left">
+            <thead className="bg-white/5 text-slate-400 text-left">
               <tr>
                 <th className="px-4 py-3 font-medium">Patient</th>
                 <th className="px-4 py-3 font-medium">Amount</th>
@@ -68,23 +68,23 @@ export default function PaymentsList() {
                 <th className="px-4 py-3 font-medium">Date</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-white/10">
               {payments.map((p) => (
-                <tr key={p.id} className="hover:bg-emerald-50/60 transition-colors">
+                <tr key={p.id} className="hover:bg-white/5 transition-colors">
                   <td className="px-4 py-3">
-                    <p className="font-medium text-slate-900">{p.patientName || '—'}</p>
-                    {p.patientCode && <p className="text-xs text-gray-400">{p.patientCode}</p>}
+                    <p className="font-medium text-white">{p.patientName || '—'}</p>
+                    {p.patientCode && <p className="text-xs text-slate-400">{p.patientCode}</p>}
                   </td>
-                  <td className="px-4 py-3 font-semibold text-slate-900 whitespace-nowrap">{formatMoney(p.amount, p.currency)}</td>
-                  <td className="px-4 py-3 text-slate-600 capitalize">{p.method}</td>
-                  <td className="px-4 py-3 text-slate-600">{p.plan || '—'}</td>
+                  <td className="px-4 py-3 font-semibold text-white whitespace-nowrap">{formatMoney(p.amount, p.currency)}</td>
+                  <td className="px-4 py-3 text-slate-300 capitalize">{p.method}</td>
+                  <td className="px-4 py-3 text-slate-300">{p.plan || '—'}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium capitalize ${STATUS_BADGE[p.status]}`}>
                       {p.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{p.collectedByName || '—'}</td>
-                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{formatDate(p.createdAt, true)}</td>
+                  <td className="px-4 py-3 text-slate-300">{p.collectedByName || '—'}</td>
+                  <td className="px-4 py-3 text-slate-400 whitespace-nowrap">{formatDate(p.createdAt, true)}</td>
                 </tr>
               ))}
             </tbody>

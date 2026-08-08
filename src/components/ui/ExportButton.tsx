@@ -24,7 +24,7 @@ export default function ExportButton<T>({
       onClick={() => !disabled && downloadCsv(filename, columns, rows)}
       disabled={disabled}
       title={disabled ? 'Nothing to export' : `Export ${rows.length} row${rows.length > 1 ? 's' : ''} to Excel (CSV)`}
-      className="inline-flex items-center gap-1.5 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed text-emerald-700 font-medium text-sm py-2 px-3 rounded-lg transition-colors"
+      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/25 bg-emerald-500/15 hover:bg-emerald-500/25 disabled:opacity-50 disabled:cursor-not-allowed text-emerald-300 font-medium text-sm py-2 px-3 transition-colors"
     >
       <FileSpreadsheet className="w-4 h-4" /> {label}
     </button>

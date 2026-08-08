@@ -6,10 +6,10 @@ import TableSkeleton from '@/components/ui/TableSkeleton';
 import ExportButton from '@/components/ui/ExportButton';
 
 const STATUS_BADGE: Record<AppointmentStatus, string> = {
-  scheduled: 'bg-sky-100 text-sky-700',
-  completed: 'bg-emerald-100 text-emerald-700',
-  cancelled: 'bg-slate-200 text-slate-600',
-  no_show: 'bg-red-100 text-red-700',
+  scheduled: 'bg-sky-500/15 text-sky-300 ring-1 ring-sky-400/20',
+  completed: 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/20',
+  cancelled: 'bg-white/10 text-slate-300',
+  no_show: 'bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/20',
 };
 
 const name = (v: Appointment['patient'] | Appointment['doctor']) =>
@@ -33,8 +33,8 @@ export default function AppointmentsList() {
     <div className="hm-page-enter max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6" data-reveal="fade">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900">Appointments</h2>
-          <p className="text-slate-500 text-sm">All bookings across doctors and reception.</p>
+          <h2 className="text-2xl font-bold tracking-tight text-white">Appointments</h2>
+          <p className="text-slate-400 text-sm">All bookings across doctors and reception.</p>
         </div>
         <div className="flex items-center gap-3">
           <ExportButton filename="appointments" columns={exportColumns} rows={appts} />
@@ -42,16 +42,16 @@ export default function AppointmentsList() {
         </div>
       </div>
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm mb-4">{error}</div>}
+      {error && <div className="bg-rose-400/10 border border-rose-400/30 text-rose-200 px-3 py-2 rounded-lg text-sm mb-4">{error}</div>}
 
-      <div className="bg-white border border-slate-200 rounded-2xl overflow-x-auto shadow-sm" data-reveal>
+      <div className="glass-dark rounded-2xl overflow-x-auto" data-reveal>
         {loading ? (
           <TableSkeleton rows={6} cols={5} />
         ) : appts.length === 0 ? (
           <div className="p-10 text-center text-slate-400">No appointments yet.</div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500 text-left">
+            <thead className="bg-white/5 text-slate-400 text-left">
               <tr>
                 <th className="px-4 py-3 font-medium">When</th>
                 <th className="px-4 py-3 font-medium">Patient</th>
@@ -60,13 +60,13 @@ export default function AppointmentsList() {
                 <th className="px-4 py-3 font-medium">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-white/10">
               {appts.map((a) => (
-                <tr key={a.id} className="hover:bg-emerald-50/60 transition-colors">
-                  <td className="px-4 py-3 text-slate-900">{formatDate(a.scheduledAt, true)}</td>
-                  <td className="px-4 py-3 font-medium text-slate-900">{name(a.patient)}</td>
-                  <td className="px-4 py-3 text-slate-600">{name(a.doctor)}</td>
-                  <td className="px-4 py-3 text-slate-600">{a.reason || '—'}</td>
+                <tr key={a.id} className="hover:bg-white/5 transition-colors">
+                  <td className="px-4 py-3 text-white">{formatDate(a.scheduledAt, true)}</td>
+                  <td className="px-4 py-3 font-medium text-white">{name(a.patient)}</td>
+                  <td className="px-4 py-3 text-slate-300">{name(a.doctor)}</td>
+                  <td className="px-4 py-3 text-slate-300">{a.reason || '—'}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium capitalize ${STATUS_BADGE[a.status]}`}>
                       {a.status.replace('_', ' ')}

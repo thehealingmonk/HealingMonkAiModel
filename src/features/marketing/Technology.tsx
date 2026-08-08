@@ -78,7 +78,7 @@ export default function Technology() {
         </Link>
         <Link
           to="/assessments"
-          className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:border-emerald-300"
+          className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-6 py-3 text-sm font-medium text-slate-100 backdrop-blur transition-colors hover:border-teal-300/50 hover:bg-white/10"
         >
           Browse assessments
         </Link>
@@ -86,22 +86,22 @@ export default function Technology() {
 
       {/* Pipeline */}
       <section className="mx-auto max-w-6xl px-6 pb-16">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-          <p className="text-center text-sm font-medium uppercase tracking-widest text-slate-400">
+        <div className="glass-dark rounded-2xl p-6 shadow-2xl shadow-black/30 sm:p-8">
+          <p className="text-center text-sm font-medium uppercase tracking-widest text-teal-300/80">
             How a frame becomes a finding
           </p>
           <div className="mt-8 grid gap-4 md:grid-cols-5">
             {PIPELINE.map((s, i) => (
               <div key={s.title} className="relative">
-                <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 text-center">
-                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 text-center">
+                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/20">
                     {s.icon}
                   </div>
-                  <p className="mt-3 text-sm font-semibold text-slate-900">{s.title}</p>
-                  <p className="mt-1 text-xs text-slate-500">{s.desc}</p>
+                  <p className="mt-3 text-sm font-semibold text-white">{s.title}</p>
+                  <p className="mt-1 text-xs text-slate-400">{s.desc}</p>
                 </div>
                 {i < PIPELINE.length - 1 && (
-                  <ArrowRight className="absolute -right-3 top-1/2 hidden h-5 w-5 -translate-y-1/2 text-slate-300 md:block" />
+                  <ArrowRight className="absolute -right-3 top-1/2 hidden h-5 w-5 -translate-y-1/2 text-slate-600 md:block" />
                 )}
               </div>
             ))}
@@ -113,15 +113,12 @@ export default function Technology() {
       <section className="mx-auto max-w-6xl px-6 pb-16">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {CAPABILITIES.map((c) => (
-            <div
-              key={c.title}
-              className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:border-emerald-300 hover:shadow-md"
-            >
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+            <div key={c.title} className="glass-dark glass-dark-lift rounded-2xl p-6">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/20">
                 {c.icon}
               </div>
-              <h3 className="mt-4 text-lg font-semibold">{c.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-slate-500">{c.desc}</p>
+              <h3 className="mt-4 text-lg font-semibold text-white">{c.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-slate-400">{c.desc}</p>
             </div>
           ))}
         </div>
@@ -129,16 +126,16 @@ export default function Technology() {
 
       {/* Severity scale */}
       <section className="mx-auto max-w-6xl px-6 pb-20">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-          <h2 className="text-xl font-bold tracking-tight">The severity scale</h2>
-          <p className="mt-2 text-sm text-slate-500">
+        <div className="glass-dark rounded-2xl p-6 shadow-2xl shadow-black/30 sm:p-8">
+          <h2 className="text-xl font-bold tracking-tight text-white">The severity scale</h2>
+          <p className="mt-2 text-sm text-slate-400">
             Every measured value is graded into one of four bands and colour-coded across the live overlay and the report.
           </p>
           <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {(['normal', 'mild', 'moderate', 'severe'] as const).map((sev) => (
-              <div key={sev} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+              <div key={sev} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-4">
                 <span className="h-3.5 w-3.5 flex-shrink-0 rounded-full" style={{ backgroundColor: SEVERITY_COLOR[sev] }} />
-                <span className="text-sm font-semibold text-slate-700">{SEVERITY_LABEL[sev]}</span>
+                <span className="text-sm font-semibold text-slate-200">{SEVERITY_LABEL[sev]}</span>
               </div>
             ))}
           </div>
