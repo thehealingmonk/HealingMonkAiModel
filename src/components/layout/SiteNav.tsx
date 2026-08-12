@@ -3,7 +3,7 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { Activity, Menu, X, ArrowRight } from 'lucide-react';
 
 /** Primary marketing navigation. Sticky and scroll-aware: it sits transparent
- *  over the dark hero at the top of every page, then turns into a solid frosted
+ *  over the light hero at the top of every page, then turns into a solid frosted
  *  white bar once you scroll — so the links stay readable on both backdrops. */
 const LINKS = [
   { to: '/', label: 'Home', end: true },
@@ -26,19 +26,19 @@ export default function SiteNav() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // The whole site is dark; the bar just gains a frosted panel once scrolled.
+  // The whole site is light; the bar just gains a frosted panel once scrolled.
   const solid = scrolled || open;
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `text-sm transition-colors ${
-      isActive ? 'font-semibold text-white' : 'text-slate-300 hover:text-white'
+      isActive ? 'font-semibold text-emerald-600' : 'text-slate-600 hover:text-slate-900'
     }`;
 
   return (
     <header
       className={`fixed inset-x-0 top-0 z-40 transition-colors duration-300 ${
         solid
-          ? 'border-b border-white/10 bg-[#1f2b48]/80 backdrop-blur-xl'
+          ? 'border-b border-slate-900/10 bg-white/80 shadow-sm backdrop-blur-xl'
           : 'border-b border-transparent bg-transparent'
       }`}
     >
@@ -47,7 +47,7 @@ export default function SiteNav() {
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/30">
             <Activity className="h-5 w-5 text-white" />
           </div>
-          <span className="text-lg font-semibold tracking-tight text-white">HealingMonk</span>
+          <span className="text-lg font-semibold tracking-tight text-slate-900">HealingMonk</span>
         </Link>
 
         {/* Desktop links */}
@@ -62,7 +62,7 @@ export default function SiteNav() {
         <div className="hidden items-center gap-3 md:flex">
           <button
             onClick={() => navigate('/login')}
-            className="text-sm text-slate-300 transition-colors hover:text-white"
+            className="text-sm text-slate-600 transition-colors hover:text-slate-900"
           >
             Sign in
           </button>
@@ -77,7 +77,7 @@ export default function SiteNav() {
 
         {/* Mobile toggle */}
         <button
-          className="rounded-lg p-2 text-white transition-colors hover:bg-white/10 md:hidden"
+          className="rounded-lg p-2 text-slate-700 transition-colors hover:bg-slate-900/5 md:hidden"
           onClick={() => setOpen((v) => !v)}
           aria-label="Toggle menu"
         >
@@ -87,7 +87,7 @@ export default function SiteNav() {
 
       {/* Mobile menu */}
       {open && (
-        <div className="border-t border-white/10 bg-[#1f2b48]/95 backdrop-blur-xl md:hidden">
+        <div className="border-t border-slate-900/10 bg-white/95 backdrop-blur-xl md:hidden">
           <nav className="mx-auto flex max-w-6xl flex-col px-6 py-3">
             {LINKS.map((l) => (
               <NavLink
@@ -97,7 +97,7 @@ export default function SiteNav() {
                 onClick={() => setOpen(false)}
                 className={({ isActive }) =>
                   `rounded-lg px-2 py-2.5 text-sm ${
-                    isActive ? 'bg-white/10 font-semibold text-white' : 'text-slate-300 hover:bg-white/5'
+                    isActive ? 'bg-emerald-50 font-semibold text-emerald-700' : 'text-slate-600 hover:bg-slate-900/5'
                   }`
                 }
               >
@@ -109,7 +109,7 @@ export default function SiteNav() {
                 setOpen(false);
                 navigate('/login');
               }}
-              className="mt-2 rounded-lg px-2 py-2.5 text-left text-sm text-slate-300 hover:bg-white/5"
+              className="mt-2 rounded-lg px-2 py-2.5 text-left text-sm text-slate-600 hover:bg-slate-900/5"
             >
               Sign in
             </button>

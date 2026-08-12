@@ -5,7 +5,7 @@ import SiteFooter from '@/components/layout/SiteFooter';
 import AiBackdrop from '@/components/common/AiBackdrop';
 
 /**
- * Shared chrome for every public marketing page: the dark "AI body-scan"
+ * Shared chrome for every public marketing page: the light "AI body-scan"
  * backdrop (animated), a fixed scroll-aware nav, and the footer. Child pages
  * render through <Outlet/>. Scrolls to top on route change so navigating feels
  * like a real website.
@@ -17,7 +17,7 @@ export default function MarketingLayout() {
   }, [pathname]);
 
   return (
-    <div className="relative min-h-screen bg-[#1b2740] text-slate-100">
+    <div className="light-base relative min-h-screen text-slate-800">
       {/* Site-wide animated AI scan backdrop. */}
       <AiBackdrop />
 
