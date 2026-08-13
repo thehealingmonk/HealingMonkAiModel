@@ -118,6 +118,8 @@ export default function BodyVRMHero({ className }: { className?: string }) {
     scene.add(skeleton);
 
     let vrm: any = null;
+    // Arm bones we drop as the view turns to the side (filled after load).
+    let poseBones: { node: THREE.Object3D; down: number }[] = [];
     let raf = 0;
     const clock = new THREE.Clock();
     const tmp = new THREE.Vector3();
@@ -148,6 +150,8 @@ export default function BodyVRMHero({ className }: { className?: string }) {
             color: isKey ? 0x34d399 : 0x7dd3fc,
             transparent: true,
             opacity: 0.95,
+            depthTest: false,  // dot always visible on top — never hidden behind the dress
+            depthWrite: false,
           });
           const dot = new THREE.Mesh(isKey ? dotGeoKey : dotGeo, mat);
           if (m.off) dot.position.set(m.off[0], m.off[1], m.off[2]);
@@ -155,6 +159,16 @@ export default function BodyVRMHero({ className }: { className?: string }) {
           bone.add(dot);
           dotMeshes[i] = dot;
         });
+
+        // Capture the arm bones so we can lower them DYNAMICALLY by view angle:
+        // facing front/back → arms stay out (rest pose); rotated to the left/right
+        // side → arms drop down along the body. Driven every frame in animate().
+        poseBones = [
+          { node: vrm.humanoid?.getNormalizedBoneNode?.('leftUpperArm'), down: -1.28 },
+          { node: vrm.humanoid?.getNormalizedBoneNode?.('rightUpperArm'), down: 1.28 },
+          { node: vrm.humanoid?.getNormalizedBoneNode?.('leftLowerArm'), down: -0.12 },
+          { node: vrm.humanoid?.getNormalizedBoneNode?.('rightLowerArm'), down: 0.12 },
+        ].filter((p) => p.node) as { node: THREE.Object3D; down: number }[];
 
         // Frame the camera so the WHOLE body fits (head + feet) with a margin.
         const box = new THREE.Box3().setFromObject(vrm.scene);
@@ -170,6 +184,33 @@ export default function BodyVRMHero({ className }: { className?: string }) {
         camera.far = dist * 50;
         camera.updateProjectionMatrix();
         controls.update();
+
+        // Plumb line — a vertical gravity/posture reference through the body centre,
+        // exactly like the alignment line the AI draws during a real pose scan.
+        const plumbGeom = new THREE.BufferGeometry();
+        plumbGeom.setAttribute(
+          'position',
+          new THREE.BufferAttribute(
+            new Float32Array([
+              center.x, box.max.y + 0.08, center.z,
+              center.x, box.min.y - 0.02, center.z,
+            ]),
+            3,
+          ),
+        );
+        const plumbMat = new THREE.LineDashedMaterial({
+          color: 0xf59e0b,
+          transparent: true,
+          opacity: 0.7,
+          dashSize: 0.05,
+          gapSize: 0.03,
+          depthTest: false,
+          depthWrite: false,
+        });
+        const plumb = new THREE.Line(plumbGeom, plumbMat);
+        plumb.computeLineDistances();
+        plumb.renderOrder = 1;
+        scene.add(plumb);
 
         setStatus('ready');
       },
@@ -196,6 +237,12 @@ export default function BodyVRMHero({ className }: { className?: string }) {
       raf = requestAnimationFrame(animate);
       const dt = clock.getDelta();
       controls.update();
+      // Drop the arms as soon as the view turns away from the front, and keep them
+      // down through the side AND back views (only the front shows the arms out).
+      // 1 - cos(azimuth) is 0 at front (0) and rises to 1 at the sides and stays
+      // capped at 1 through the back — so arms never pop back up while rotating.
+      const t = Math.min(1, 1 - Math.cos(controls.getAzimuthalAngle()));
+      for (let i = 0; i < poseBones.length; i++) poseBones[i].node.rotation.z = poseBones[i].down * t;
       if (vrm) vrm.update(dt);
 
       // Update the skeleton overlay from current dot world positions.
