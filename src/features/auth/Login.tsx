@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/store/auth.store';
 import { Role } from '@/services/api';
-import BodyScanHero from '@/components/common/BodyScanHero';
+import BodyVRMHero from '@/components/common/BodyVRMHero';
 import AiBackdrop from '@/components/common/AiBackdrop';
 
 interface Props {
@@ -140,7 +140,7 @@ export default function Login({ onBack }: Props) {
         </button>
 
         <div className="relative flex flex-1 flex-col items-center justify-center py-8">
-          <BodyScanHero className="max-w-xs" />
+          <BodyVRMHero className="max-w-xs" />
         </div>
 
         <div>

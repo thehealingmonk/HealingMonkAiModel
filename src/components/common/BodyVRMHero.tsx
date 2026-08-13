@@ -119,7 +119,13 @@ export default function BodyVRMHero({ className }: { className?: string }) {
 
     let vrm: any = null;
     // Arm bones we drop as the view turns to the side (filled after load).
-    let poseBones: { node: THREE.Object3D; down: number }[] = [];
+    // `rot` is the fully-turned target euler [x, y, z] (radians), scaled by t.
+    let poseBones: { node: THREE.Object3D; rot: [number, number, number] }[] = [];
+    // Plumb line kept locked to the body centre (hips) every frame.
+    let hips: THREE.Object3D | null = null;
+    let plumbPos: Float32Array | null = null;
+    let plumbGeomRef: THREE.BufferGeometry | null = null;
+    let plumbLineRef: THREE.Line | null = null;
     let raf = 0;
     const clock = new THREE.Clock();
     const tmp = new THREE.Vector3();
@@ -164,11 +170,11 @@ export default function BodyVRMHero({ className }: { className?: string }) {
         // facing front/back → arms stay out (rest pose); rotated to the left/right
         // side → arms drop down along the body. Driven every frame in animate().
         poseBones = [
-          { node: vrm.humanoid?.getNormalizedBoneNode?.('leftUpperArm'), down: -1.28 },
-          { node: vrm.humanoid?.getNormalizedBoneNode?.('rightUpperArm'), down: 1.28 },
-          { node: vrm.humanoid?.getNormalizedBoneNode?.('leftLowerArm'), down: -0.12 },
-          { node: vrm.humanoid?.getNormalizedBoneNode?.('rightLowerArm'), down: 0.12 },
-        ].filter((p) => p.node) as { node: THREE.Object3D; down: number }[];
+          // Keep the arms STRAIGHT (no elbow bend) and raise them UP as the view
+          // turns to the side. Front → rest pose; side/back → arms lifted up.
+          { node: vrm.humanoid?.getNormalizedBoneNode?.('leftUpperArm'), rot: [0, 0, 0.9] },
+          { node: vrm.humanoid?.getNormalizedBoneNode?.('rightUpperArm'), rot: [0, 0, -0.9] },
+        ].filter((p) => p.node) as { node: THREE.Object3D; rot: [number, number, number] }[];
 
         // Frame the camera so the WHOLE body fits (head + feet) with a margin.
         const box = new THREE.Box3().setFromObject(vrm.scene);
@@ -186,18 +192,19 @@ export default function BodyVRMHero({ className }: { className?: string }) {
         controls.update();
 
         // Plumb line — a vertical gravity/posture reference through the body centre,
-        // exactly like the alignment line the AI draws during a real pose scan.
+        // exactly like the alignment line the AI draws during a real pose scan. Its
+        // x/z are re-centred on the hips every frame (see animate) so it stays dead
+        // centre through the body from EVERY angle, including the left/right sides.
+        hips =
+          vrm.humanoid?.getNormalizedBoneNode?.('hips') ??
+          vrm.humanoid?.getRawBoneNode?.('hips') ??
+          null;
+        plumbPos = new Float32Array([
+          center.x, box.max.y + 0.08, center.z,
+          center.x, box.min.y - 0.02, center.z,
+        ]);
         const plumbGeom = new THREE.BufferGeometry();
-        plumbGeom.setAttribute(
-          'position',
-          new THREE.BufferAttribute(
-            new Float32Array([
-              center.x, box.max.y + 0.08, center.z,
-              center.x, box.min.y - 0.02, center.z,
-            ]),
-            3,
-          ),
-        );
+        plumbGeom.setAttribute('position', new THREE.BufferAttribute(plumbPos, 3));
         const plumbMat = new THREE.LineDashedMaterial({
           color: 0xf59e0b,
           transparent: true,
@@ -210,7 +217,10 @@ export default function BodyVRMHero({ className }: { className?: string }) {
         const plumb = new THREE.Line(plumbGeom, plumbMat);
         plumb.computeLineDistances();
         plumb.renderOrder = 1;
+        plumb.frustumCulled = false;
         scene.add(plumb);
+        plumbGeomRef = plumbGeom;
+        plumbLineRef = plumb;
 
         setStatus('ready');
       },
@@ -242,8 +252,21 @@ export default function BodyVRMHero({ className }: { className?: string }) {
       // 1 - cos(azimuth) is 0 at front (0) and rises to 1 at the sides and stays
       // capped at 1 through the back — so arms never pop back up while rotating.
       const t = Math.min(1, 1 - Math.cos(controls.getAzimuthalAngle()));
-      for (let i = 0; i < poseBones.length; i++) poseBones[i].node.rotation.z = poseBones[i].down * t;
+      for (let i = 0; i < poseBones.length; i++) {
+        const r = poseBones[i].rot;
+        poseBones[i].node.rotation.set(r[0] * t, r[1] * t, r[2] * t);
+      }
       if (vrm) vrm.update(dt);
+
+      // Keep the plumb line locked to the body centre (hips x/z) so it stays dead
+      // centre through the body from every angle, while remaining world-vertical.
+      if (hips && plumbPos && plumbGeomRef) {
+        hips.getWorldPosition(tmp);
+        plumbPos[0] = tmp.x; plumbPos[2] = tmp.z;
+        plumbPos[3] = tmp.x; plumbPos[5] = tmp.z;
+        (plumbGeomRef.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+        plumbLineRef?.computeLineDistances();
+      }
 
       // Update the skeleton overlay from current dot world positions.
       let ok = true;
