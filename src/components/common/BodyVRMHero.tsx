@@ -105,7 +105,13 @@ export default function BodyVRMHero({ className }: { className?: string }) {
     const lineGeom = new THREE.BufferGeometry();
     const linePos = new Float32Array(CONNECTIONS.length * 2 * 3);
     lineGeom.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
-    const lineMat = new THREE.LineBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.75 });
+    const lineMat = new THREE.LineBasicMaterial({
+      color: 0x10b981,
+      transparent: true,
+      opacity: 0.9,
+      depthTest: false,  // always draw the skeleton ON TOP of the body/dress
+      depthWrite: false,
+    });
     const skeleton = new THREE.LineSegments(lineGeom, lineMat);
     skeleton.frustumCulled = false;
     skeleton.renderOrder = 2;
