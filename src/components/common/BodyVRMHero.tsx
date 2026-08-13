@@ -95,17 +95,11 @@ export default function BodyVRMHero({ className }: { className?: string }) {
     controls.dampingFactor = 0.08;
     controls.enablePan = false;
     controls.enableZoom = false;
-    controls.autoRotate = true;
-    controls.autoRotateSpeed = 1.6;
-    controls.minPolarAngle = Math.PI * 0.25;
-    controls.maxPolarAngle = Math.PI * 0.62;
-    // Pause auto-rotate briefly while the user is dragging.
-    controls.addEventListener('start', () => (controls.autoRotate = false));
-    controls.addEventListener('end', () => (controls.autoRotate = true));
+    controls.autoRotate = false; // no auto-spin — user rotates by dragging
+    controls.minPolarAngle = Math.PI * 0.28;
+    controls.maxPolarAngle = Math.PI * 0.6;
 
     const dotMeshes: THREE.Mesh[] = new Array(33);
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduce) controls.autoRotate = false;
 
     // Skeleton line overlay — positions updated every frame from dot world pos.
     const lineGeom = new THREE.BufferGeometry();
@@ -156,16 +150,18 @@ export default function BodyVRMHero({ className }: { className?: string }) {
           dotMeshes[i] = dot;
         });
 
-        // Frame the camera on the whole body.
+        // Frame the camera so the WHOLE body fits (head + feet) with a margin.
         const box = new THREE.Box3().setFromObject(vrm.scene);
         const size = box.getSize(new THREE.Vector3());
         const center = box.getCenter(new THREE.Vector3());
-        const target = new THREE.Vector3(center.x, center.y + size.y * 0.04, center.z);
-        controls.target.copy(target);
-        const dist = size.y * 1.28;
-        camera.position.set(center.x + 0.05, target.y + size.y * 0.06, center.z + dist);
-        camera.near = dist / 20;
-        camera.far = dist * 20;
+        controls.target.set(center.x, center.y, center.z);
+        // Distance needed to fit the full height inside the vertical FOV.
+        const vFov = (camera.fov * Math.PI) / 180;
+        const margin = 1.18; // a little breathing room top & bottom
+        const dist = (size.y * 0.5 * margin) / Math.tan(vFov / 2);
+        camera.position.set(center.x, center.y, center.z + dist);
+        camera.near = dist / 50;
+        camera.far = dist * 50;
         camera.updateProjectionMatrix();
         controls.update();
 
