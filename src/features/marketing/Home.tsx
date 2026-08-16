@@ -8,6 +8,7 @@ import {
   Sparkles,
   Zap,
   Activity,
+  CheckCircle2,
 } from 'lucide-react';
 import { CLINICAL_ASSESSMENTS } from '@/lib/clinicalKnowledge';
 import BodyVRMHero from '@/components/common/BodyVRMHero';
@@ -77,6 +78,80 @@ export default function Home() {
         <Feature i={1} icon={<Zap className="h-5 w-5" />} title="Instant Results" desc="Get posture, mobility, and stability scores in seconds." />
         <Feature i={2} icon={<Gauge className="h-5 w-5" />} title="Personalized Programs" desc="Targeted routines matched to your specific findings." />
         <Feature i={3} icon={<ShieldCheck className="h-5 w-5" />} title="Private by Design" desc="Analysis runs on-device in your browser — nothing leaves you." />
+      </section>
+
+      {/* Clinic showcase — image on the left, description on the right */}
+      <section className="mb-14 grid items-center gap-8 md:grid-cols-2">
+        {/* Image slides in from the left; hover lifts the card and zooms the photo */}
+        <div
+          data-reveal="left"
+          className="hm-lift group relative overflow-hidden rounded-2xl shadow-xl ring-1 ring-slate-200"
+        >
+          {/* Ambient glow that pulses behind the card */}
+          <div className="scan-halo pointer-events-none absolute -inset-4 -z-10 rounded-[2rem] bg-[radial-gradient(circle_at_50%_50%,rgba(16,185,129,0.25),transparent_65%)] blur-2xl" />
+
+          {/* Placeholder clinic photo — swap the src for your own image later. */}
+          <img
+            src="https://images.unsplash.com/photo-1631217868264-e5b90bb7e133?auto=format&fit=crop&w=1200&q=80"
+            alt="HealingMonk physiotherapy clinic"
+            loading="lazy"
+            onError={(e) => {
+              e.currentTarget.onerror = null;
+              e.currentTarget.src = '/image.png';
+            }}
+            className="aspect-[4/3] h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+          />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-emerald-900/25 via-transparent to-transparent" />
+
+          {/* Scan sweep — a soft beam that runs down the photo on hover */}
+          <div className="pose-sweep pointer-events-none absolute inset-x-0 top-0 h-20 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+            <div className="h-full w-full bg-[linear-gradient(180deg,transparent,rgba(45,212,191,0.35))]" />
+            <div className="h-px w-full bg-emerald-300 shadow-[0_0_16px_3px_rgba(16,185,129,0.7)]" />
+          </div>
+
+          <div className="absolute bottom-4 left-4 rounded-xl border border-white/40 bg-white/80 px-4 py-2 backdrop-blur transition-transform duration-300 group-hover:-translate-y-1">
+            <p className="text-[10px] font-medium uppercase tracking-widest text-emerald-600">HealingMonk</p>
+            <p className="text-sm font-semibold text-slate-900">AI-assisted physiotherapy clinic</p>
+          </div>
+        </div>
+
+        {/* Copy slides in from the right */}
+        <div data-reveal="right">
+          <p className="text-sm font-medium uppercase tracking-widest text-emerald-600">Our clinic</p>
+          <h2 className="mt-3 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            Where AI precision meets hands-on care
+          </h2>
+          <p className="mt-4 text-slate-600">
+            At HealingMonk, every assessment pairs on-device AI movement analysis with experienced
+            physiotherapists. From your first scan to a personalized recovery program, your care is
+            guided by data and delivered with a human touch.
+          </p>
+          <ul className="mt-6 space-y-3">
+            {[
+              'Certified physiotherapists on staff',
+              'AI-guided posture & movement screening',
+              'Personalized recovery programs built around you',
+              'Clinical-grade reports you can share with any doctor',
+            ].map((item, i) => (
+              <li
+                key={item}
+                data-reveal="left"
+                style={{ '--reveal-delay': `${i * 90}ms` } as React.CSSProperties}
+                className="group flex items-start gap-3 rounded-lg px-2 py-1.5 text-slate-700 transition-colors hover:bg-emerald-50"
+              >
+                <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-500 transition-transform duration-200 group-hover:scale-125" />
+                <span className="transition-transform duration-200 group-hover:translate-x-1">{item}</span>
+              </li>
+            ))}
+          </ul>
+          <Link
+            to="/about"
+            className="hm-lift group mt-8 inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:border-emerald-400 hover:text-emerald-700"
+          >
+            Learn more about us
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+          </Link>
+        </div>
       </section>
 
       {/* Assessment library teaser */}
