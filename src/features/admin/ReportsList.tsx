@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { ExternalLink, Eye, X, Download } from 'lucide-react';
-import { ReportListItem, listAllReports } from '@/services/api';
+import { ExternalLink, Eye, X, Download, Trash2 } from 'lucide-react';
+import { ReportListItem, listAllReports, deleteReport } from '@/services/api';
 import { fetchStoredReport } from '@/services/report.service';
 import { downloadReportPdf } from '@/lib/reportPdf';
 import { formatDate } from '@/utils/formatter';
@@ -221,6 +221,7 @@ export default function ReportsList() {
   const reports = data?.reports ?? [];
   const [selected, setSelected] = useState<ReportListItem | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [dlError, setDlError] = useState('');
   const error = dlError || loadError;
 
@@ -255,6 +256,22 @@ export default function ReportsList() {
       setDlError(e instanceof Error ? e.message : 'Could not download report');
     } finally {
       setDownloadingId(null);
+    }
+  };
+
+  // Permanently delete a report, then refresh the live list.
+  const removeReport = async (r: ReportListItem) => {
+    const who = r.patientInfo?.name || 'this patient';
+    if (!window.confirm(`Delete the report for ${who}? This cannot be undone.`)) return;
+    setDlError('');
+    setDeletingId(r.id);
+    try {
+      await deleteReport(r.id);
+      await refresh();
+    } catch (e) {
+      setDlError(e instanceof Error ? e.message : 'Could not delete report');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -345,6 +362,18 @@ export default function ReportsList() {
                           {downloadingId === r.id ? 'Preparing…' : 'Download'}
                         </button>
                       )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeReport(r);
+                        }}
+                        disabled={deletingId === r.id}
+                        className="inline-flex items-center gap-1.5 text-rose-400 hover:text-rose-300 disabled:opacity-60 text-xs font-semibold"
+                        title="Delete this report"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        {deletingId === r.id ? 'Deleting…' : 'Delete'}
+                      </button>
                     </div>
                   </td>
                 </tr>

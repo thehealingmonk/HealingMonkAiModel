@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Mail, Lock, User as UserIcon, Plus, ShieldCheck, RefreshCw } from 'lucide-react';
+import { Mail, Lock, User as UserIcon, Plus, ShieldCheck, RefreshCw, Pencil, Trash2, X } from 'lucide-react';
 import { useAuth } from '@/store/auth.store';
-import { AuthUser, Role, listUsers, createUser, setUserActive } from '@/services/api';
+import { AuthUser, Role, listUsers, createUser, setUserActive, updateUser, deleteUser } from '@/services/api';
 
 const ROLE_TABS: { label: string; value: Role | 'all' }[] = [
   { label: 'All', value: 'all' },
@@ -44,6 +44,19 @@ export default function UserManagement({ initialRole = 'all' }: Props) {
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState('');
 
+  // Edit-user modal state (null = closed). `password` is optional — blank keeps
+  // the current one.
+  const [editing, setEditing] = useState<AuthUser | null>(null);
+  const [editForm, setEditForm] = useState<{ name: string; email: string; role: Role; password: string }>({
+    name: '',
+    email: '',
+    role: 'doctor',
+    password: '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   async function load() {
     setLoading(true);
     setError('');
@@ -84,6 +97,48 @@ export default function UserManagement({ initialRole = 'all' }: Props) {
       setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, active: !u.active } : x)));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update status');
+    }
+  };
+
+  const openEdit = (u: AuthUser) => {
+    setEditError('');
+    setEditForm({ name: u.name, email: u.email, role: u.role, password: '' });
+    setEditing(u);
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editing) return;
+    setEditError('');
+    setSaving(true);
+    try {
+      const { user: updated } = await updateUser(editing.id, {
+        name: editForm.name,
+        email: editForm.email,
+        role: editForm.role,
+        // Only send a password when the admin actually typed a new one.
+        ...(editForm.password ? { password: editForm.password } : {}),
+      });
+      setUsers((prev) => prev.map((x) => (x.id === updated.id ? { ...x, ...updated } : x)));
+      setEditing(null);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Could not update user');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (u: AuthUser) => {
+    if (!window.confirm(`Delete ${u.name} (${u.email})? This cannot be undone.`)) return;
+    setError('');
+    setDeletingId(u.id);
+    try {
+      await deleteUser(u.id);
+      setUsers((prev) => prev.filter((x) => x.id !== u.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete user');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -258,20 +313,42 @@ export default function UserManagement({ initialRole = 'all' }: Props) {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => handleToggleActive(u)}
-                        disabled={isSelf}
-                        title={isSelf ? 'You cannot change your own status' : ''}
-                        className={`text-sm font-medium ${
-                          isSelf
-                            ? 'text-slate-600 cursor-not-allowed'
-                            : u.active
-                            ? 'text-rose-400 hover:text-rose-300'
-                            : 'text-emerald-400 hover:text-emerald-300'
-                        }`}
-                      >
-                        {u.active ? 'Disable' : 'Enable'}
-                      </button>
+                      <div className="inline-flex items-center gap-3">
+                        <button
+                          onClick={() => openEdit(u)}
+                          className="inline-flex items-center gap-1 text-sm font-medium text-sky-400 hover:text-sky-300"
+                          title="Edit user"
+                        >
+                          <Pencil className="w-3.5 h-3.5" /> Edit
+                        </button>
+                        <button
+                          onClick={() => handleToggleActive(u)}
+                          disabled={isSelf}
+                          title={isSelf ? 'You cannot change your own status' : ''}
+                          className={`text-sm font-medium ${
+                            isSelf
+                              ? 'text-slate-600 cursor-not-allowed'
+                              : u.active
+                              ? 'text-amber-400 hover:text-amber-300'
+                              : 'text-emerald-400 hover:text-emerald-300'
+                          }`}
+                        >
+                          {u.active ? 'Disable' : 'Enable'}
+                        </button>
+                        <button
+                          onClick={() => handleDelete(u)}
+                          disabled={isSelf || deletingId === u.id}
+                          title={isSelf ? 'You cannot delete your own account' : 'Delete user'}
+                          className={`inline-flex items-center gap-1 text-sm font-medium ${
+                            isSelf
+                              ? 'text-slate-600 cursor-not-allowed'
+                              : 'text-rose-400 hover:text-rose-300'
+                          }`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          {deletingId === u.id ? 'Deleting…' : 'Delete'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -280,6 +357,114 @@ export default function UserManagement({ initialRole = 'all' }: Props) {
           </table>
         )}
       </div>
+
+      {editing && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-y-auto"
+          onClick={() => !saving && setEditing(null)}
+        >
+          <form
+            onSubmit={handleUpdate}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg my-8 rounded-2xl border border-white/10 bg-[#1f2b48] text-slate-200 shadow-2xl shadow-black/50"
+          >
+            <div className="flex items-center justify-between border-b border-white/10 p-5">
+              <h3 className="text-lg font-bold text-white">Edit user</h3>
+              <button
+                type="button"
+                onClick={() => setEditing(null)}
+                className="text-slate-400 hover:text-white"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Full name</label>
+                <div className="relative">
+                  <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    className={fieldInput}
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Role</label>
+                <select
+                  value={editForm.role}
+                  onChange={(e) => setEditForm({ ...editForm, role: e.target.value as Role })}
+                  disabled={me?.id === editing.id}
+                  title={me?.id === editing.id ? 'You cannot change your own role' : ''}
+                  className="w-full px-3 py-2 rounded-lg border border-white/15 bg-[#1f2b48] text-white focus:ring-2 focus:ring-emerald-400/60 focus:border-transparent disabled:opacity-60"
+                >
+                  <option value="doctor">Doctor</option>
+                  <option value="reception">Reception</option>
+                  <option value="patient">Patient</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="email"
+                    value={editForm.email}
+                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                    className={fieldInput}
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  New password <span className="text-slate-500">(optional)</span>
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={editForm.password}
+                    onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+                    className={fieldInput}
+                    placeholder="Leave blank to keep current"
+                    minLength={6}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {editError && (
+              <div className="mx-5 bg-rose-400/10 border border-rose-400/30 text-rose-200 px-3 py-2 rounded-lg text-sm">
+                {editError}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 border-t border-white/10 p-4 mt-1">
+              <button
+                type="button"
+                onClick={() => setEditing(null)}
+                className="rounded-lg border border-white/15 bg-white/5 text-slate-200 hover:bg-white/10 font-medium py-2 px-4 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 disabled:opacity-60 text-white font-semibold py-2 px-4 shadow-lg shadow-emerald-500/30 transition-transform hover:scale-[1.03]"
+              >
+                {saving ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

@@ -62,6 +62,13 @@ const CONNECTIONS: [number, number][] = [
 
 const KEY = new Set([0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]);
 
+// Ear landmarks (left 7 / right 8). These sit ON the head, so as the view turns
+// the skull geometry slides in front of them and the ordinary dot gets visually
+// lost. They get a dedicated high-visibility marker (distinct amber colour + a
+// white core) that is always drawn on top of the head — see the ear branch in
+// the dot-build loop. Only these two landmarks use the alternate style.
+const EAR = new Set([7, 8]);
+
 export default function BodyVRMHero({ className }: { className?: string }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -145,25 +152,49 @@ export default function BodyVRMHero({ className }: { className?: string }) {
         // Attach a glowing dot sphere to each mapped bone.
         const dotGeoKey = new THREE.SphereGeometry(0.022, 16, 16);
         const dotGeo = new THREE.SphereGeometry(0.014, 12, 12);
+        const dotGeoEar = new THREE.SphereGeometry(0.02, 16, 16);
+        const dotGeoEarCore = new THREE.SphereGeometry(0.009, 12, 12);
         LANDMARKS.forEach((m, i) => {
           const isKey = KEY.has(i);
+          const isEar = EAR.has(i);
           const bone =
             vrm.humanoid?.getRawBoneNode?.(m.bone) ??
             vrm.humanoid?.getNormalizedBoneNode?.(m.bone) ??
             null;
           if (!bone) return;
           const mat = new THREE.MeshBasicMaterial({
-            color: isKey ? 0x34d399 : 0x7dd3fc,
+            // Ears get a distinct high-visibility amber so they read clearly even
+            // when the head geometry is between them and the camera.
+            color: isEar ? 0xff9500 : isKey ? 0x34d399 : 0x7dd3fc,
             transparent: true,
-            opacity: 0.95,
+            opacity: isEar ? 1 : 0.95,
             depthTest: false,  // dot always visible on top — never hidden behind the dress
             depthWrite: false,
           });
-          const dot = new THREE.Mesh(isKey ? dotGeoKey : dotGeo, mat);
+          const dot = new THREE.Mesh(isEar ? dotGeoEar : isKey ? dotGeoKey : dotGeo, mat);
           if (m.off) dot.position.set(m.off[0], m.off[1], m.off[2]);
-          dot.renderOrder = 3;
+          // Ears render above every other dot so they can never be hidden by the
+          // skull; the anchoring bone still moves them correctly on rotation.
+          dot.renderOrder = isEar ? 5 : 3;
           bone.add(dot);
           dotMeshes[i] = dot;
+
+          // Bright white core inside each ear marker — a bullseye that stays
+          // unmistakable against skin/hair even when the ear itself is occluded.
+          if (isEar) {
+            const core = new THREE.Mesh(
+              dotGeoEarCore,
+              new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 1,
+                depthTest: false,
+                depthWrite: false,
+              }),
+            );
+            core.renderOrder = 6;
+            dot.add(core);
+          }
         });
 
         // Capture the arm bones so we can lower them DYNAMICALLY by view angle:

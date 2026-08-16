@@ -101,6 +101,20 @@ export async function setUserActive(id: string, active: boolean): Promise<{ user
   });
 }
 
+// Admin edits an account. Send only the fields you want to change; a non-empty
+// `password` resets the login password.
+export async function updateUser(
+  id: string,
+  payload: { name?: string; email?: string; role?: Role; password?: string }
+): Promise<{ user: AuthUser; permissions: string[] }> {
+  return request(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+// Admin permanently deletes a user account.
+export async function deleteUser(id: string): Promise<{ ok: boolean }> {
+  return request(`/users/${id}`, { method: 'DELETE' });
+}
+
 // ---- Patients ----
 
 export interface Patient {
@@ -250,6 +264,11 @@ export async function updateReportNotes(id: string, doctorNotes: string): Promis
     method: 'PATCH',
     body: JSON.stringify({ doctorNotes }),
   });
+}
+
+// Admin permanently deletes an assessment report.
+export async function deleteReport(id: string): Promise<{ ok: boolean }> {
+  return request(`/reports/${id}`, { method: 'DELETE' });
 }
 
 // ---- Appointments ----
