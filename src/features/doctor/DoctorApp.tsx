@@ -152,19 +152,22 @@ export default function DoctorApp() {
               onStart={async (p) => {
                 setPatient(p);
                 setCaptures([]);
-                // Pre-select the capture poses the doctor curated for this
-                // patient's pain areas, so the position screen opens with the
-                // relevant poses already ticked (defaults still apply if none).
-                let preset: string[] = [];
+                // Open the position screen with the default full-body poses PLUS
+                // the extra poses the doctor curated for this patient's pain areas
+                // (e.g. shoulder), all pre-ticked. Keep knowledge-base order so the
+                // full-body shots stay first.
+                const curated = new Set<string>();
                 if (p.painAreas?.length) {
                   try {
                     const { sets } = await listIdealPostures(p.painAreas);
-                    const ids = new Set(sets.flatMap((s) => s.poses ?? []));
-                    preset = CLINICAL_ASSESSMENTS.filter((a) => ids.has(a.id)).map((a) => a.id);
+                    for (const s of sets) for (const id of s.poses ?? []) curated.add(id);
                   } catch {
-                    /* Non-fatal — fall back to the default selection. */
+                    /* Non-fatal — fall back to just the defaults. */
                   }
                 }
+                const preset = CLINICAL_ASSESSMENTS.filter(
+                  (a) => a.defaultSelected || curated.has(a.id)
+                ).map((a) => a.id);
                 setAssessmentIds(preset);
                 navigate(`/doctor/patient/${p.id}/assess`);
               }}
