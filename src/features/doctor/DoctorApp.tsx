@@ -8,6 +8,7 @@ import DoctorDashboard from '@/features/doctor/DoctorDashboard';
 import PatientForm from '@/features/doctor/PatientForm';
 import PatientProfile from '@/features/doctor/PatientProfile';
 import DoctorReportView from '@/features/doctor/DoctorReportView';
+import IdealPostures from '@/features/doctor/IdealPostures';
 import PositionSelect from '@/features/assessment/PositionSelect';
 import ClinicalCapture from '@/features/assessment/ClinicalCapture';
 
@@ -121,6 +122,7 @@ export default function DoctorApp() {
           element={
             <DoctorDashboard
               onRegister={() => navigate('/doctor/register')}
+              onManageIdeal={() => navigate('/doctor/ideal-postures')}
               onOpenPatient={(p) => {
                 setPatient(p);
                 navigate(`/doctor/patient/${p.id}`);
@@ -140,6 +142,7 @@ export default function DoctorApp() {
             />
           }
         />
+        <Route path="ideal-postures" element={<IdealPostures onBack={() => navigate('/doctor')} />} />
         <Route
           path="patient/:id"
           element={

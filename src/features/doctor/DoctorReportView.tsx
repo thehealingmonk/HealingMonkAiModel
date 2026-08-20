@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Save, Check, AlertCircle, Link2, Copy } from 'lucide-react';
 import ClinicalReport from '@/features/assessment/ClinicalReport';
 import { PatientInfo, AssessmentCapture } from '@/lib/clinicalKnowledge';
-import { Patient, createReport, updateReportNotes } from '@/services/api';
+import { Patient, createReport, updateReportNotes, listIdealPostures, IdealPostureSet } from '@/services/api';
 import { buildReportPayload } from '@/lib/reportBuilder';
 import { createStoredReport } from '@/services/report.service';
 
@@ -34,6 +34,7 @@ export default function DoctorReportView({ patient, captures, onDone }: Props) {
   const [copied, setCopied] = useState(false);
   const [notes, setNotes] = useState('');
   const [notesStatus, setNotesStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [idealPostures, setIdealPostures] = useState<IdealPostureSet[]>([]);
   const created = useRef(false);
 
   // Persist the report once when the view mounts. Two things are saved:
@@ -44,9 +45,28 @@ export default function DoctorReportView({ patient, captures, onDone }: Props) {
   useEffect(() => {
     if (created.current) return;
     created.current = true;
-    const slug = createStoredReport({ patient: toPatientInfo(patient), captures, extraShots: [] });
-    setShareUrl(`${window.location.origin}/r/${slug}`);
     (async () => {
+      // Auto-populate the doctor's curated ideal reference postures for this
+      // patient's pain areas. Non-fatal: the report still generates without them.
+      let presets: IdealPostureSet[] = [];
+      try {
+        if (patient.painAreas.length > 0) {
+          const { sets } = await listIdealPostures(patient.painAreas);
+          presets = sets.filter((s) => s.images.length > 0);
+        }
+      } catch {
+        /* library unavailable — continue without reference images */
+      }
+      setIdealPostures(presets);
+
+      // Bake the reference images into the shareable report so /r/:slug shows them too.
+      const slug = createStoredReport({
+        patient: toPatientInfo(patient),
+        captures,
+        extraShots: [],
+        idealPostures: presets,
+      });
+      setShareUrl(`${window.location.origin}/r/${slug}`);
       try {
         const payload = { ...buildReportPayload(patient.id, captures, patient.painAreas), shareId: slug };
         const { report } = await createReport(payload);
@@ -163,6 +183,7 @@ export default function DoctorReportView({ patient, captures, onDone }: Props) {
       restartLabel="Done"
       shareUrl={shareUrl || undefined}
       notesSection={notesSection}
+      idealPostures={idealPostures}
       doctorMode
     />
   );

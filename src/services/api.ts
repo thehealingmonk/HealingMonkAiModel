@@ -271,6 +271,48 @@ export async function deleteReport(id: string): Promise<{ ok: boolean }> {
   return request(`/reports/${id}`, { method: 'DELETE' });
 }
 
+// ---- Ideal posture library ----
+
+// The canonical conditions a doctor can curate a reference library for. Matches
+// the pain-area options used when registering a patient, so presets auto-apply.
+export const IDEAL_POSTURE_CONDITIONS = [
+  'Neck',
+  'Shoulder',
+  'Upper Back',
+  'Lower Back',
+  'Hip',
+  'Knee',
+  'Ankle',
+] as const;
+
+export interface IdealPostureImage {
+  label: string;
+  imageData: string; // data URL
+}
+
+export interface IdealPostureSet {
+  condition: string;
+  images: IdealPostureImage[];
+  updatedAt?: string;
+}
+
+// List the ideal-posture library. Pass conditions to fetch only those.
+export async function listIdealPostures(conditions?: string[]): Promise<{ sets: IdealPostureSet[] }> {
+  const q = conditions && conditions.length ? `?conditions=${encodeURIComponent(conditions.join(','))}` : '';
+  return request(`/ideal-postures${q}`);
+}
+
+// Upsert (replace) the image library for one condition. Doctor/admin only.
+export async function saveIdealPosture(
+  condition: string,
+  images: IdealPostureImage[]
+): Promise<{ set: IdealPostureSet }> {
+  return request('/ideal-postures', {
+    method: 'PUT',
+    body: JSON.stringify({ condition, images }),
+  });
+}
+
 // ---- Appointments ----
 
 export type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled' | 'no_show';

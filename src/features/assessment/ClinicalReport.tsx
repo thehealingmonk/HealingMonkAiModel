@@ -16,6 +16,7 @@ import { useState, ReactNode } from 'react';
 import { FileText, Printer, RotateCcw, Activity, AlertTriangle, Stethoscope, ShieldAlert, Download, Link2, Check, ZoomIn, X } from 'lucide-react';
 import { downloadReportPdf } from '@/lib/reportPdf';
 import type { DoctorFindingData } from '@/services/report.service';
+import type { IdealPostureSet } from '@/services/api';
 
 interface Props {
   patient: PatientInfo;
@@ -35,6 +36,8 @@ interface Props {
   onDoctorDataChange?: (assessmentId: string, data: DoctorFindingData) => void;
   /** When set, shows a "Copy link" button so the report's permanent URL can be shared/revisited. */
   shareUrl?: string;
+  /** Doctor-curated ideal reference postures for the patient's pain areas (auto-populated). */
+  idealPostures?: IdealPostureSet[];
 }
 
 const SEVERITY_SCORE: Record<Severity, number> = { normal: 0, mild: 1, moderate: 2, severe: 3 };
@@ -47,7 +50,7 @@ const VIEW_LABEL: Record<View, string> = {
   back: 'Back View',
 };
 
-export default function ClinicalReport({ patient, captures, extraShots = [], onRestart, restartLabel, notesSection, doctorMode = false, doctorData, onDoctorDataChange, shareUrl }: Props) {
+export default function ClinicalReport({ patient, captures, extraShots = [], onRestart, restartLabel, notesSection, doctorMode = false, doctorData, onDoctorDataChange, shareUrl, idealPostures = [] }: Props) {
   const [downloading, setDownloading] = useState(false);
 
   // One-click PDF download. Composed programmatically for a crisp, consistent
@@ -258,6 +261,50 @@ export default function ClinicalReport({ patient, captures, extraShots = [], onR
               })}
             </div>
           </section>
+
+          {/* Doctor-curated ideal reference postures for this patient's pain areas.
+              Auto-populated from the clinic's ideal-posture library at report time. */}
+          {idealPostures.some((s) => s.images.length > 0) && (
+            <section className="mt-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                Ideal Reference Postures
+              </h2>
+              <p className="text-xs text-gray-400 mb-3">
+                Target postures for the patient's condition — compare against the captured photos above.
+              </p>
+              <div className="space-y-5">
+                {idealPostures
+                  .filter((s) => s.images.length > 0)
+                  .map((set) => (
+                    <div key={set.condition} className="break-inside-avoid">
+                      <h3 className="text-xs font-bold text-emerald-700 uppercase tracking-wider mb-2 flex items-center gap-2">
+                        <span className="w-1.5 h-4 bg-emerald-600 rounded-sm" /> {set.condition}
+                      </h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                        {set.images.map((img, i) => (
+                          <figure
+                            key={i}
+                            className="rounded-lg overflow-hidden border border-emerald-100 bg-emerald-50/40 break-inside-avoid"
+                          >
+                            <ZoomableImage
+                              src={img.imageData}
+                              alt={img.label || `${set.condition} ideal posture ${i + 1}`}
+                              heightClass="h-44"
+                              badge="Ideal"
+                            />
+                            {img.label && (
+                              <figcaption className="px-2 py-1 text-[11px] text-emerald-800 bg-emerald-50 truncate">
+                                {img.label}
+                              </figcaption>
+                            )}
+                          </figure>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </section>
+          )}
 
           {/* Additional angle photos captured during the session */}
           {extraShots.length > 0 && (

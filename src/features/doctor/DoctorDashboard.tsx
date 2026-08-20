@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Search, UserPlus, ChevronRight, Users } from 'lucide-react';
+import { Search, UserPlus, ChevronRight, Users, Images } from 'lucide-react';
 import { listPatients, Patient } from '@/services/api';
 import TableSkeleton from '@/components/ui/TableSkeleton';
 
 interface Props {
   onRegister: () => void;
   onOpenPatient: (patient: Patient) => void;
+  onManageIdeal: () => void;
 }
 
-export default function DoctorDashboard({ onRegister, onOpenPatient }: Props) {
+export default function DoctorDashboard({ onRegister, onOpenPatient, onManageIdeal }: Props) {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [q, setQ] = useState('');
   const [scope, setScope] = useState<'mine' | 'all'>('mine');
@@ -40,12 +41,20 @@ export default function DoctorDashboard({ onRegister, onOpenPatient }: Props) {
           <h2 className="text-2xl font-bold tracking-tight text-white">Patients</h2>
           <p className="text-slate-400 text-sm">Register a patient or open a record to start an AI assessment.</p>
         </div>
-        <button
-          onClick={onRegister}
-          className="hm-lift inline-flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold py-2 px-4 rounded-lg shadow-lg shadow-emerald-500/30"
-        >
-          <UserPlus className="w-4 h-4" /> Register patient
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onManageIdeal}
+            className="hm-lift inline-flex items-center gap-2 border border-white/15 bg-white/5 hover:bg-white/10 text-slate-200 font-medium py-2 px-4 rounded-lg"
+          >
+            <Images className="w-4 h-4" /> Ideal postures
+          </button>
+          <button
+            onClick={onRegister}
+            className="hm-lift inline-flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold py-2 px-4 rounded-lg shadow-lg shadow-emerald-500/30"
+          >
+            <UserPlus className="w-4 h-4" /> Register patient
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 mb-4">

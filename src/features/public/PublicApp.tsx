@@ -78,6 +78,7 @@ function ReportRoute({ onRestart }: { onRestart: () => void }) {
       patient={report.patient}
       captures={report.captures}
       extraShots={report.extraShots}
+      idealPostures={report.idealPostures}
       onRestart={onRestart}
       doctorMode
       shareUrl={window.location.href}

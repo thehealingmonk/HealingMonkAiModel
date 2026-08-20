@@ -8,6 +8,7 @@
 // (a fast local cache so the generating device reopens instantly and offline).
 
 import type { PatientInfo, AssessmentCapture, ExtraShot } from '@/lib/clinicalKnowledge';
+import type { IdealPostureSet } from '@/services/api';
 
 // Same-origin API now that the backend lives in this Next.js app under /api.
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
@@ -31,6 +32,8 @@ export interface StoredReport {
   doctorPoints: string[];
   /** Per-assessment doctor score / remarks / exercises, keyed by assessmentId. */
   findingData: Record<string, DoctorFindingData>;
+  /** Doctor's curated ideal-posture reference images for this patient's pain areas. */
+  idealPostures?: IdealPostureSet[];
 }
 
 const PREFIX = 'hm_report_';
@@ -72,6 +75,7 @@ export function createStoredReport(input: {
   patient: PatientInfo;
   captures: AssessmentCapture[];
   extraShots: ExtraShot[];
+  idealPostures?: IdealPostureSet[];
 }): string {
   const id = genId(input.patient?.name);
   const report: StoredReport = {
@@ -83,6 +87,7 @@ export function createStoredReport(input: {
     doctorNotes: '',
     doctorPoints: [],
     findingData: {},
+    idealPostures: input.idealPostures ?? [],
   };
   memoryCache.set(id, report);
   persist(report);
