@@ -293,6 +293,8 @@ export interface IdealPostureImage {
 export interface IdealPostureSet {
   condition: string;
   images: IdealPostureImage[];
+  /** Capture-pose ids (from CLINICAL_ASSESSMENTS) the doctor tracks for this condition. */
+  poses: string[];
   updatedAt?: string;
 }
 
@@ -302,14 +304,16 @@ export async function listIdealPostures(conditions?: string[]): Promise<{ sets: 
   return request(`/ideal-postures${q}`);
 }
 
-// Upsert (replace) the image library for one condition. Doctor/admin only.
+// Upsert (replace) the reference library for one condition — its images and the
+// capture poses the doctor tracks for it. Doctor/admin only.
 export async function saveIdealPosture(
   condition: string,
-  images: IdealPostureImage[]
+  images: IdealPostureImage[],
+  poses: string[] = []
 ): Promise<{ set: IdealPostureSet }> {
   return request('/ideal-postures', {
     method: 'PUT',
-    body: JSON.stringify({ condition, images }),
+    body: JSON.stringify({ condition, images, poses }),
   });
 }
 

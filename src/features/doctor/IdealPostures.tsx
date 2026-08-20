@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Upload, Trash2, Save, Check, ImageIcon, Plus } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, Save, Check, ImageIcon, Plus, CheckCircle2 } from 'lucide-react';
 import {
   IDEAL_POSTURE_CONDITIONS,
   IdealPostureImage,
   listIdealPostures,
   saveIdealPosture,
 } from '@/services/api';
+import { CLINICAL_ASSESSMENTS } from '@/lib/clinicalKnowledge';
+import PoseIllustration from '@/components/common/PoseIllustration';
 
 interface Props {
   onBack: () => void;
@@ -42,6 +44,8 @@ export default function IdealPostures({ onBack }: Props) {
   const [condition, setCondition] = useState<string>(IDEAL_POSTURE_CONDITIONS[0]);
   // Images per condition, kept in memory so switching tabs preserves edits.
   const [byCondition, setByCondition] = useState<Record<string, IdealPostureImage[]>>({});
+  // Selected capture-pose ids per condition (pre-checked from what was saved before).
+  const [posesByCondition, setPosesByCondition] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<Record<string, boolean>>({});
@@ -53,8 +57,13 @@ export default function IdealPostures({ onBack }: Props) {
       try {
         const { sets } = await listIdealPostures();
         const map: Record<string, IdealPostureImage[]> = {};
-        for (const s of sets) map[s.condition] = s.images;
+        const poseMap: Record<string, string[]> = {};
+        for (const s of sets) {
+          map[s.condition] = s.images;
+          poseMap[s.condition] = s.poses ?? [];
+        }
         setByCondition(map);
+        setPosesByCondition(poseMap);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not load library');
       } finally {
@@ -66,6 +75,14 @@ export default function IdealPostures({ onBack }: Props) {
   const images = byCondition[condition] ?? [];
   const setImages = (next: IdealPostureImage[]) =>
     setByCondition((prev) => ({ ...prev, [condition]: next }));
+
+  const selectedPoses = posesByCondition[condition] ?? [];
+  const togglePose = (id: string) =>
+    setPosesByCondition((prev) => {
+      const current = prev[condition] ?? [];
+      const next = current.includes(id) ? current.filter((p) => p !== id) : [...current, id];
+      return { ...prev, [condition]: next };
+    });
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -85,7 +102,7 @@ export default function IdealPostures({ onBack }: Props) {
     setSaving(true);
     setError('');
     try {
-      await saveIdealPosture(condition, images);
+      await saveIdealPosture(condition, images, selectedPoses);
       setSavedAt((prev) => ({ ...prev, [condition]: true }));
       setTimeout(() => setSavedAt((prev) => ({ ...prev, [condition]: false })), 2000);
     } catch (err) {
@@ -112,7 +129,7 @@ export default function IdealPostures({ onBack }: Props) {
       {/* Condition tabs */}
       <div className="flex flex-wrap gap-2 mb-5">
         {IDEAL_POSTURE_CONDITIONS.map((c) => {
-          const count = (byCondition[c] ?? []).length;
+          const count = (byCondition[c] ?? []).length + (posesByCondition[c] ?? []).length;
           return (
             <button
               key={c}
@@ -209,6 +226,48 @@ export default function IdealPostures({ onBack }: Props) {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Tracked capture poses for this condition */}
+      <div className="glass-dark rounded-2xl p-5 mt-5" data-reveal>
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="font-semibold text-white">
+            Tracked poses{' '}
+            <span className="text-slate-400 font-normal text-sm">· {selectedPoses.length} selected</span>
+          </h3>
+        </div>
+        <p className="text-slate-400 text-sm mb-4">
+          Pick the capture poses to track for {condition}. Previously-saved poses are already selected — tap to
+          add or remove, then Save.
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          {CLINICAL_ASSESSMENTS.map((a) => {
+            const active = selectedPoses.includes(a.id);
+            return (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => togglePose(a.id)}
+                className={`relative overflow-hidden rounded-xl border text-left transition-all ${
+                  active
+                    ? 'border-emerald-400/70 ring-1 ring-emerald-400/40 bg-emerald-500/10'
+                    : 'border-white/10 bg-white/5 hover:border-emerald-400/40'
+                }`}
+              >
+                {active && (
+                  <span className="absolute right-1.5 top-1.5 z-10 rounded-full bg-emerald-500 p-0.5 text-white">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  </span>
+                )}
+                <PoseIllustration pose={a.id} className="h-24 w-full bg-slate-950/40" />
+                <div className="border-t border-white/10 p-2">
+                  <p className="text-xs font-medium leading-tight text-white">{a.name}</p>
+                  <p className="mt-0.5 text-[10px] text-slate-400 capitalize">{a.bodyRegion}</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

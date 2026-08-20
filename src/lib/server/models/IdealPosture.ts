@@ -23,6 +23,10 @@ const idealPostureSchema = new mongoose.Schema(
     // e.g. "Shoulder". Unique so each condition has exactly one library doc.
     condition: { type: String, required: true, unique: true, index: true, trim: true },
     images: { type: [idealImageSchema], default: [] },
+    // Capture-pose ids (from CLINICAL_ASSESSMENTS) the doctor marked as the ones
+    // to track for this condition. Pre-selected when curating and when starting
+    // an assessment for a patient with this pain area.
+    poses: { type: [String], default: [] },
     // Last doctor/admin who edited this library.
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
@@ -36,6 +40,7 @@ idealPostureSchema.methods.toJSONSafe = function toJSONSafe(this: any) {
       label: img.label || '',
       imageData: img.imageData,
     })),
+    poses: Array.isArray(this.poses) ? this.poses : [],
     updatedAt: this.updatedAt,
   };
 };

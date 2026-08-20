@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { CLINICAL_ASSESSMENTS } from '@/lib/clinicalKnowledge';
 import { initializePoseLandmarker } from '@/lib/poseDetection';
 import PoseIllustration from '@/components/common/PoseIllustration';
-import Landmark33Diagram from '@/components/common/Landmark33Diagram';
-import PageShell, { GlassCard } from '@/components/common/PageShell';
+import PageShell from '@/components/common/PageShell';
 import { CheckCircle2, ChevronLeft, AlertCircle, Activity, ArrowRight } from 'lucide-react';
 
 interface Props {
@@ -62,25 +61,6 @@ export default function PositionSelect({ initial, onBack, onStart }: Props) {
           <p className="text-slate-500">Tap the poses you want the AI to capture.</p>
         </div>
       </div>
-
-      <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-        MediaPipe Pose detects and tracks 33 body landmarks in real time. Pick the poses below — you'll
-        manually capture each one, and live points will show whether the position is correct or incorrect.
-      </div>
-
-      {/* All 33 MediaPipe landmark points reference */}
-      <GlassCard className="mb-8 flex flex-col items-center gap-4 sm:flex-row">
-        <div className="flex-shrink-0 rounded-xl bg-slate-50 p-2">
-          <Landmark33Diagram className="h-56 w-40" />
-        </div>
-        <div>
-          <h2 className="font-semibold text-slate-900">All 33 Pose Landmarks (3D)</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Every position below is measured from these 33 MediaPipe body points — face, shoulders, elbows,
-            wrists, hands, hips, knees, ankles and feet. Each numbered point is tracked live in 3D during capture.
-          </p>
-        </div>
-      </GlassCard>
 
       <div className="mb-3 flex items-center justify-between">
         <p className="text-sm text-slate-500">{selected.length} selected</p>

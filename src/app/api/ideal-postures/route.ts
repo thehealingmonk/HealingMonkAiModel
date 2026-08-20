@@ -36,7 +36,7 @@ export async function PUT(req: NextRequest) {
 
   try {
     await connectDB();
-    const { condition, images } = (await req.json().catch(() => ({}))) || {};
+    const { condition, images, poses } = (await req.json().catch(() => ({}))) || {};
 
     if (!condition || typeof condition !== 'string') {
       return NextResponse.json({ error: 'condition is required' }, { status: 400 });
@@ -44,6 +44,10 @@ export async function PUT(req: NextRequest) {
     if (!Array.isArray(images)) {
       return NextResponse.json({ error: 'images must be an array' }, { status: 400 });
     }
+    // Capture-pose ids are optional; keep only unique non-empty strings.
+    const cleanPoses = Array.isArray(poses)
+      ? Array.from(new Set(poses.filter((p): p is string => typeof p === 'string' && p.trim() !== '')))
+      : [];
     if (images.length > MAX_IMAGES_PER_CONDITION) {
       return NextResponse.json(
         { error: `At most ${MAX_IMAGES_PER_CONDITION} images per condition` },
@@ -65,7 +69,7 @@ export async function PUT(req: NextRequest) {
 
     const set = await IdealPosture.findOneAndUpdate(
       { condition: condition.trim() },
-      { condition: condition.trim(), images: clean, updatedBy: user._id },
+      { condition: condition.trim(), images: clean, poses: cleanPoses, updatedBy: user._id },
       { new: true, upsert: true, setDefaultsOnInsert: true }
     );
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, Outlet, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/store/auth.store';
 import DashboardShell from '@/components/layout/DashboardShell';
-import { Patient, getPatient } from '@/services/api';
+import { Patient, getPatient, listIdealPostures } from '@/services/api';
 import { CLINICAL_ASSESSMENTS, AssessmentCapture } from '@/lib/clinicalKnowledge';
 import DoctorDashboard from '@/features/doctor/DoctorDashboard';
 import PatientForm from '@/features/doctor/PatientForm';
@@ -149,10 +149,23 @@ export default function DoctorApp() {
             <ProfileRoute
               patient={patient}
               setPatient={setPatient}
-              onStart={(p) => {
+              onStart={async (p) => {
                 setPatient(p);
-                setAssessmentIds([]);
                 setCaptures([]);
+                // Pre-select the capture poses the doctor curated for this
+                // patient's pain areas, so the position screen opens with the
+                // relevant poses already ticked (defaults still apply if none).
+                let preset: string[] = [];
+                if (p.painAreas?.length) {
+                  try {
+                    const { sets } = await listIdealPostures(p.painAreas);
+                    const ids = new Set(sets.flatMap((s) => s.poses ?? []));
+                    preset = CLINICAL_ASSESSMENTS.filter((a) => ids.has(a.id)).map((a) => a.id);
+                  } catch {
+                    /* Non-fatal — fall back to the default selection. */
+                  }
+                }
+                setAssessmentIds(preset);
                 navigate(`/doctor/patient/${p.id}/assess`);
               }}
             />
