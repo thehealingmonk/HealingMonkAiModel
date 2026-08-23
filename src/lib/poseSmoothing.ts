@@ -37,6 +37,24 @@ const DEFAULT_CONFIG: OneEuroConfig = {
 
 const TAU = 2 * Math.PI;
 
+// Confidence-aware smoothing band. At/above HIGH the landmark is trusted and the
+// filter behaves exactly as the tuned One-Euro (no added lag — critical for the
+// eyes/ears/joints when they are clearly visible). As visibility falls toward
+// LOW the position low-pass is damped down to FLOOR so an occluded / uncertain
+// joint HOLDS its last stable position instead of chasing MediaPipe's noisy,
+// jumpy low-confidence estimate. This is the occlusion / no-snap behaviour.
+const CONF_HIGH = 0.6;
+const CONF_LOW = 0.3;
+const CONF_FLOOR = 0.15;
+
+/** Map a landmark visibility to a [FLOOR..1] weight applied to the position alpha. */
+function confidenceWeight(vis: number): number {
+  if (vis >= CONF_HIGH) return 1;
+  if (vis <= CONF_LOW) return CONF_FLOOR;
+  const t = (vis - CONF_LOW) / (CONF_HIGH - CONF_LOW);
+  return CONF_FLOOR + t * (1 - CONF_FLOOR);
+}
+
 /** Smoothing factor for a low-pass step given a cutoff frequency and dt. */
 function smoothingAlpha(cutoff: number, dt: number): number {
   const r = TAU * cutoff * dt;
@@ -51,7 +69,8 @@ class OneEuroChannel {
 
   constructor(private cfg: OneEuroConfig) {}
 
-  filter(x: number, dt: number): number {
+  /** `conf` in [0..1] (landmark visibility): lower confidence → more hold. */
+  filter(x: number, dt: number, conf = 1): number {
     if (!this.initialized || dt <= 0) {
       this.xPrev = x;
       this.dxPrev = 0;
@@ -65,10 +84,14 @@ class OneEuroChannel {
 
     // Motion-adaptive cutoff: faster motion → higher cutoff → less smoothing.
     const cutoff = this.cfg.minCutoff + this.cfg.beta * Math.abs(dxHat);
-    const a = smoothingAlpha(cutoff, dt);
+    // Confidence-aware: shrink the position step when the landmark is uncertain
+    // so it damps toward its last stable value instead of snapping to noise.
+    const a = smoothingAlpha(cutoff, dt) * confidenceWeight(conf);
     const xHat = a * x + (1 - a) * this.xPrev;
 
     this.xPrev = xHat;
+    // Damp the stored velocity by confidence too, so a low-confidence spike does
+    // not leave a large residual velocity that overshoots on re-acquisition.
     this.dxPrev = dxHat;
     return xHat;
   }
@@ -114,10 +137,13 @@ export class PoseSmoother {
 
     return landmarks.map((lm, i) => {
       const [cx, cy, cz] = this.channels[i];
+      // Visibility drives confidence-aware damping; treat missing as fully
+      // confident so models without a visibility field behave as before.
+      const conf = lm.visibility ?? 1;
       return {
-        x: cx.filter(lm.x, dt),
-        y: cy.filter(lm.y, dt),
-        z: cz.filter(lm.z ?? 0, dt),
+        x: cx.filter(lm.x, dt, conf),
+        y: cy.filter(lm.y, dt, conf),
+        z: cz.filter(lm.z ?? 0, dt, conf),
         visibility: lm.visibility,
       };
     });

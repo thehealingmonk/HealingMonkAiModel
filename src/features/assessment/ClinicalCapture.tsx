@@ -38,16 +38,22 @@ const CONNECTIONS: [number, number][] = [
   [27, 29], [29, 31], [28, 30], [30, 32],
 ];
 
-// Only these landmarks get a dot. MediaPipe returns 33 points including eyes,
+// Only these landmarks get a dot. MediaPipe returns 33 points including the
 // mouth and individual fingers; those add visual noise with no clinical value,
 // so they are hidden — the tracker still follows the whole body, we just draw
-// the joints that matter for posture/ROM measurement.
+// the joints that matter for posture/ROM measurement, PLUS the eyes so the user
+// can see the points sit precisely on their eyes.
 const CLINICAL_POINTS = new Set<number>([
-  0, 7, 8, // nose, ears (head reference)
+  0, 2, 5, 7, 8, // nose, left eye, right eye, ears (head reference)
   11, 12, 13, 14, 15, 16, // shoulders, elbows, wrists
   23, 24, 25, 26, 27, 28, // hips, knees, ankles
   29, 30, 31, 32, // heels, foot index
 ]);
+
+// Fine facial points (eye centres). Drawn smaller than body joints so the dot
+// sits ON the eye instead of covering it. These use MediaPipe's actual eye
+// landmarks (2 = left_eye, 5 = right_eye) — no positional fudging.
+const FACE_DOTS = new Set<number>([2, 5]);
 
 export default function ClinicalCapture({ assessments, onComplete, onBack }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -55,6 +61,15 @@ export default function ClinicalCapture({ assessments, onComplete, onBack }: Pro
   // Separate overlay for the guidance arrow so it is NEVER baked into a capture.
   const guideCanvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>();
+  // Frame-loop lifecycle guards. `loopGen` is bumped every time the stream
+  // (re)starts so a stale in-flight frame from a previous camera never
+  // reschedules; `disposed` stops everything on unmount. Together they guarantee
+  // exactly ONE live loop and no post-unmount detection (the async rAF/rVFC
+  // callback re-schedules itself, so a plain cancel alone can leak a frame).
+  const loopGen = useRef(0);
+  const disposed = useRef(false);
+  const usingRvfc = useRef(false);
+  const lastVideoTime = useRef(-1);
   const latestLandmarks = useRef<Landmark[] | null>(null);
   // Latest plumb-line result for the frame on screen, so a capture stores the
   // exact alignment the doctor saw (and the live verdict can read it).
@@ -108,8 +123,11 @@ export default function ClinicalCapture({ assessments, onComplete, onBack }: Pro
       }
       setReady(true);
       setStatus('Tracking...');
-      if (animationRef.current) cancelAnimationFrame(animationRef.current);
-      loop();
+      // Retire any previous loop and start a fresh generation for this stream.
+      cancelFrame();
+      lastVideoTime.current = -1;
+      const gen = ++loopGen.current;
+      scheduleNext(video, gen);
     };
     // Start as soon as we have data; also handle the case where the event
     // already fired before this listener was attached.
@@ -132,6 +150,9 @@ export default function ClinicalCapture({ assessments, onComplete, onBack }: Pro
   };
 
   useEffect(() => {
+    // Reset the dispose flag on (re)mount — StrictMode runs mount→cleanup→mount
+    // on the same instance, and the cleanup above sets disposed=true.
+    disposed.current = false;
     initializeVoice();
     const setup = async () => {
       // Open the camera FIRST so the live preview appears instantly, then load
@@ -157,7 +178,12 @@ export default function ClinicalCapture({ assessments, onComplete, onBack }: Pro
     setup();
 
     return () => {
-      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      // Stop the loop for good: flip the dispose flag, retire the generation so
+      // any in-flight async frame won't reschedule, cancel the pending frame,
+      // and release the camera + speech.
+      disposed.current = true;
+      loopGen.current++;
+      cancelFrame();
       streamRef.current?.getTracks().forEach((t) => t.stop());
       stopSpeech();
     };
@@ -193,12 +219,54 @@ export default function ClinicalCapture({ assessments, onComplete, onBack }: Pro
     }
   };
 
-  const loop = async () => {
-    const video = videoRef.current;
+  // Schedule the next frame. Prefer requestVideoFrameCallback — it fires exactly
+  // once per PRESENTED camera frame, so pose inference runs at the true capture
+  // rate (~30fps) instead of the display's rAF rate (60–120Hz), which would
+  // reprocess identical frames and waste GPU. Falls back to rAF where rVFC is
+  // unsupported. The generation guard makes a stale callback a no-op.
+  const scheduleNext = (video: HTMLVideoElement, gen: number) => {
+    const run = () => {
+      if (disposed.current || gen !== loopGen.current) return;
+      void tick(video, gen);
+    };
+    const anyVideo = video as HTMLVideoElement & {
+      requestVideoFrameCallback?: (cb: () => void) => number;
+    };
+    if (typeof anyVideo.requestVideoFrameCallback === 'function') {
+      usingRvfc.current = true;
+      animationRef.current = anyVideo.requestVideoFrameCallback(run);
+    } else {
+      usingRvfc.current = false;
+      animationRef.current = requestAnimationFrame(run);
+    }
+  };
+
+  const cancelFrame = () => {
+    if (animationRef.current === undefined) return;
+    const video = videoRef.current as (HTMLVideoElement & {
+      cancelVideoFrameCallback?: (h: number) => void;
+    }) | null;
+    if (usingRvfc.current && video?.cancelVideoFrameCallback) {
+      video.cancelVideoFrameCallback(animationRef.current);
+    } else if (!usingRvfc.current) {
+      cancelAnimationFrame(animationRef.current);
+    }
+    animationRef.current = undefined;
+  };
+
+  const tick = async (video: HTMLVideoElement, gen: number) => {
     const canvas = canvasRef.current;
     try {
       if (video && canvas && video.videoWidth > 0 && video.readyState >= video.HAVE_CURRENT_DATA) {
+        // Skip inference if the video hasn't advanced (rAF fallback can fire
+        // faster than the camera). rVFC only fires on new frames, so this is a
+        // no-op there. Guards against reprocessing an identical frame.
+        if (!usingRvfc.current && video.currentTime === lastVideoTime.current) {
+          return;
+        }
+        lastVideoTime.current = video.currentTime;
         const result = await detectPose(video);
+        if (disposed.current || gen !== loopGen.current) return;
         if (result?.landmarks && result.landmarks.length > 0) {
           latestLandmarks.current = result.landmarks;
           setBodyDetected(true);
@@ -230,7 +298,8 @@ export default function ClinicalCapture({ assessments, onComplete, onBack }: Pro
       // Never let a single bad frame kill the render loop.
       console.error('pose loop frame error', err);
     } finally {
-      animationRef.current = requestAnimationFrame(loop);
+      // Reschedule only while this generation is still the active one.
+      if (!disposed.current && gen === loopGen.current) scheduleNext(video, gen);
     }
   };
 
@@ -284,14 +353,16 @@ export default function ClinicalCapture({ assessments, onComplete, onBack }: Pro
       const isActive = active.has(i);
       const x = p.x * w;
       const y = p.y * h;
+      // Eyes get a smaller dot so the marker sits ON the eye, not over it.
+      const core = FACE_DOTS.has(i) ? 5 : isActive ? 11 : 7;
       // White halo so dots stand out against any clothing/background.
       ctx.beginPath();
-      ctx.arc(x, y, (isActive ? 11 : 7) + 2, 0, 2 * Math.PI);
+      ctx.arc(x, y, core + 2, 0, 2 * Math.PI);
       ctx.fillStyle = 'rgba(255,255,255,0.85)';
       ctx.fill();
       // Coloured core: severity colour for the active region, cyan otherwise.
       ctx.beginPath();
-      ctx.arc(x, y, isActive ? 11 : 7, 0, 2 * Math.PI);
+      ctx.arc(x, y, core, 0, 2 * Math.PI);
       ctx.fillStyle = isActive ? sevColor : '#06b6d4';
       ctx.fill();
       ctx.lineWidth = 2;

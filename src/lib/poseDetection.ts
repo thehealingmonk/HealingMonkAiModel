@@ -105,7 +105,7 @@ export function drawPoseSkeleton(
     const startLandmark = landmarks[start];
     const endLandmark = landmarks[end];
 
-    if (startLandmark?.visibility > 0.5 && endLandmark?.visibility > 0.5) {
+    if ((startLandmark?.visibility ?? 0) > 0.5 && (endLandmark?.visibility ?? 0) > 0.5) {
       ctx.beginPath();
       ctx.moveTo(startLandmark.x * videoWidth, startLandmark.y * videoHeight);
       ctx.lineTo(endLandmark.x * videoWidth, endLandmark.y * videoHeight);
@@ -116,7 +116,7 @@ export function drawPoseSkeleton(
   // Draw landmarks as circles
   ctx.fillStyle = '#00ff00';
   for (const landmark of landmarks) {
-    if (landmark.visibility > 0.5) {
+    if ((landmark.visibility ?? 0) > 0.5) {
       ctx.beginPath();
       ctx.arc(landmark.x * videoWidth, landmark.y * videoHeight, 4, 0, 2 * Math.PI);
       ctx.fill();
