@@ -2,6 +2,7 @@ import { lazy, Suspense, ReactElement } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/store/auth.store';
 import { Role } from '@/services/api';
+import RouteMeta from '@/components/common/RouteMeta';
 
 // Each top-level app is lazy-loaded so a signed-in doctor never downloads the
 // admin bundle, a guest never downloads any dashboard, and heavy dependencies
@@ -49,6 +50,7 @@ export default function App() {
 
   return (
     <Suspense fallback={<Splash />}>
+    <RouteMeta />
     <Routes>
       {/* Auth */}
       <Route path="/login" element={user ? <Navigate to={HOME[user.role]} replace /> : <Login />} />
