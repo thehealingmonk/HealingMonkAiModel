@@ -40,9 +40,9 @@ export interface OneEuroConfig {
 // unchanged: at rest speed≈0 so the cutoff stays at minCutoff. Lower minCutoff =
 // steadier line when still; raise it only if the still line still shimmers.
 const DEFAULT_CONFIG: OneEuroConfig = {
-  minCutoff: 0.9,
-  beta: 12,
-  dCutoff: 2.0,
+  minCutoff: 3.0,
+  beta: 25,
+  dCutoff: 3.0,
 };
 
 const TAU = 2 * Math.PI;
