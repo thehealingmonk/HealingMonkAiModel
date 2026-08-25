@@ -25,14 +25,24 @@ export interface OneEuroConfig {
 
 // Tuned for a person holding a clinical pose: a low baseline cutoff kills the
 // residual per-frame shimmer so the skeleton, landmarks and — most visibly — the
-// plumb/deviation line sit rock-steady when the subject is still. `beta` still
-// lets the filter open up the moment they actually move, so there is no drag
-// when they step or turn. Lower minCutoff = steadier line (this is the setting
-// that stops the deviation line from "always moving"); raise it if it feels laggy.
+// plumb/deviation line sit rock-steady when the subject is still.
+//
+// `beta` is what makes the filter FOLLOW real movement without lag. MediaPipe
+// landmarks are normalised to [0..1], so joint speeds are small (a hand raise is
+// only ~1–3 units/sec). The old beta of 0.008 was effectively zero at that
+// scale (0.008 * 2 ≈ 0.016 added to the cutoff), so the filter never opened up
+// and every fast move dragged. A much larger beta lets the cutoff jump the
+// instant a joint accelerates — e.g. speed 2/sec now adds ~24Hz to the cutoff,
+// so the skeleton tracks a raised arm almost 1:1. `dCutoff` is raised so that
+// speed itself is detected quickly (less lag before the filter opens).
+//
+// Because beta only affects the cutoff WHEN moving, the still-pose steadiness is
+// unchanged: at rest speed≈0 so the cutoff stays at minCutoff. Lower minCutoff =
+// steadier line when still; raise it only if the still line still shimmers.
 const DEFAULT_CONFIG: OneEuroConfig = {
   minCutoff: 0.9,
-  beta: 0.008,
-  dCutoff: 1.0,
+  beta: 12,
+  dCutoff: 2.0,
 };
 
 const TAU = 2 * Math.PI;
