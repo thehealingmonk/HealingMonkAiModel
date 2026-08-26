@@ -13,8 +13,11 @@ import {
   Minus,
   IndianRupee,
   Plus,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import RecordPaymentModal from '@/features/reception/RecordPaymentModal';
+import PatientEditModal from '@/components/common/PatientEditModal';
 import {
   Patient,
   Report,
@@ -27,6 +30,7 @@ import {
   listPayments,
   getPatientAccount,
   setPatientAccount,
+  deletePatient,
   PatientAccountStatus,
 } from '@/services/api';
 import { formatDate, formatMoney } from '@/utils/formatter';
@@ -61,11 +65,32 @@ const PAY_BADGE: Record<PaymentStatus, string> = {
 export default function PatientProfile({ patient, onBack, onStartAssessment }: Props) {
   const { hasRole } = useAuth();
   const isAdmin = hasRole('admin');
+  // Local copy so an inline edit reflects immediately without a round-trip up
+  // to the routing parent (which also holds the record). Re-synced by id.
+  const [current, setCurrent] = useState<Patient>(patient);
   const [reports, setReports] = useState<Report[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [billing, setBilling] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [delError, setDelError] = useState('');
+
+  useEffect(() => setCurrent(patient), [patient]);
+
+  const handleDelete = async () => {
+    setDelError('');
+    setDeleting(true);
+    try {
+      await deletePatient(current.id);
+      onBack();
+    } catch (err) {
+      setDelError(err instanceof Error ? err.message : 'Could not delete patient');
+      setDeleting(false);
+    }
+  };
 
   // Doctors and admins may both view this patient's billing (the payments API
   // allows either role); only admins can record a new one from here.
@@ -117,49 +142,66 @@ export default function PatientProfile({ patient, onBack, onStartAssessment }: P
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">
-              {patient.name}
-              <span className="ml-3 text-sm font-mono text-gray-400">{patient.patientId}</span>
+              {current.name}
+              <span className="ml-3 text-sm font-mono text-gray-400">{current.patientId}</span>
             </h2>
             <p className="text-gray-500 text-sm mt-1">
-              {[patient.age ? `${patient.age} yrs` : null, patient.gender || null, patient.mobile || null]
+              {[current.age ? `${current.age} yrs` : null, current.gender || null, current.mobile || null]
                 .filter(Boolean)
                 .join(' · ') || '—'}
             </p>
             <div className="flex flex-wrap gap-x-5 gap-y-1 mt-2 text-xs text-gray-500">
-              {patient.email && <span>✉ {patient.email}</span>}
-              {patient.height != null && <span>Height: {patient.height} cm</span>}
-              {patient.weight != null && <span>Weight: {patient.weight} kg</span>}
+              {current.email && <span>✉ {current.email}</span>}
+              {current.height != null && <span>Height: {current.height} cm</span>}
+              {current.weight != null && <span>Weight: {current.weight} kg</span>}
               <span>
                 Doctor:{' '}
-                {patient.assignedDoctor && typeof patient.assignedDoctor === 'object'
-                  ? patient.assignedDoctor.name
+                {current.assignedDoctor && typeof current.assignedDoctor === 'object'
+                  ? current.assignedDoctor.name
                   : '—'}
               </span>
-              <span>Registered: {formatDate(patient.createdAt)}</span>
+              <span>Registered: {formatDate(current.createdAt)}</span>
             </div>
-            {patient.painAreas.length > 0 && (
+            {current.painAreas.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-3">
-                {patient.painAreas.map((a) => (
+                {current.painAreas.map((a) => (
                   <span key={a} className="text-xs font-medium bg-red-50 text-red-600 px-2 py-0.5 rounded-full">
                     {a}
                   </span>
                 ))}
               </div>
             )}
-            {patient.complaint && <p className="text-sm text-gray-600 mt-3 max-w-xl">{patient.complaint}</p>}
+            {current.complaint && <p className="text-sm text-gray-600 mt-3 max-w-xl">{current.complaint}</p>}
           </div>
-          <button
-            onClick={onStartAssessment}
-            className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 px-5 rounded-lg transition-colors"
-          >
-            <Stethoscope className="w-4 h-4" /> Start AI Assessment
-          </button>
+          <div className="flex flex-col items-stretch gap-2">
+            <button
+              onClick={onStartAssessment}
+              className="inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 px-5 rounded-lg transition-colors"
+            >
+              <Stethoscope className="w-4 h-4" /> Start AI Assessment
+            </button>
+            {/* Correct a wrong entry, or remove a duplicate/double entry. */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEditing(true)}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-semibold py-2 px-3 rounded-lg transition-colors"
+              >
+                <Pencil className="w-3.5 h-3.5" /> Edit
+              </button>
+              <button
+                onClick={() => { setDelError(''); setConfirmDelete(true); }}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 border border-red-200 text-red-600 hover:bg-red-50 text-sm font-semibold py-2 px-3 rounded-lg transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Delete
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Patient login — admin sets a password so the patient can sign in and
           see all their sessions & reports. */}
-      {hasRole('admin') && <PatientLoginCard patient={patient} />}
+      {hasRole('admin') && <PatientLoginCard patient={current} />}
 
       {/* Progress: posture-score trend across sessions */}
       {!loading && reports.length > 0 && <ProgressCard reports={reports} />}
@@ -323,10 +365,52 @@ export default function PatientProfile({ patient, onBack, onStartAssessment }: P
 
       {billing && (
         <RecordPaymentModal
-          presetPatient={patient}
+          presetPatient={current}
           onClose={() => setBilling(false)}
           onRecorded={loadPayments}
         />
+      )}
+
+      {editing && (
+        <PatientEditModal
+          patient={current}
+          onClose={() => setEditing(false)}
+          onSaved={setCurrent}
+        />
+      )}
+
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-200 p-6 hm-page-enter">
+            <div className="flex items-center gap-2 mb-2">
+              <Trash2 className="w-5 h-5 text-red-600" />
+              <h3 className="text-lg font-bold text-slate-900">Delete patient?</h3>
+            </div>
+            <p className="text-sm text-slate-600">
+              This permanently removes <b>{current.name}</b> ({current.patientId}). Use this for a
+              duplicate/double entry. Any existing reports remain as history.
+            </p>
+            {delError && (
+              <div className="mt-3 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">{delError}</div>
+            )}
+            <div className="flex items-center gap-3 mt-5">
+              <button
+                onClick={() => setConfirmDelete(false)}
+                disabled={deleting}
+                className="flex-1 border border-slate-300 text-slate-700 font-semibold py-2.5 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white font-semibold py-2.5 rounded-lg transition-colors"
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

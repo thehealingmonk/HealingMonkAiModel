@@ -162,6 +162,16 @@ export async function getPatient(id: string): Promise<{ patient: Patient }> {
   return request(`/patients/${id}`);
 }
 
+// Modify a patient — correct a wrong entry. Only the passed fields are updated.
+export async function updatePatient(id: string, payload: Partial<NewPatient>): Promise<{ patient: Patient }> {
+  return request(`/patients/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+// Delete a patient — remove a duplicate/double entry.
+export async function deletePatient(id: string): Promise<{ ok: true; id: string }> {
+  return request(`/patients/${id}`, { method: 'DELETE' });
+}
+
 export async function assignDoctor(id: string, doctorId: string | null): Promise<{ patient: Patient }> {
   return request(`/patients/${id}/assign`, {
     method: 'PATCH',

@@ -18,14 +18,22 @@ import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 type Map33 = { bone: string; off?: [number, number, number] };
 const LANDMARKS: Map33[] = [
   { bone: 'head', off: [0, 0.06, 0.12] },     // 0 nose
-  { bone: 'leftEye', off: [0, 0, 0.02] },      // 1 left eye inner
-  { bone: 'leftEye', off: [0.02, 0, 0.02] },   // 2 left eye
-  { bone: 'leftEye', off: [0.035, 0, 0.01] },  // 3 left eye outer
-  { bone: 'rightEye', off: [0, 0, 0.02] },     // 4 right eye inner
-  { bone: 'rightEye', off: [-0.02, 0, 0.02] }, // 5 right eye
-  { bone: 'rightEye', off: [-0.035, 0, 0.01] },// 6 right eye outer
-  { bone: 'head', off: [0.08, 0.04, 0] },      // 7 left ear
-  { bone: 'head', off: [-0.08, 0.04, 0] },     // 8 right ear
+  // Eyes are anchored to the HEAD bone (not the eye bones) with a forward +Z
+  // offset — the eye bones' local axes vary between VRMs and left the dots
+  // sitting inside/behind the skull. Head-local space matches the nose/mouth
+  // (whose forward offset reads correctly), so these now sit on the face front.
+  { bone: 'head', off: [0.02, 0.10, 0.11] },   // 1 left eye inner
+  { bone: 'head', off: [0.04, 0.10, 0.10] },   // 2 left eye
+  { bone: 'head', off: [0.06, 0.10, 0.085] },  // 3 left eye outer
+  { bone: 'head', off: [-0.02, 0.10, 0.11] },  // 4 right eye inner
+  { bone: 'head', off: [-0.04, 0.10, 0.10] },  // 5 right eye
+  { bone: 'head', off: [-0.06, 0.10, 0.085] }, // 6 right eye outer
+  // Ears use the SAME head-local convention as the eyes above: sit them at eye
+  // level (y matches the eyes) on the far sides of the skull (wide x), pulled a
+  // touch BEHIND centre (small -z) because the ear canal sits behind the eyes.
+  // This lands the dots exactly on the ears from the front and every rotation.
+  { bone: 'head', off: [0.085, 0.095, -0.015] },  // 7 left ear
+  { bone: 'head', off: [-0.085, 0.095, -0.015] }, // 8 right ear
   { bone: 'head', off: [0.03, -0.02, 0.11] },  // 9 mouth left
   { bone: 'head', off: [-0.03, -0.02, 0.11] }, // 10 mouth right
   { bone: 'leftUpperArm' },                     // 11 left shoulder

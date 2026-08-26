@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Stethoscope } from 'lucide-react';
-import { Patient, listPatients } from '@/services/api';
+import { Search, Stethoscope, Pencil, Trash2 } from 'lucide-react';
+import { Patient, listPatients, deletePatient } from '@/services/api';
 import { formatDate } from '@/utils/formatter';
 import { useLiveData } from '@/hooks/useLiveData';
 import LiveBadge from '@/features/admin/LiveBadge';
 import TableSkeleton from '@/components/ui/TableSkeleton';
 import ExportButton from '@/components/ui/ExportButton';
+import PatientEditModal from '@/components/common/PatientEditModal';
 
 export default function PatientsList() {
   const navigate = useNavigate();
@@ -16,6 +17,27 @@ export default function PatientsList() {
     listPatients({ scope: 'all', q: q.trim() || undefined })
   );
   const patients = data?.patients ?? [];
+
+  // Correct a wrong entry (edit) or remove a duplicate/double entry (delete).
+  const [editPatient, setEditPatient] = useState<Patient | null>(null);
+  const [delPatient, setDelPatient] = useState<Patient | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [delError, setDelError] = useState('');
+
+  const handleDelete = async () => {
+    if (!delPatient) return;
+    setDelError('');
+    setDeleting(true);
+    try {
+      await deletePatient(delPatient.id);
+      setDelPatient(null);
+      refresh();
+    } catch (err) {
+      setDelError(err instanceof Error ? err.message : 'Could not delete patient');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const doctorName = (d: Patient['assignedDoctor']) =>
     d && typeof d === 'object' ? d.name : '—';
@@ -100,16 +122,41 @@ export default function PatientsList() {
                   <td className="px-4 py-3 text-slate-300">{p.painAreas.length ? p.painAreas.join(', ') : '—'}</td>
                   <td className="px-4 py-3 text-slate-300">{doctorName(p.assignedDoctor)}</td>
                   <td className="px-4 py-3 text-slate-400">{formatDate(p.createdAt)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/admin/patient/${p.id}`);
-                      }}
-                      className="hm-lift inline-flex items-center gap-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-xs font-semibold py-1.5 px-3 rounded-lg"
-                    >
-                      <Stethoscope className="w-3.5 h-3.5" /> Assess
-                    </button>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/admin/patient/${p.id}`);
+                        }}
+                        className="hm-lift inline-flex items-center gap-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-xs font-semibold py-1.5 px-3 rounded-lg"
+                      >
+                        <Stethoscope className="w-3.5 h-3.5" /> Assess
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditPatient(p);
+                        }}
+                        title="Edit patient"
+                        aria-label="Edit patient"
+                        className="inline-flex items-center justify-center p-1.5 rounded-lg border border-white/15 text-slate-300 hover:bg-white/10 hover:text-white transition-colors"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDelError('');
+                          setDelPatient(p);
+                        }}
+                        title="Delete duplicate"
+                        aria-label="Delete patient"
+                        className="inline-flex items-center justify-center p-1.5 rounded-lg border border-rose-400/30 text-rose-300 hover:bg-rose-400/10 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -117,6 +164,48 @@ export default function PatientsList() {
           </table>
         )}
       </div>
+
+      {editPatient && (
+        <PatientEditModal
+          patient={editPatient}
+          onClose={() => setEditPatient(null)}
+          onSaved={() => { setEditPatient(null); refresh(); }}
+        />
+      )}
+
+      {delPatient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-200 p-6 hm-page-enter">
+            <div className="flex items-center gap-2 mb-2">
+              <Trash2 className="w-5 h-5 text-red-600" />
+              <h3 className="text-lg font-bold text-slate-900">Delete patient?</h3>
+            </div>
+            <p className="text-sm text-slate-600">
+              This permanently removes <b>{delPatient.name}</b> ({delPatient.patientId}). Use this for a
+              duplicate/double entry. Any existing reports remain as history.
+            </p>
+            {delError && (
+              <div className="mt-3 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">{delError}</div>
+            )}
+            <div className="flex items-center gap-3 mt-5">
+              <button
+                onClick={() => setDelPatient(null)}
+                disabled={deleting}
+                className="flex-1 border border-slate-300 text-slate-700 font-semibold py-2.5 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white font-semibold py-2.5 rounded-lg transition-colors"
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
