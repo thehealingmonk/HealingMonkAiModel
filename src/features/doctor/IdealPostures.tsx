@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Upload, Trash2, Save, Check, ImageIcon, Plus, CheckCircle2, LayoutGrid, FolderPlus } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, Save, Check, ImageIcon, Plus, CheckCircle2, LayoutGrid, FolderPlus, Sparkles } from 'lucide-react';
 import {
   IDEAL_POSTURE_CONDITIONS,
   IdealPostureImage,
@@ -40,6 +40,67 @@ function fileToDataUrl(file: File, maxPx = 900, quality = 0.82): Promise<string>
   });
 }
 
+// Built-in reference postures suggested per category. Each id is a capture pose
+// from CLINICAL_ASSESSMENTS; its PoseIllustration is rendered as a ready-made
+// "ideal" reference the doctor can add to the library in one click — so every
+// category ships with sensible defaults instead of starting empty.
+const CATEGORY_DEFAULT_POSES: Record<string, string[]> = {
+  Neck: ['forward_head', 'head_tilt', 'cervical_flexion', 'cervical_extension', 'seated_forward_head'],
+  Shoulder: ['shoulder_level', 'shoulder_flexion_rom', 'shoulder_abduction_rom', 'shoulder_extension_rom'],
+  'Upper Back': ['thoracic_kyphosis', 'lateral_spine', 'seated_slump'],
+  'Lower Back': ['trunk_forward_flexion', 'trunk_extension', 'trunk_lateral_flexion', 'anterior_pelvic_tilt', 'scoliosis_adams'],
+  Hip: ['pelvic_level', 'hip_abduction', 'hip_flexion_rom', 'supine_slr', 'supine_knee_to_chest', 'single_leg_balance'],
+  Knee: ['knee_alignment', 'squat_depth', 'knee_flexion_active', 'lunge_depth', 'overhead_squat'],
+  Ankle: ['ankle_dorsiflexion', 'squat_depth'],
+};
+
+// Resolve the default reference poses for a category. Custom categories (added
+// by the doctor) have no preset, so we fall back to any assessment whose body
+// region or name matches the category text.
+function defaultPosesFor(condition: string): string[] {
+  const preset = CATEGORY_DEFAULT_POSES[condition];
+  if (preset) return preset;
+  const q = condition.trim().toLowerCase();
+  if (!q) return [];
+  return CLINICAL_ASSESSMENTS.filter(
+    (a) => a.bodyRegion.toLowerCase().includes(q) || a.name.toLowerCase().includes(q)
+  ).map((a) => a.id);
+}
+
+// Rasterise a rendered PoseIllustration <svg> into a JPEG data URL so it can be
+// stored in the library exactly like an uploaded photo. The illustration is
+// inline (no external refs) so the canvas is never tainted.
+function svgToJpegDataUrl(svg: SVGSVGElement, targetH = 560, quality = 0.85, bg = '#f8fafc'): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const rect = svg.getBoundingClientRect();
+    const w = rect.width || 300;
+    const h = rect.height || 400;
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute('width', String(w));
+    clone.setAttribute('height', String(h));
+    if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const xml = new XMLSerializer().serializeToString(clone);
+    const src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
+    const img = new Image();
+    img.onload = () => {
+      const scale = targetH / h;
+      const outW = Math.round(w * scale);
+      const outH = Math.round(h * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = outW;
+      canvas.height = outH;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('Canvas not supported'));
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, outW, outH);
+      ctx.drawImage(img, 0, 0, outW, outH);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => reject(new Error('Could not render illustration'));
+    img.src = src;
+  });
+}
+
 // Sentinel tab id for the "All" overview (every category's images at once).
 const ALL_TAB = '__all__';
 
@@ -56,6 +117,9 @@ export default function IdealPostures({ onBack }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<Record<string, boolean>>({});
+  // Default reference poses already pulled into a category this session, so the
+  // "Add" button on each illustration flips to "Added".
+  const [addedDefaults, setAddedDefaults] = useState<Record<string, string[]>>({});
   const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -107,6 +171,28 @@ export default function IdealPostures({ onBack }: Props) {
       setError(err instanceof Error ? err.message : 'Could not process image');
     }
     if (fileRef.current) fileRef.current.value = '';
+  };
+
+  // Convert a built-in reference illustration to an image and add it to the
+  // current category's library (in memory — the doctor still presses Save to
+  // persist it as the default that auto-fills matching reports).
+  const addDefault = async (poseId: string, svg: SVGSVGElement) => {
+    setError('');
+    if (images.length >= 8) {
+      setError('This category already has the maximum of 8 images.');
+      return;
+    }
+    try {
+      const imageData = await svgToJpegDataUrl(svg);
+      const label = CLINICAL_ASSESSMENTS.find((a) => a.id === poseId)?.name ?? '';
+      setImages([...images, { label, imageData }]);
+      setAddedDefaults((prev) => ({
+        ...prev,
+        [condition]: [...(prev[condition] ?? []), poseId],
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add illustration');
+    }
   };
 
   const isAll = condition === ALL_TAB;
@@ -309,6 +395,14 @@ export default function IdealPostures({ onBack }: Props) {
         )}
       </div>
 
+      {/* Built-in default reference postures for this category */}
+      <DefaultGallery
+        condition={condition}
+        added={addedDefaults[condition] ?? []}
+        atMax={images.length >= 8}
+        onAdd={addDefault}
+      />
+
       {/* Tracked capture poses for this condition */}
       <div className="glass-dark rounded-2xl p-5 mt-5" data-reveal>
         <div className="mb-1 flex items-center justify-between">
@@ -352,6 +446,99 @@ export default function IdealPostures({ onBack }: Props) {
       </div>
       </>
       )}
+    </div>
+  );
+}
+
+// A gallery of built-in reference postures for the active category. Each card
+// renders the anatomical illustration and an "Add" button that bakes it into
+// the library — giving every category ready-made defaults to start from.
+function DefaultGallery({
+  condition,
+  added,
+  atMax,
+  onAdd,
+}: {
+  condition: string;
+  added: string[];
+  atMax: boolean;
+  onAdd: (poseId: string, svg: SVGSVGElement) => void;
+}) {
+  const poses = defaultPosesFor(condition);
+  if (poses.length === 0) return null;
+
+  return (
+    <div className="glass-dark rounded-2xl p-5 mt-5" data-reveal>
+      <div className="mb-1 flex items-center gap-2">
+        <Sparkles className="w-4 h-4 text-emerald-400" />
+        <h3 className="font-semibold text-white">Default reference postures</h3>
+      </div>
+      <p className="text-slate-400 text-sm mb-4">
+        Ready-made ideal-posture references for {condition}. Tap <span className="text-emerald-300">Add</span> to drop one
+        into the library above, then Save so it auto-fills every matching report.
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        {poses.map((id) => (
+          <DefaultPoseCard key={id} poseId={id} added={added.includes(id)} disabled={atMax} onAdd={onAdd} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// One default-reference card. Holds a ref to its own illustration so the parent
+// can rasterise exactly this <svg> when the doctor clicks Add.
+function DefaultPoseCard({
+  poseId,
+  added,
+  disabled,
+  onAdd,
+}: {
+  poseId: string;
+  added: boolean;
+  disabled: boolean;
+  onAdd: (poseId: string, svg: SVGSVGElement) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const meta = CLINICAL_ASSESSMENTS.find((a) => a.id === poseId);
+
+  const handleAdd = () => {
+    const svg = ref.current?.querySelector('svg');
+    if (svg) onAdd(poseId, svg as unknown as SVGSVGElement);
+  };
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-white/10 bg-white/5">
+      <div ref={ref} className="aspect-[3/4] bg-slate-950/40">
+        <PoseIllustration pose={poseId} className="h-full w-full" />
+      </div>
+      <div className="border-t border-white/10 p-2">
+        <p className="text-xs font-medium leading-tight text-white truncate" title={meta?.name}>
+          {meta?.name ?? poseId}
+        </p>
+        <button
+          type="button"
+          onClick={handleAdd}
+          disabled={added || disabled}
+          className={`mt-1.5 inline-flex w-full items-center justify-center gap-1 rounded-lg py-1.5 text-xs font-semibold transition-colors ${
+            added
+              ? 'bg-emerald-500/15 text-emerald-300 cursor-default'
+              : disabled
+                ? 'border border-white/10 text-slate-500 cursor-not-allowed'
+                : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-sm shadow-emerald-500/30 hover:opacity-90'
+          }`}
+        >
+          {added ? (
+            <>
+              <Check className="w-3.5 h-3.5" /> Added
+            </>
+          ) : (
+            <>
+              <Plus className="w-3.5 h-3.5" /> Add
+            </>
+          )}
+        </button>
+      </div>
     </div>
   );
 }
