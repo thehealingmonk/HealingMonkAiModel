@@ -203,6 +203,59 @@ export async function setPatientAccount(
   });
 }
 
+// ---- Patient documents (X-rays, prescriptions, outside reports, etc.) ----
+
+export type DocumentCategory = 'report' | 'xray' | 'prescription' | 'scan' | 'other';
+
+export interface PatientDocumentMeta {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  category: DocumentCategory;
+  uploadedByName: string;
+  createdAt?: string;
+}
+
+export interface NewDocument {
+  name: string;
+  data: string; // data URL
+  mime?: string;
+  size?: number;
+  category?: DocumentCategory;
+}
+
+export async function listPatientDocuments(
+  patientId: string
+): Promise<{ documents: PatientDocumentMeta[] }> {
+  return request(`/patients/${patientId}/documents`);
+}
+
+export async function uploadPatientDocuments(
+  patientId: string,
+  documents: NewDocument[]
+): Promise<{ documents: PatientDocumentMeta[] }> {
+  return request(`/patients/${patientId}/documents`, {
+    method: 'POST',
+    body: JSON.stringify({ documents }),
+  });
+}
+
+// Fetch a single document with its base64 payload (for preview / download).
+export async function getPatientDocument(
+  patientId: string,
+  docId: string
+): Promise<{ document: PatientDocumentMeta & { data: string } }> {
+  return request(`/patients/${patientId}/documents/${docId}`);
+}
+
+export async function deletePatientDocument(
+  patientId: string,
+  docId: string
+): Promise<{ ok: true; id: string }> {
+  return request(`/patients/${patientId}/documents/${docId}`, { method: 'DELETE' });
+}
+
 // ---- Reports ----
 
 export interface ReportFinding {

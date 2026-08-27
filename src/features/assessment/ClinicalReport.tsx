@@ -376,23 +376,24 @@ function FindingCard({
     <div className="border border-gray-200 rounded-xl overflow-hidden break-inside-avoid">
       <div className="flex flex-col md:flex-row">
         {/* Left: user's captured photo (ideal line + joint angles baked in) · Right: ideal-position reference */}
-        <div className="grid grid-cols-[3fr_2fr] md:w-[30rem] flex-shrink-0 bg-slate-900">
+        <div className="grid grid-cols-[3fr_2fr] md:w-[34rem] flex-shrink-0 bg-slate-900">
           <figure className="relative">
             {/* Patient photo WITH the AI pose overlay (dots + skeleton + plumb line)
                 baked in, so the doctor sees exactly what the model measured. Uses
                 object-contain (not cover) so the FULL body and every measured
                 point / plumb line stays visible — cropping would hide the head or
-                feet the assessment depends on. Click to view full size. Falls back
-                to the raw frame only if the overlay snapshot is missing. */}
+                feet the assessment depends on. A blurred copy fills the margins so
+                the frame looks full. Click to view full size. Falls back to the raw
+                frame only if the overlay snapshot is missing. */}
             <ZoomableImage
               src={capture.imageData || capture.rawImageData}
               alt={`${assessment.name} — patient photo with pose points`}
-              heightClass="h-72"
+              heightClass="h-80"
               badge="Patient Photo · pose points"
             />
           </figure>
           <figure className="relative border-l border-gray-200 bg-slate-50 flex items-center justify-center">
-            <PoseIllustration pose={assessment.id} className="w-full h-72" />
+            <PoseIllustration pose={assessment.id} className="w-full h-80" />
             {/* Ideal plumb reference — the target vertical the patient's line
                 (drawn on the left photo) should match. */}
             <span
@@ -728,22 +729,33 @@ function ZoomableImage({
       <button
         type="button"
         onClick={() => setZoom(true)}
-        className={`group relative block w-full ${heightClass} cursor-zoom-in bg-slate-900 print:cursor-default`}
+        className={`group relative block w-full ${heightClass} cursor-zoom-in overflow-hidden bg-slate-900 print:cursor-default`}
         aria-label={`View ${alt} full size`}
       >
+        {/* Blurred, cover-sized copy of the same photo fills the empty margins so
+            portrait/landscape shots look full and attractive without ever
+            cropping the measured image in front (which stays object-contain). */}
+        <img
+          src={src}
+          alt=""
+          aria-hidden
+          loading="lazy"
+          decoding="async"
+          className="absolute inset-0 w-full h-full object-cover scale-110 blur-xl opacity-40 print:hidden"
+        />
         <img
           src={src}
           alt={alt}
           loading="lazy"
           decoding="async"
-          className="w-full h-full object-contain"
+          className="relative z-10 w-full h-full object-contain"
         />
         {badge && (
-          <span className="absolute bottom-1 left-1 text-[10px] font-semibold bg-black/70 text-white px-1.5 py-0.5 rounded">
+          <span className="absolute z-20 bottom-1 left-1 text-[10px] font-semibold bg-black/70 text-white px-1.5 py-0.5 rounded">
             {badge}
           </span>
         )}
-        <span className="absolute top-1 right-1 flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 print:hidden">
+        <span className="absolute z-20 top-1 right-1 flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 print:hidden">
           <ZoomIn className="w-3 h-3" /> Enlarge
         </span>
       </button>

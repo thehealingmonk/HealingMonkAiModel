@@ -11,14 +11,23 @@ import {
   Phone,
   IndianRupee,
   CalendarDays,
+  CalendarClock,
+  Pencil,
+  Paperclip,
+  X,
+  Loader2,
 } from 'lucide-react';
 import TableSkeleton from '@/components/ui/TableSkeleton';
+import PatientEditModal from '@/components/common/PatientEditModal';
+import PatientDocuments from '@/components/common/PatientDocuments';
 import {
   Appointment,
   AppointmentStatus,
   Patient,
   listAppointments,
   setAppointmentStatus,
+  rescheduleAppointment,
+  getPatient,
 } from '@/services/api';
 
 interface Props {
@@ -101,6 +110,11 @@ export default function ReceptionDashboard({ onBook }: Props) {
   const [error, setError] = useState('');
   // Upcoming (today onward) by default; toggle to also show past days.
   const [showPast, setShowPast] = useState(false);
+  // Row actions: reschedule an appointment, edit a patient, manage documents.
+  const [rescheduleAppt, setRescheduleAppt] = useState<Appointment | null>(null);
+  const [editPatient, setEditPatient] = useState<Patient | null>(null);
+  const [docsFor, setDocsFor] = useState<{ id: string; name: string } | null>(null);
+  const [loadingEditId, setLoadingEditId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -138,6 +152,21 @@ export default function ReceptionDashboard({ onBook }: Props) {
   const goBill = (a: Appointment) => {
     const patient = patientFromAppt(a);
     navigate('/reception/billing', patient ? { state: { patient } } : undefined);
+  };
+
+  // Open the edit modal for an appointment's patient. The schedule row only
+  // carries a light patient ref, so fetch the full record first.
+  const openEdit = async (a: Appointment) => {
+    if (!a.patient || typeof a.patient !== 'object') return;
+    setLoadingEditId(a.id);
+    try {
+      const { patient } = await getPatient(a.patient.id);
+      setEditPatient(patient);
+    } catch {
+      /* ignore — button simply does nothing on failure */
+    } finally {
+      setLoadingEditId(null);
+    }
   };
 
   // Group appointments by their IST day (the API already sorts them by time), so
@@ -278,6 +307,27 @@ export default function ReceptionDashboard({ onBook }: Props) {
                         <IconBtn title="Collect payment" onClick={() => goBill(a)} className="text-emerald-300 hover:bg-white/10">
                           <IndianRupee className="w-4 h-4" />
                         </IconBtn>
+                        <IconBtn title="Reschedule" onClick={() => setRescheduleAppt(a)} className="text-sky-300 hover:bg-white/10">
+                          <CalendarClock className="w-4 h-4" />
+                        </IconBtn>
+                        <IconBtn
+                          title="Edit patient"
+                          onClick={() => openEdit(a)}
+                          className="text-slate-300 hover:bg-white/10"
+                        >
+                          {loadingEditId === a.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Pencil className="w-4 h-4" />
+                          )}
+                        </IconBtn>
+                        <IconBtn
+                          title="Documents"
+                          onClick={() => a.patient && typeof a.patient === 'object' && setDocsFor({ id: a.patient.id, name: a.patient.name })}
+                          className="text-slate-300 hover:bg-white/10"
+                        >
+                          <Paperclip className="w-4 h-4" />
+                        </IconBtn>
                         <IconBtn title="Mark completed" onClick={() => changeStatus(a.id, 'completed')} className="text-emerald-300 hover:bg-white/10">
                           <CheckCircle2 className="w-4 h-4" />
                         </IconBtn>
@@ -296,6 +346,144 @@ export default function ReceptionDashboard({ onBook }: Props) {
           ))}
         </div>
       )}
+
+      {rescheduleAppt && (
+        <RescheduleModal
+          appointment={rescheduleAppt}
+          onClose={() => setRescheduleAppt(null)}
+          onDone={() => {
+            setRescheduleAppt(null);
+            load();
+          }}
+        />
+      )}
+
+      {editPatient && (
+        <PatientEditModal
+          patient={editPatient}
+          onClose={() => setEditPatient(null)}
+          onSaved={() => {
+            setEditPatient(null);
+            load();
+          }}
+        />
+      )}
+
+      {docsFor && (
+        <DocumentsModal patient={docsFor} onClose={() => setDocsFor(null)} />
+      )}
+    </div>
+  );
+}
+
+// Pick a new date & time for an appointment. Reuses the existing reschedule API
+// (which also emails the patient the new time).
+function RescheduleModal({
+  appointment,
+  onClose,
+  onDone,
+}: {
+  appointment: Appointment;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  // Pre-fill the picker with the current slot in the browser's local time.
+  const initial = (() => {
+    const d = new Date(appointment.scheduledAt);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  })();
+  const [when, setWhen] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const save = async () => {
+    setError('');
+    const dt = new Date(when);
+    if (Number.isNaN(dt.getTime())) return setError('Pick a valid date & time.');
+    setSaving(true);
+    try {
+      await rescheduleAppointment(appointment.id, dt.toISOString());
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not reschedule');
+      setSaving(false);
+    }
+  };
+
+  const patientName = appointment.patient && typeof appointment.patient === 'object' ? appointment.patient.name : 'patient';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-200 hm-page-enter">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <CalendarClock className="w-5 h-5 text-sky-600" /> Reschedule
+          </h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600" aria-label="Close">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <p className="text-sm text-slate-600">
+            New date & time for <b>{patientName}</b>. The patient is emailed the change.
+          </p>
+          <input
+            type="datetime-local"
+            value={when}
+            onChange={(e) => setWhen(e.target.value)}
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+          />
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">{error}</div>
+          )}
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              onClick={onClose}
+              disabled={saving}
+              className="flex-1 border border-slate-300 text-slate-700 font-semibold py-2.5 rounded-lg hover:bg-slate-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={save}
+              disabled={saving}
+              className="flex-1 inline-flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-700 disabled:bg-slate-300 text-white font-semibold py-2.5 rounded-lg transition-colors"
+            >
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              {saving ? 'Saving…' : 'Reschedule'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Manage a patient's documents from the reception schedule.
+function DocumentsModal({
+  patient,
+  onClose,
+}: {
+  patient: { id: string; name: string };
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 backdrop-blur-sm p-4 sm:py-10">
+      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl border border-slate-200 hm-page-enter">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <Paperclip className="w-5 h-5 text-emerald-600" /> Documents
+            <span className="text-sm font-normal text-slate-400">· {patient.name}</span>
+          </h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600" aria-label="Close">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="px-6 py-5">
+          <PatientDocuments patientId={patient.id} />
+        </div>
+      </div>
     </div>
   );
 }

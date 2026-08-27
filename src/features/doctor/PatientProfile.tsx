@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import RecordPaymentModal from '@/features/reception/RecordPaymentModal';
 import PatientEditModal from '@/components/common/PatientEditModal';
+import PatientDocuments from '@/components/common/PatientDocuments';
 import {
   Patient,
   Report,
@@ -362,6 +363,11 @@ export default function PatientProfile({ patient, onBack, onStartAssessment }: P
           </table>
         </div>
       )}
+
+      {/* Documents — X-rays, prescriptions, outside reports. Uploaded by
+          reception/doctor/admin; multiple files per patient. */}
+      <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 mt-8">Documents</h3>
+      <PatientDocuments patientId={current.id} />
 
       {billing && (
         <RecordPaymentModal
