@@ -139,6 +139,34 @@ export default function IdealPostures({ onBack }: Props) {
     }
   };
 
+  // Add images to any category directly from the "All" overview and persist them
+  // immediately, so a doctor can build up every category (Shoulder, Neck, …) in
+  // one place without switching tabs.
+  const addImagesTo = async (cond: string, files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setError('');
+    try {
+      const existing = byCondition[cond] ?? [];
+      const remaining = 8 - existing.length;
+      if (remaining <= 0) {
+        setError(`${cond} already has the maximum of 8 images.`);
+        return;
+      }
+      const picked = Array.from(files).slice(0, remaining);
+      const added = await Promise.all(
+        picked.map(async (f) => ({ label: '', imageData: await fileToDataUrl(f) }))
+      );
+      const next = [...existing, ...added];
+      setByCondition((prev) => ({ ...prev, [cond]: next }));
+      setConditions((prev) => (prev.includes(cond) ? prev : [...prev, cond]));
+      await saveIdealPosture(cond, next, posesByCondition[cond] ?? []);
+      setSavedAt((prev) => ({ ...prev, [cond]: true }));
+      setTimeout(() => setSavedAt((prev) => ({ ...prev, [cond]: false })), 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add images');
+    }
+  };
+
   return (
     <div className="hm-page-enter max-w-4xl mx-auto">
       <button onClick={onBack} className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white mb-4">
@@ -201,7 +229,13 @@ export default function IdealPostures({ onBack }: Props) {
       )}
 
       {isAll ? (
-        <AllOverview conditions={conditions} byCondition={byCondition} onOpen={setCondition} />
+        <AllOverview
+          conditions={conditions}
+          byCondition={byCondition}
+          savedAt={savedAt}
+          onOpen={setCondition}
+          onAddImages={addImagesTo}
+        />
       ) : (
       <>
       <div className="glass-dark rounded-2xl p-5" data-reveal>
@@ -322,69 +356,110 @@ export default function IdealPostures({ onBack }: Props) {
   );
 }
 
-// The "All" overview: every category's saved reference images at a glance, so a
-// doctor can see the whole library in one place. Click a category to edit it.
+// The "All" overview: every category in one place. Shows each category's saved
+// reference images and lets the doctor add images to ANY category right here
+// (uploaded images save immediately and auto-fill every matching patient report).
 function AllOverview({
   conditions,
   byCondition,
+  savedAt,
   onOpen,
+  onAddImages,
 }: {
   conditions: string[];
   byCondition: Record<string, IdealPostureImage[]>;
+  savedAt: Record<string, boolean>;
   onOpen: (condition: string) => void;
+  onAddImages: (condition: string, files: FileList | null) => void;
 }) {
-  const withImages = conditions.filter((c) => (byCondition[c]?.length ?? 0) > 0);
-  const total = withImages.reduce((n, c) => n + (byCondition[c]?.length ?? 0), 0);
-
-  if (withImages.length === 0) {
-    return (
-      <div className="glass-dark rounded-2xl p-12 text-center text-slate-400" data-reveal>
-        <ImageIcon className="w-8 h-8 mx-auto mb-2 text-slate-500" />
-        No ideal images yet. Open a category above and upload its reference postures —
-        they’ll appear here and auto-fill every matching patient report.
-      </div>
-    );
-  }
+  const total = conditions.reduce((n, c) => n + (byCondition[c]?.length ?? 0), 0);
 
   return (
     <div className="space-y-5" data-reveal>
       <p className="text-sm text-slate-400">
-        {total} image{total === 1 ? '' : 's'} across {withImages.length} categor
-        {withImages.length === 1 ? 'y' : 'ies'}.
+        {total} image{total === 1 ? '' : 's'} across {conditions.length} categor
+        {conditions.length === 1 ? 'y' : 'ies'}. Add images to any category below — they
+        save automatically.
       </p>
-      {withImages.map((c) => (
-        <div key={c} className="glass-dark rounded-2xl p-5">
-          <button
-            onClick={() => onOpen(c)}
-            className="group flex items-center gap-2 mb-3 text-left"
-          >
-            <span className="w-1.5 h-4 bg-emerald-500 rounded-sm" />
-            <h3 className="font-semibold text-white">{c}</h3>
-            <span className="text-slate-400 text-sm">· {byCondition[c].length} images</span>
-            <span className="text-emerald-400 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-              Edit →
-            </span>
-          </button>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {byCondition[c].map((img, i) => (
-              <div key={i} className="rounded-xl overflow-hidden border border-white/10 bg-slate-900/60">
-                <div className="relative aspect-[3/4] bg-slate-950">
-                  <img
-                    src={img.imageData}
-                    alt={img.label || `${c} ideal ${i + 1}`}
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-                {img.label && (
-                  <p className="px-2 py-1.5 text-xs text-slate-300 truncate border-t border-white/10">
-                    {img.label}
-                  </p>
+      {conditions.map((c) => {
+        const imgs = byCondition[c] ?? [];
+        const full = imgs.length >= 8;
+        return (
+          <div key={c} className="glass-dark rounded-2xl p-5">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <button onClick={() => onOpen(c)} className="group flex items-center gap-2 text-left">
+                <span className="w-1.5 h-4 bg-emerald-500 rounded-sm" />
+                <h3 className="font-semibold text-white">{c}</h3>
+                <span className="text-slate-400 text-sm">· {imgs.length}/8 images</span>
+                {savedAt[c] && (
+                  <span className="inline-flex items-center gap-1 text-emerald-400 text-xs font-medium">
+                    <Check className="w-3.5 h-3.5" /> Saved
+                  </span>
                 )}
+                <span className="text-emerald-400 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                  Edit →
+                </span>
+              </button>
+              <label
+                className={`inline-flex items-center gap-1.5 text-sm font-medium py-1.5 px-3 rounded-lg cursor-pointer transition-colors ${
+                  full
+                    ? 'border border-white/10 text-slate-500 cursor-not-allowed'
+                    : 'border border-white/15 bg-white/5 hover:bg-white/10 text-slate-200'
+                }`}
+                title={full ? 'Maximum of 8 images' : `Add images to ${c}`}
+              >
+                <Upload className="w-4 h-4" /> Add to {c}
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  disabled={full}
+                  className="hidden"
+                  onChange={(e) => {
+                    onAddImages(c, e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            </div>
+            {imgs.length === 0 ? (
+              <label className="block w-full border-2 border-dashed border-white/15 rounded-xl py-8 text-center text-slate-400 hover:border-emerald-400/40 hover:text-slate-200 transition-colors cursor-pointer">
+                <ImageIcon className="w-7 h-7 mx-auto mb-1.5 text-slate-500" />
+                No images for {c} yet — click to upload references.
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    onAddImages(c, e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {imgs.map((img, i) => (
+                  <div key={i} className="rounded-xl overflow-hidden border border-white/10 bg-slate-900/60">
+                    <div className="relative aspect-[3/4] bg-slate-950">
+                      <img
+                        src={img.imageData}
+                        alt={img.label || `${c} ideal ${i + 1}`}
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    {img.label && (
+                      <p className="px-2 py-1.5 text-xs text-slate-300 truncate border-t border-white/10">
+                        {img.label}
+                      </p>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
