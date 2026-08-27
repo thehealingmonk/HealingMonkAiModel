@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Upload, Trash2, Save, Check, ImageIcon, Plus, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, Save, Check, ImageIcon, Plus, CheckCircle2, LayoutGrid, FolderPlus } from 'lucide-react';
 import {
   IDEAL_POSTURE_CONDITIONS,
   IdealPostureImage,
@@ -40,8 +40,15 @@ function fileToDataUrl(file: File, maxPx = 900, quality = 0.82): Promise<string>
   });
 }
 
+// Sentinel tab id for the "All" overview (every category's images at once).
+const ALL_TAB = '__all__';
+
 export default function IdealPostures({ onBack }: Props) {
-  const [condition, setCondition] = useState<string>(IDEAL_POSTURE_CONDITIONS[0]);
+  // The active tab: a category name, or ALL_TAB for the overview.
+  const [condition, setCondition] = useState<string>(ALL_TAB);
+  // The category list = built-in defaults + any custom ones (from the DB or
+  // added this session). Editable so doctors can add their own categories.
+  const [conditions, setConditions] = useState<string[]>([...IDEAL_POSTURE_CONDITIONS]);
   // Images per condition, kept in memory so switching tabs preserves edits.
   const [byCondition, setByCondition] = useState<Record<string, IdealPostureImage[]>>({});
   // Selected capture-pose ids per condition (pre-checked from what was saved before).
@@ -64,6 +71,10 @@ export default function IdealPostures({ onBack }: Props) {
         }
         setByCondition(map);
         setPosesByCondition(poseMap);
+        // Surface any custom categories saved earlier (beyond the defaults).
+        setConditions((prev) =>
+          Array.from(new Set([...prev, ...sets.map((s) => s.condition)]))
+        );
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not load library');
       } finally {
@@ -98,6 +109,22 @@ export default function IdealPostures({ onBack }: Props) {
     if (fileRef.current) fileRef.current.value = '';
   };
 
+  const isAll = condition === ALL_TAB;
+
+  // Add a new custom category and switch to it. It persists once you save images
+  // (the API upserts by category name), and re-appears on the next visit.
+  const addCategory = () => {
+    const name = window.prompt('New category name (e.g. Wrist, Full Body, Scoliosis)')?.trim();
+    if (!name) return;
+    const existing = conditions.find((c) => c.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      setCondition(existing);
+      return;
+    }
+    setConditions((prev) => [...prev, name]);
+    setCondition(name);
+  };
+
   const save = async () => {
     setSaving(true);
     setError('');
@@ -126,9 +153,19 @@ export default function IdealPostures({ onBack }: Props) {
         </p>
       </div>
 
-      {/* Condition tabs */}
+      {/* Condition tabs — "All" overview first, then every category, then add. */}
       <div className="flex flex-wrap gap-2 mb-5">
-        {IDEAL_POSTURE_CONDITIONS.map((c) => {
+        <button
+          onClick={() => setCondition(ALL_TAB)}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            isAll
+              ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-sm shadow-emerald-500/30'
+              : 'border border-white/15 bg-white/5 text-slate-300 hover:bg-white/10'
+          }`}
+        >
+          <LayoutGrid className="w-3.5 h-3.5" /> All
+        </button>
+        {conditions.map((c) => {
           const count = (byCondition[c] ?? []).length + (posesByCondition[c] ?? []).length;
           return (
             <button
@@ -149,6 +186,12 @@ export default function IdealPostures({ onBack }: Props) {
             </button>
           );
         })}
+        <button
+          onClick={addCategory}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-dashed border-emerald-400/40 bg-emerald-500/5 text-emerald-300 hover:bg-emerald-500/10 transition-colors"
+        >
+          <FolderPlus className="w-3.5 h-3.5" /> New category
+        </button>
       </div>
 
       {error && (
@@ -157,6 +200,10 @@ export default function IdealPostures({ onBack }: Props) {
         </div>
       )}
 
+      {isAll ? (
+        <AllOverview conditions={conditions} byCondition={byCondition} onOpen={setCondition} />
+      ) : (
+      <>
       <div className="glass-dark rounded-2xl p-5" data-reveal>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-white">
@@ -269,6 +316,75 @@ export default function IdealPostures({ onBack }: Props) {
           })}
         </div>
       </div>
+      </>
+      )}
+    </div>
+  );
+}
+
+// The "All" overview: every category's saved reference images at a glance, so a
+// doctor can see the whole library in one place. Click a category to edit it.
+function AllOverview({
+  conditions,
+  byCondition,
+  onOpen,
+}: {
+  conditions: string[];
+  byCondition: Record<string, IdealPostureImage[]>;
+  onOpen: (condition: string) => void;
+}) {
+  const withImages = conditions.filter((c) => (byCondition[c]?.length ?? 0) > 0);
+  const total = withImages.reduce((n, c) => n + (byCondition[c]?.length ?? 0), 0);
+
+  if (withImages.length === 0) {
+    return (
+      <div className="glass-dark rounded-2xl p-12 text-center text-slate-400" data-reveal>
+        <ImageIcon className="w-8 h-8 mx-auto mb-2 text-slate-500" />
+        No ideal images yet. Open a category above and upload its reference postures —
+        they’ll appear here and auto-fill every matching patient report.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5" data-reveal>
+      <p className="text-sm text-slate-400">
+        {total} image{total === 1 ? '' : 's'} across {withImages.length} categor
+        {withImages.length === 1 ? 'y' : 'ies'}.
+      </p>
+      {withImages.map((c) => (
+        <div key={c} className="glass-dark rounded-2xl p-5">
+          <button
+            onClick={() => onOpen(c)}
+            className="group flex items-center gap-2 mb-3 text-left"
+          >
+            <span className="w-1.5 h-4 bg-emerald-500 rounded-sm" />
+            <h3 className="font-semibold text-white">{c}</h3>
+            <span className="text-slate-400 text-sm">· {byCondition[c].length} images</span>
+            <span className="text-emerald-400 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+              Edit →
+            </span>
+          </button>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+            {byCondition[c].map((img, i) => (
+              <div key={i} className="rounded-xl overflow-hidden border border-white/10 bg-slate-900/60">
+                <div className="relative aspect-[3/4] bg-slate-950">
+                  <img
+                    src={img.imageData}
+                    alt={img.label || `${c} ideal ${i + 1}`}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                {img.label && (
+                  <p className="px-2 py-1.5 text-xs text-slate-300 truncate border-t border-white/10">
+                    {img.label}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

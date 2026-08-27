@@ -253,6 +253,7 @@ export default function ClinicalReport({ patient, captures, extraShots = [], onR
                           doctorMode={doctorMode}
                           initialDoctorData={doctorData?.[assessment.id]}
                           onDoctorDataChange={onDoctorDataChange}
+                          idealPostures={idealPostures}
                         />
                       ))}
                     </div>
@@ -335,19 +336,42 @@ export default function ClinicalReport({ patient, captures, extraShots = [], onR
   );
 }
 
+// Pick the best curated "ideal" reference image to show beside a finding's
+// patient photo: first a library set that tracks this exact capture pose, else
+// one whose condition matches the finding's pain area / body region. Returns
+// null when nothing matches, so the caller falls back to the plumb illustration.
+function pickIdealImage(
+  assessment: ClinicalAssessment,
+  sets: IdealPostureSet[]
+): { imageData: string; label: string } | null {
+  if (!sets || sets.length === 0) return null;
+  const norm = (s?: string) => (s || '').toLowerCase().trim();
+  let match = sets.find(
+    (s) => Array.isArray(s.poses) && s.poses.includes(assessment.id) && s.images.length > 0
+  );
+  if (!match) {
+    const keys = [norm(assessment.painArea), norm(assessment.bodyRegion)];
+    match = sets.find((s) => s.images.length > 0 && keys.includes(norm(s.condition)));
+  }
+  return match ? match.images[0] : null;
+}
+
 function FindingCard({
   capture,
   assessment,
   doctorMode,
   initialDoctorData,
   onDoctorDataChange,
+  idealPostures = [],
 }: {
   capture: AssessmentCapture;
   assessment: ClinicalAssessment;
   doctorMode: boolean;
   initialDoctorData?: DoctorFindingData;
   onDoctorDataChange?: (assessmentId: string, data: DoctorFindingData) => void;
+  idealPostures?: IdealPostureSet[];
 }) {
+  const idealImage = pickIdealImage(assessment, idealPostures);
   const sev = capture.severity;
   const color = sev ? SEVERITY_COLOR[sev] : '#9ca3af';
   const gauge = ASSESSMENT_GAUGE[assessment.id];
@@ -374,38 +398,48 @@ function FindingCard({
 
   return (
     <div className="border border-gray-200 rounded-xl overflow-hidden break-inside-avoid">
-      <div className="flex flex-col md:flex-row">
-        {/* Left: user's captured photo (ideal line + joint angles baked in) · Right: ideal-position reference */}
-        <div className="grid grid-cols-[3fr_2fr] md:w-[34rem] flex-shrink-0 bg-slate-900">
-          <figure className="relative">
-            {/* Patient photo WITH the AI pose overlay (dots + skeleton + plumb line)
-                baked in, so the doctor sees exactly what the model measured. Uses
-                object-contain (not cover) so the FULL body and every measured
-                point / plumb line stays visible — cropping would hide the head or
-                feet the assessment depends on. A blurred copy fills the margins so
-                the frame looks full. Click to view full size. Falls back to the raw
-                frame only if the overlay snapshot is missing. */}
+      <div className="flex flex-col">
+        {/* Media row — LEFT: patient's captured photo with the AI pose overlay
+            baked in. RIGHT: the doctor-curated ideal reference image for this
+            condition (falls back to the plumb illustration when the library has
+            none). Both are equal, full-width halves shown large so the patient
+            can clearly compare their posture against the ideal. Photos use
+            object-contain with a blurred backdrop, so the FULL body / every
+            measured point stays visible and the frame never looks empty. */}
+        <div className="grid grid-cols-2 w-full bg-slate-900">
+          <figure className="relative border-r border-white/10">
             <ZoomableImage
               src={capture.imageData || capture.rawImageData}
               alt={`${assessment.name} — patient photo with pose points`}
-              heightClass="h-80"
-              badge="Patient Photo · pose points"
+              heightClass="h-80 sm:h-96"
+              badge="You · pose points"
             />
           </figure>
-          <figure className="relative border-l border-gray-200 bg-slate-50 flex items-center justify-center">
-            <PoseIllustration pose={assessment.id} className="w-full h-80" />
-            {/* Ideal plumb reference — the target vertical the patient's line
-                (drawn on the left photo) should match. */}
-            <span
-              className="absolute top-2 bottom-2 left-1/2 -translate-x-1/2 border-l-2 border-dashed border-green-500 pointer-events-none"
-              aria-hidden
-            />
-            <figcaption className="absolute bottom-1 left-1 text-[10px] font-semibold bg-green-700 text-white px-1.5 py-0.5 rounded">
-              Ideal Position · plumb
-            </figcaption>
+          <figure className="relative">
+            {idealImage ? (
+              <ZoomableImage
+                src={idealImage.imageData}
+                alt={idealImage.label || `${assessment.name} — ideal position`}
+                heightClass="h-80 sm:h-96"
+                badge={idealImage.label ? `Ideal · ${idealImage.label}` : 'Ideal Position'}
+              />
+            ) : (
+              <div className="relative flex h-80 sm:h-96 items-center justify-center bg-slate-50">
+                <PoseIllustration pose={assessment.id} className="w-full h-full" />
+                {/* Ideal plumb reference — the target vertical the patient's line
+                    (drawn on the left photo) should match. */}
+                <span
+                  className="absolute top-2 bottom-2 left-1/2 -translate-x-1/2 border-l-2 border-dashed border-green-500 pointer-events-none"
+                  aria-hidden
+                />
+                <figcaption className="absolute bottom-1 left-1 text-[10px] font-semibold bg-green-700 text-white px-1.5 py-0.5 rounded">
+                  Ideal Position · plumb
+                </figcaption>
+              </div>
+            )}
           </figure>
         </div>
-        <div className="flex-1 p-4">
+        <div className="p-4 border-t border-gray-100">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h3 className="font-semibold text-gray-900">{assessment.name}</h3>
