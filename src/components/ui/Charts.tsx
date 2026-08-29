@@ -1,6 +1,7 @@
 // Lightweight, dependency-free SVG charts for the admin dashboard. Responsive
-// via viewBox (w-full h-auto). Each data point exposes a <title> so hovering a
-// point/bar shows its exact value.
+// via viewBox (w-full h-auto). Hovering the plot shows a floating tooltip with
+// a crosshair so you can read the exact value at any point.
+import { useState } from 'react';
 
 export interface ChartPoint {
   label: string; // x-axis label / tooltip prefix
@@ -8,10 +9,11 @@ export interface ChartPoint {
 }
 
 const pad = { top: 10, right: 8, bottom: 18, left: 8 };
+const W = 640;
 
 // Faint horizontal gridlines (with a max-value label on top) so the charts read
 // like a real analytics dashboard rather than a lone sparkline.
-function Gridlines({ W, innerH, max, format }: { W: number; innerH: number; max: number; format: (n: number) => string }) {
+function Gridlines({ innerH, max, format }: { innerH: number; max: number; format: (n: number) => string }) {
   const lines = [0, 0.25, 0.5, 0.75, 1];
   return (
     <g>
@@ -32,6 +34,23 @@ function Gridlines({ W, innerH, max, format }: { W: number; innerH: number; max:
   );
 }
 
+// Floating HTML tooltip anchored to a fraction of the chart width. Positioned in
+// the wrapping relative <div>; clamps to stay inside the card edges.
+function ChartTooltip({ xPct, label, value, color }: { xPct: number; label: string; value: string; color: string }) {
+  return (
+    <div
+      className="pointer-events-none absolute top-1 z-10 -translate-x-1/2 whitespace-nowrap rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 shadow-lg shadow-slate-900/10"
+      style={{ left: `${Math.min(90, Math.max(10, xPct))}%` }}
+    >
+      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
+        <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+        {value}
+      </div>
+      <div className="text-[10px] font-medium text-slate-500">{label}</div>
+    </div>
+  );
+}
+
 /** Smooth line + gradient area chart. Good for a revenue / activity trend. */
 export function LineAreaChart({
   points,
@@ -46,8 +65,8 @@ export function LineAreaChart({
   height?: number;
   format?: (n: number) => string;
 }) {
-  const W = 640;
   const H = height;
+  const [hover, setHover] = useState<number | null>(null);
   if (points.length === 0) return <EmptyChart height={H} />;
 
   const max = Math.max(1, ...points.map((p) => p.value));
@@ -64,28 +83,46 @@ export function LineAreaChart({
   const lastX = x(points.length - 1);
   const lastY = y(points[points.length - 1].value);
 
+  // Map the mouse to the nearest data point (viewBox scales uniformly to width).
+  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const fx = ((e.clientX - rect.left) / rect.width) * W;
+    const idx = Math.round(((fx - pad.left) / innerW) * (points.length - 1));
+    setHover(Math.max(0, Math.min(points.length - 1, idx)));
+  };
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="Trend chart">
-      <defs>
-        <linearGradient id={`grad-${id}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.28" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <Gridlines W={W} innerH={innerH} max={max} format={format} />
-      <path d={area} fill={`url(#grad-${id})`} />
-      <path d={line} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-      {points.map((p, i) => (
-        <circle key={i} cx={x(i)} cy={y(p.value)} r={points.length > 40 ? 0 : 2.5} fill="#fff" stroke={color} strokeWidth="1.5">
-          <title>{`${p.label}: ${format(p.value)}`}</title>
-        </circle>
-      ))}
-      {/* Emphasise the latest value with a pulsing marker. */}
-      <circle cx={lastX} cy={lastY} r="4" fill={color}>
-        <animate attributeName="r" values="4;6;4" dur="1.8s" repeatCount="indefinite" />
-        <title>{`${points[points.length - 1].label}: ${format(points[points.length - 1].value)}`}</title>
-      </circle>
-    </svg>
+    <div className="relative" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="Trend chart">
+        <defs>
+          <linearGradient id={`grad-${id}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.28" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <Gridlines innerH={innerH} max={max} format={format} />
+        <path d={area} fill={`url(#grad-${id})`} />
+        <path d={line} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        {points.length <= 40 &&
+          points.map((p, i) => <circle key={i} cx={x(i)} cy={y(p.value)} r={2.5} fill="#fff" stroke={color} strokeWidth="1.5" />)}
+        {/* Latest value: pulsing marker (hidden while hovering elsewhere). */}
+        {hover === null && (
+          <circle cx={lastX} cy={lastY} r="4" fill={color}>
+            <animate attributeName="r" values="4;6;4" dur="1.8s" repeatCount="indefinite" />
+          </circle>
+        )}
+        {/* Hover crosshair + highlighted point. */}
+        {hover !== null && (
+          <g>
+            <line x1={x(hover)} y1={pad.top} x2={x(hover)} y2={pad.top + innerH} stroke={color} strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
+            <circle cx={x(hover)} cy={y(points[hover].value)} r="5" fill="#fff" stroke={color} strokeWidth="2.5" />
+          </g>
+        )}
+      </svg>
+      {hover !== null && (
+        <ChartTooltip xPct={(x(hover) / W) * 100} label={points[hover].label} value={format(points[hover].value)} color={color} />
+      )}
+    </div>
   );
 }
 
@@ -101,8 +138,8 @@ export function BarChart({
   height?: number;
   format?: (n: number) => string;
 }) {
-  const W = 640;
   const H = height;
+  const [hover, setHover] = useState<number | null>(null);
   if (points.length === 0) return <EmptyChart height={H} />;
 
   const max = Math.max(1, ...points.map((p) => p.value));
@@ -111,29 +148,41 @@ export function BarChart({
   const gap = points.length > 60 ? 0.5 : 2;
   const bw = innerW / points.length - gap;
 
+  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const fx = ((e.clientX - rect.left) / rect.width) * W;
+    const idx = Math.floor((fx - pad.left) / (bw + gap));
+    setHover(Math.max(0, Math.min(points.length - 1, idx)));
+  };
+
+  const centerX = (i: number) => pad.left + i * (bw + gap) + bw / 2;
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="Bar chart">
-      <Gridlines W={W} innerH={innerH} max={max} format={format} />
-      {points.map((p, i) => {
-        const h = (p.value / max) * innerH;
-        const bx = pad.left + i * (bw + gap);
-        return (
-          <rect
-            key={i}
-            x={bx}
-            y={pad.top + innerH - h}
-            width={Math.max(1, bw)}
-            height={h}
-            rx="1.5"
-            fill={color}
-            opacity="0.85"
-            className="transition-opacity hover:opacity-100"
-          >
-            <title>{`${p.label}: ${format(p.value)}`}</title>
-          </rect>
-        );
-      })}
-    </svg>
+    <div className="relative" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="Bar chart">
+        <Gridlines innerH={innerH} max={max} format={format} />
+        {points.map((p, i) => {
+          const h = (p.value / max) * innerH;
+          const bx = pad.left + i * (bw + gap);
+          return (
+            <rect
+              key={i}
+              x={bx}
+              y={pad.top + innerH - h}
+              width={Math.max(1, bw)}
+              height={h}
+              rx="1.5"
+              fill={color}
+              opacity={hover === null || hover === i ? 0.9 : 0.4}
+              className="transition-opacity"
+            />
+          );
+        })}
+      </svg>
+      {hover !== null && (
+        <ChartTooltip xPct={(centerX(hover) / W) * 100} label={points[hover].label} value={format(points[hover].value)} color={color} />
+      )}
+    </div>
   );
 }
 
@@ -150,14 +199,14 @@ export function HBars({
   return (
     <div className="space-y-3">
       {rows.map((r) => (
-        <div key={r.label}>
+        <div key={r.label} className="group">
           <div className="flex justify-between text-xs mb-1">
             <span className="text-slate-600 capitalize">{r.label}</span>
             <span className="font-semibold text-slate-900">{format(r.value)}</span>
           </div>
           <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
             <div
-              className="h-full rounded-full transition-[width] duration-500"
+              className="h-full rounded-full transition-[width] duration-500 group-hover:brightness-110"
               style={{ width: `${(r.value / max) * 100}%`, backgroundColor: r.color || '#10b981' }}
             />
           </div>
