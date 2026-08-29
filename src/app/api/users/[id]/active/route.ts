@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/server/db';
 import { User } from '@/lib/server/models/User';
-import { requireAuth, requireRole } from '@/middleware/auth';
+import { requireAuth, requireRole, invalidateUser } from '@/middleware/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,5 +21,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
   target.active = Boolean(active);
   await target.save();
+  // A disabled account must stop being accepted right away, not after the TTL.
+  invalidateUser(params.id);
   return NextResponse.json({ user: target.toSafeJSON() });
 }

@@ -18,6 +18,10 @@ const appointmentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// The patient profile lists one patient's appointments sorted by time; a
+// compound index serves that without scanning every appointment.
+appointmentSchema.index({ patient: 1, scheduledAt: 1 });
+
 appointmentSchema.methods.toJSONSafe = function toJSONSafe(this: any) {
   const ref = (v: any) =>
     v == null ? null : v._id ? { id: v._id.toString(), name: v.name } : v.toString();

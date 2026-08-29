@@ -98,6 +98,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Inter: a clean, professional variable UI typeface */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* Warm up the two hosts the MediaPipe pose engine downloads from (the
+            WASM runtime + the model .task file) so DNS/TLS is already done by the
+            time the assessment opens the camera — the AI starts tracking sooner. */}
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://storage.googleapis.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
+        <link rel="dns-prefetch" href="https://storage.googleapis.com" />
         <link
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
           rel="stylesheet"

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/server/db';
 import { User } from '@/lib/server/models/User';
-import { requireAuth, requireRole } from '@/middleware/auth';
+import { requireAuth, requireRole, invalidateUser } from '@/middleware/auth';
 import { ROLES, permissionsForRole } from '@/lib/server/permissions';
 
 export const dynamic = 'force-dynamic';
@@ -53,6 +53,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   await target.save();
+  // Role/email/password just changed — drop any cached copy so the next request
+  // for this account re-reads the fresh record instead of a stale one.
+  invalidateUser(params.id);
   return NextResponse.json({
     user: target.toSafeJSON(),
     permissions: permissionsForRole(target.role),
@@ -75,5 +78,6 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   }
 
   await target.deleteOne();
+  invalidateUser(params.id);
   return NextResponse.json({ ok: true });
 }

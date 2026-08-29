@@ -22,6 +22,11 @@ const paymentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Both the per-patient billing list and the global payments list sort newest
+// first; these indexes serve those directly from the index.
+paymentSchema.index({ patient: 1, createdAt: -1 });
+paymentSchema.index({ createdAt: -1 });
+
 paymentSchema.methods.toJSONSafe = function toJSONSafe(this: any) {
   return {
     id: this._id.toString(),

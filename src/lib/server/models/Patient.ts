@@ -35,6 +35,11 @@ patientSchema.pre('save', async function assignId(this: any, next) {
   }
 });
 
+// The list view sorts newest-first, and doctors are scoped to their own
+// patients — index both so neither path needs a full collection scan.
+patientSchema.index({ createdAt: -1 });
+patientSchema.index({ assignedDoctor: 1, createdAt: -1 });
+
 patientSchema.methods.toJSONSafe = function toJSONSafe(this: any) {
   return {
     id: this._id.toString(),

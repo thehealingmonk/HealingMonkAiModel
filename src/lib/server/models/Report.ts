@@ -47,6 +47,11 @@ const reportSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// The patient timeline query filters by `patient` and sorts newest-first; a
+// compound index lets Atlas serve it straight from the index (no collection
+// scan + in-memory sort), which is what made opening a patient feel slow.
+reportSchema.index({ patient: 1, createdAt: -1 });
+
 reportSchema.methods.toJSONSafe = function toJSONSafe(this: any) {
   return {
     id: this._id.toString(),
