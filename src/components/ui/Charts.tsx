@@ -9,6 +9,29 @@ export interface ChartPoint {
 
 const pad = { top: 10, right: 8, bottom: 18, left: 8 };
 
+// Faint horizontal gridlines (with a max-value label on top) so the charts read
+// like a real analytics dashboard rather than a lone sparkline.
+function Gridlines({ W, innerH, max, format }: { W: number; innerH: number; max: number; format: (n: number) => string }) {
+  const lines = [0, 0.25, 0.5, 0.75, 1];
+  return (
+    <g>
+      {lines.map((f) => {
+        const gy = pad.top + innerH - f * innerH;
+        return (
+          <g key={f}>
+            <line x1={pad.left} y1={gy} x2={W - pad.right} y2={gy} stroke="#e2e8f0" strokeWidth="1" strokeDasharray={f === 0 ? '0' : '3 4'} />
+            {f > 0 && (
+              <text x={W - pad.right} y={gy - 3} textAnchor="end" className="fill-slate-400" fontSize="10">
+                {format(f * max)}
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
 /** Smooth line + gradient area chart. Good for a revenue / activity trend. */
 export function LineAreaChart({
   points,
@@ -38,6 +61,9 @@ export function LineAreaChart({
     pad.top + innerH
   ).toFixed(1)} Z`;
 
+  const lastX = x(points.length - 1);
+  const lastY = y(points[points.length - 1].value);
+
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="Trend chart">
       <defs>
@@ -46,8 +72,7 @@ export function LineAreaChart({
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
       </defs>
-      {/* baseline */}
-      <line x1={pad.left} y1={pad.top + innerH} x2={W - pad.right} y2={pad.top + innerH} stroke="#e2e8f0" strokeWidth="1" />
+      <Gridlines W={W} innerH={innerH} max={max} format={format} />
       <path d={area} fill={`url(#grad-${id})`} />
       <path d={line} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
       {points.map((p, i) => (
@@ -55,6 +80,11 @@ export function LineAreaChart({
           <title>{`${p.label}: ${format(p.value)}`}</title>
         </circle>
       ))}
+      {/* Emphasise the latest value with a pulsing marker. */}
+      <circle cx={lastX} cy={lastY} r="4" fill={color}>
+        <animate attributeName="r" values="4;6;4" dur="1.8s" repeatCount="indefinite" />
+        <title>{`${points[points.length - 1].label}: ${format(points[points.length - 1].value)}`}</title>
+      </circle>
     </svg>
   );
 }
@@ -83,12 +113,22 @@ export function BarChart({
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="Bar chart">
-      <line x1={pad.left} y1={pad.top + innerH} x2={W - pad.right} y2={pad.top + innerH} stroke="#e2e8f0" strokeWidth="1" />
+      <Gridlines W={W} innerH={innerH} max={max} format={format} />
       {points.map((p, i) => {
         const h = (p.value / max) * innerH;
         const bx = pad.left + i * (bw + gap);
         return (
-          <rect key={i} x={bx} y={pad.top + innerH - h} width={Math.max(1, bw)} height={h} rx="1.5" fill={color} opacity="0.85">
+          <rect
+            key={i}
+            x={bx}
+            y={pad.top + innerH - h}
+            width={Math.max(1, bw)}
+            height={h}
+            rx="1.5"
+            fill={color}
+            opacity="0.85"
+            className="transition-opacity hover:opacity-100"
+          >
             <title>{`${p.label}: ${format(p.value)}`}</title>
           </rect>
         );

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Stethoscope, Pencil, Trash2 } from 'lucide-react';
+import { Search, Stethoscope, Pencil, Trash2, ArrowDownUp } from 'lucide-react';
 import { Patient, listPatients, deletePatient } from '@/services/api';
 import { formatDate } from '@/utils/formatter';
 import { useLiveData } from '@/hooks/useLiveData';
@@ -8,6 +8,15 @@ import LiveBadge from '@/features/admin/LiveBadge';
 import TableSkeleton from '@/components/ui/TableSkeleton';
 import ExportButton from '@/components/ui/ExportButton';
 import PatientEditModal from '@/components/common/PatientEditModal';
+import {
+  StatStrip,
+  SegmentedFilter,
+  DateRange,
+  DATE_RANGE_OPTIONS,
+  inRange,
+  isToday,
+  isWithinDays,
+} from '@/components/ui/ListControls';
 
 export default function PatientsList() {
   const navigate = useNavigate();
@@ -16,7 +25,36 @@ export default function PatientsList() {
   const { data, loading, refreshing, error, lastUpdated, refresh } = useLiveData(() =>
     listPatients({ scope: 'all', q: q.trim() || undefined })
   );
-  const patients = data?.patients ?? [];
+  const loaded = data?.patients ?? [];
+
+  // Client-side refinement on top of the server search.
+  const [range, setRange] = useState<DateRange>('all');
+  const [gender, setGender] = useState<'all' | 'male' | 'female'>('all');
+  const [sort, setSort] = useState<'recent' | 'name' | 'oldest'>('recent');
+
+  const counts = useMemo(
+    () => ({
+      total: loaded.length,
+      today: loaded.filter((p) => isToday(p.createdAt)).length,
+      week: loaded.filter((p) => isWithinDays(p.createdAt, 7)).length,
+      unassigned: loaded.filter((p) => !(p.assignedDoctor && typeof p.assignedDoctor === 'object')).length,
+    }),
+    [loaded]
+  );
+
+  const patients = useMemo(() => {
+    const rows = loaded.filter((p) => {
+      if (!inRange(p.createdAt, range)) return false;
+      if (gender !== 'all' && (p.gender || '').toLowerCase() !== gender) return false;
+      return true;
+    });
+    return [...rows].sort((a, b) => {
+      if (sort === 'name') return a.name.localeCompare(b.name);
+      const ta = new Date(a.createdAt ?? 0).getTime();
+      const tb = new Date(b.createdAt ?? 0).getTime();
+      return sort === 'oldest' ? ta - tb : tb - ta;
+    });
+  }, [loaded, range, gender, sort]);
 
   // Correct a wrong entry (edit) or remove a duplicate/double entry (delete).
   const [editPatient, setEditPatient] = useState<Patient | null>(null);
@@ -89,11 +127,48 @@ export default function PatientsList() {
 
       {error && <div className="bg-rose-400/10 border border-rose-400/30 text-rose-200 px-3 py-2 rounded-lg text-sm mb-4">{error}</div>}
 
+      <StatStrip
+        items={[
+          { label: 'Total patients', value: counts.total },
+          { label: 'New today', value: counts.today, tint: 'text-emerald-300' },
+          { label: 'Last 7 days', value: counts.week, tint: 'text-sky-300' },
+          { label: 'Unassigned', value: counts.unassigned, tint: 'text-amber-300' },
+        ]}
+      />
+
+      <div className="mb-4 flex flex-wrap items-center gap-3" data-reveal="fade">
+        <SegmentedFilter value={range} options={DATE_RANGE_OPTIONS} onChange={setRange} ariaLabel="Registered range" />
+        <SegmentedFilter
+          value={gender}
+          onChange={setGender}
+          ariaLabel="Gender filter"
+          options={[
+            { value: 'all', label: 'All' },
+            { value: 'male', label: 'Male' },
+            { value: 'female', label: 'Female' },
+          ]}
+        />
+        <label className="ml-auto inline-flex items-center gap-2 text-xs font-medium text-slate-400">
+          <ArrowDownUp className="h-3.5 w-3.5" />
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as typeof sort)}
+            className="rounded-lg border border-white/15 bg-white/5 px-2 py-1.5 text-xs font-semibold text-white focus:ring-2 focus:ring-emerald-400/60 [&>option]:text-slate-900"
+          >
+            <option value="recent">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="name">Name (A–Z)</option>
+          </select>
+        </label>
+      </div>
+
       <div className="glass-dark rounded-2xl overflow-x-auto" data-reveal>
         {loading ? (
           <TableSkeleton rows={7} cols={8} />
         ) : patients.length === 0 ? (
-          <div className="p-10 text-center text-slate-400">No patients yet.</div>
+          <div className="p-10 text-center text-slate-400">
+            {loaded.length === 0 ? 'No patients yet.' : 'No patients match these filters.'}
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-white/5 text-slate-400 text-left">

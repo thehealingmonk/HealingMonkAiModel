@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ExternalLink, Eye, X, Download, Trash2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ExternalLink, Eye, X, Download, Trash2, ArrowDownUp } from 'lucide-react';
 import { ReportListItem, listAllReports, deleteReport } from '@/services/api';
 import { fetchStoredReport } from '@/services/report.service';
 import { downloadReportPdf } from '@/lib/reportPdf';
@@ -8,6 +8,16 @@ import { useLiveData } from '@/hooks/useLiveData';
 import LiveBadge from '@/features/admin/LiveBadge';
 import TableSkeleton from '@/components/ui/TableSkeleton';
 import ExportButton from '@/components/ui/ExportButton';
+import {
+  StatStrip,
+  SegmentedFilter,
+  SearchBox,
+  DateRange,
+  DATE_RANGE_OPTIONS,
+  inRange,
+  isToday,
+  isWithinDays,
+} from '@/components/ui/ListControls';
 
 // Open a report's public, no-auth visual URL (name-based /r/:slug) in a new tab.
 function openReport(shareId: string | null) {
@@ -218,14 +228,57 @@ export default function ReportsList() {
   const { data, loading, refreshing, error: loadError, lastUpdated, refresh } = useLiveData(() =>
     listAllReports('all')
   );
-  const reports = data?.reports ?? [];
+  const allReports = data?.reports ?? [];
   const [selected, setSelected] = useState<ReportListItem | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [dlError, setDlError] = useState('');
   const error = dlError || loadError;
 
+  // Filters & sorting (all client-side — the list already holds every report).
+  const [q, setQ] = useState('');
+  const [range, setRange] = useState<DateRange>('all');
+  const [quality, setQuality] = useState<'all' | 'flagged' | 'low' | 'high'>('all');
+  const [sort, setSort] = useState<'recent' | 'scoreDesc' | 'scoreAsc' | 'flagged'>('recent');
+
   const doctorName = (d: ReportListItem['doctor']) => (d && typeof d === 'object' ? d.name : '—');
+
+  // Live totals across the full dataset (before filtering) so counts are stable.
+  const totals = useMemo(() => {
+    const scored = allReports.filter((r) => r.overallScore != null);
+    const avg = scored.length
+      ? Math.round(scored.reduce((s, r) => s + (r.overallScore ?? 0), 0) / scored.length)
+      : 0;
+    return {
+      total: allReports.length,
+      today: allReports.filter((r) => isToday(r.createdAt)).length,
+      week: allReports.filter((r) => isWithinDays(r.createdAt, 7)).length,
+      flagged: allReports.filter((r) => r.flaggedCount > 0).length,
+      avg,
+    };
+  }, [allReports]);
+
+  const reports = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    let rows = allReports.filter((r) => {
+      if (!inRange(r.createdAt, range)) return false;
+      if (quality === 'flagged' && r.flaggedCount === 0) return false;
+      if (quality === 'low' && !(r.overallScore != null && r.overallScore < 60)) return false;
+      if (quality === 'high' && !(r.overallScore != null && r.overallScore >= 80)) return false;
+      if (term) {
+        const hay = `${r.patientInfo?.name || ''} ${r.patientInfo?.patientId || ''} ${doctorName(r.doctor)} ${r.painAreas.join(' ')}`.toLowerCase();
+        if (!hay.includes(term)) return false;
+      }
+      return true;
+    });
+    rows = [...rows].sort((a, b) => {
+      if (sort === 'scoreDesc') return (b.overallScore ?? -1) - (a.overallScore ?? -1);
+      if (sort === 'scoreAsc') return (a.overallScore ?? 999) - (b.overallScore ?? 999);
+      if (sort === 'flagged') return b.flaggedCount - a.flaggedCount;
+      return new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime();
+    });
+    return rows;
+  }, [allReports, q, range, quality, sort]);
 
   const exportColumns = [
     { header: 'Date', value: (r: ReportListItem) => formatDate(r.createdAt, true) },
@@ -290,11 +343,54 @@ export default function ReportsList() {
 
       {error && <div className="bg-rose-400/10 border border-rose-400/30 text-rose-200 px-3 py-2 rounded-lg text-sm mb-4">{error}</div>}
 
+      {/* Live totals */}
+      <StatStrip
+        items={[
+          { label: 'Total reports', value: totals.total },
+          { label: 'Today', value: totals.today, tint: 'text-emerald-300' },
+          { label: 'Last 7 days', value: totals.week, tint: 'text-sky-300' },
+          { label: 'Flagged', value: totals.flagged, tint: 'text-rose-300' },
+          { label: 'Avg score', value: totals.avg, tint: 'text-violet-300' },
+        ]}
+      />
+
+      {/* Filters */}
+      <div className="mb-4 flex flex-wrap items-center gap-3" data-reveal="fade">
+        <SearchBox value={q} onChange={setQ} placeholder="Search patient / doctor / pain area" />
+        <SegmentedFilter value={range} options={DATE_RANGE_OPTIONS} onChange={setRange} ariaLabel="Date range" />
+        <SegmentedFilter
+          value={quality}
+          onChange={setQuality}
+          ariaLabel="Quality filter"
+          options={[
+            { value: 'all', label: 'All' },
+            { value: 'flagged', label: 'Flagged' },
+            { value: 'low', label: 'Low score' },
+            { value: 'high', label: 'Healthy' },
+          ]}
+        />
+        <label className="ml-auto inline-flex items-center gap-2 text-xs font-medium text-slate-400">
+          <ArrowDownUp className="h-3.5 w-3.5" />
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as typeof sort)}
+            className="rounded-lg border border-white/15 bg-white/5 px-2 py-1.5 text-xs font-semibold text-white focus:ring-2 focus:ring-emerald-400/60 [&>option]:text-slate-900"
+          >
+            <option value="recent">Newest first</option>
+            <option value="scoreDesc">Score: high → low</option>
+            <option value="scoreAsc">Score: low → high</option>
+            <option value="flagged">Most flagged</option>
+          </select>
+        </label>
+      </div>
+
       <div className="glass-dark rounded-2xl overflow-x-auto" data-reveal>
         {loading ? (
           <TableSkeleton rows={7} cols={7} />
         ) : reports.length === 0 ? (
-          <div className="p-10 text-center text-slate-400">No reports yet.</div>
+          <div className="p-10 text-center text-slate-400">
+            {allReports.length === 0 ? 'No reports yet.' : 'No reports match these filters.'}
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-white/5 text-slate-400 text-left">

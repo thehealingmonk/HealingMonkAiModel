@@ -1,9 +1,19 @@
+import { useMemo, useState } from 'react';
 import { Appointment, AppointmentStatus, listAppointments } from '@/services/api';
 import { formatDate } from '@/utils/formatter';
 import { useLiveData } from '@/hooks/useLiveData';
 import LiveBadge from '@/features/admin/LiveBadge';
 import TableSkeleton from '@/components/ui/TableSkeleton';
 import ExportButton from '@/components/ui/ExportButton';
+import {
+  StatStrip,
+  SegmentedFilter,
+  SearchBox,
+  DateRange,
+  DATE_RANGE_OPTIONS,
+  inRange,
+  isToday,
+} from '@/components/ui/ListControls';
 
 const STATUS_BADGE: Record<AppointmentStatus, string> = {
   scheduled: 'bg-sky-500/15 text-sky-300 ring-1 ring-sky-400/20',
@@ -15,11 +25,43 @@ const STATUS_BADGE: Record<AppointmentStatus, string> = {
 const name = (v: Appointment['patient'] | Appointment['doctor']) =>
   v && typeof v === 'object' ? v.name : '—';
 
+type StatusFilter = 'all' | AppointmentStatus;
+
 export default function AppointmentsList() {
   const { data, loading, refreshing, error, lastUpdated, refresh } = useLiveData(() =>
     listAppointments({ scope: 'all' })
   );
-  const appts = data?.appointments ?? [];
+  const allAppts = data?.appointments ?? [];
+
+  const [q, setQ] = useState('');
+  const [range, setRange] = useState<DateRange>('all');
+  const [status, setStatus] = useState<StatusFilter>('all');
+
+  // Counts over the full dataset so the pills/strip stay stable while filtering.
+  const counts = useMemo(() => {
+    const by: Record<AppointmentStatus, number> = { scheduled: 0, completed: 0, cancelled: 0, no_show: 0 };
+    let today = 0;
+    for (const a of allAppts) {
+      by[a.status]++;
+      if (isToday(a.scheduledAt)) today++;
+    }
+    return { total: allAppts.length, today, ...by };
+  }, [allAppts]);
+
+  const appts = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return allAppts
+      .filter((a) => {
+        if (status !== 'all' && a.status !== status) return false;
+        if (!inRange(a.scheduledAt, range)) return false;
+        if (term) {
+          const hay = `${name(a.patient)} ${name(a.doctor)} ${a.reason || ''} ${a.patientCode || ''} ${a.patientMobile || ''}`.toLowerCase();
+          if (!hay.includes(term)) return false;
+        }
+        return true;
+      })
+      .sort((x, y) => new Date(y.scheduledAt).getTime() - new Date(x.scheduledAt).getTime());
+  }, [allAppts, q, range, status]);
 
   const exportColumns = [
     { header: 'When', value: (a: Appointment) => formatDate(a.scheduledAt, true) },
@@ -44,11 +86,40 @@ export default function AppointmentsList() {
 
       {error && <div className="bg-rose-400/10 border border-rose-400/30 text-rose-200 px-3 py-2 rounded-lg text-sm mb-4">{error}</div>}
 
+      <StatStrip
+        items={[
+          { label: 'Total', value: counts.total },
+          { label: 'Today', value: counts.today, tint: 'text-emerald-300' },
+          { label: 'Scheduled', value: counts.scheduled, tint: 'text-sky-300' },
+          { label: 'Completed', value: counts.completed, tint: 'text-emerald-300' },
+          { label: 'No-show', value: counts.no_show, tint: 'text-rose-300' },
+        ]}
+      />
+
+      <div className="mb-4 flex flex-wrap items-center gap-3" data-reveal="fade">
+        <SearchBox value={q} onChange={setQ} placeholder="Search patient / doctor / reason" />
+        <SegmentedFilter value={range} options={DATE_RANGE_OPTIONS} onChange={setRange} ariaLabel="Date range" />
+        <SegmentedFilter
+          value={status}
+          onChange={setStatus}
+          ariaLabel="Status filter"
+          options={[
+            { value: 'all', label: 'All' },
+            { value: 'scheduled', label: 'Scheduled', count: counts.scheduled },
+            { value: 'completed', label: 'Completed', count: counts.completed },
+            { value: 'cancelled', label: 'Cancelled', count: counts.cancelled },
+            { value: 'no_show', label: 'No-show', count: counts.no_show },
+          ]}
+        />
+      </div>
+
       <div className="glass-dark rounded-2xl overflow-x-auto" data-reveal>
         {loading ? (
           <TableSkeleton rows={6} cols={5} />
         ) : appts.length === 0 ? (
-          <div className="p-10 text-center text-slate-400">No appointments yet.</div>
+          <div className="p-10 text-center text-slate-400">
+            {allAppts.length === 0 ? 'No appointments yet.' : 'No appointments match these filters.'}
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-white/5 text-slate-400 text-left">
