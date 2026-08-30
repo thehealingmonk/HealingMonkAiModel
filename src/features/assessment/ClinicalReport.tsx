@@ -11,11 +11,11 @@ import {
   ASSESSMENT_GAUGE,
   View,
 } from '@/lib/clinicalKnowledge';
-import { useState, useRef, ReactNode } from 'react';
+import { useState, useRef, useEffect, ReactNode } from 'react';
 import { FileText, Printer, RotateCcw, Activity, AlertTriangle, Stethoscope, ShieldAlert, Download, Link2, Check, ZoomIn, X, ImagePlus, Upload } from 'lucide-react';
 import { downloadReportPdf } from '@/lib/reportPdf';
 import type { DoctorFindingData } from '@/services/report.service';
-import type { IdealPostureSet } from '@/services/api';
+import { listIdealPostures, type IdealPostureSet } from '@/services/api';
 
 interface Props {
   patient: PatientInfo;
@@ -91,6 +91,32 @@ export default function ClinicalReport({ patient, captures, extraShots = [], onR
   const findings = captures
     .map((c) => ({ capture: c, assessment: getAssessment(c.assessmentId)! }))
     .filter((f) => f.assessment);
+
+  // Quick-pick images for the manual "Select image" control on non-default
+  // findings. Seed from the ideal-posture sets already on this report, then
+  // fetch the FULL doctor-panel library so every curated image is available —
+  // not just the ones auto-matched to the patient's pain areas. If the fetch
+  // fails (offline / not authenticated) we keep the seeded subset.
+  const [libraryImages, setLibraryImages] = useState<{ imageData: string; label?: string }[]>(() =>
+    idealPostures.flatMap((s) => s.images.map((img) => ({ imageData: img.imageData, label: img.label || s.condition })))
+  );
+  useEffect(() => {
+    let cancelled = false;
+    listIdealPostures()
+      .then(({ sets }) => {
+        if (cancelled) return;
+        const imgs = sets.flatMap((s) =>
+          s.images.map((img) => ({ imageData: img.imageData, label: img.label || s.condition }))
+        );
+        if (imgs.length) setLibraryImages(imgs);
+      })
+      .catch(() => {
+        /* keep the seeded subset */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const flagged = findings.filter(
     (f) => f.capture.severity && f.capture.severity !== 'normal'
@@ -274,6 +300,7 @@ export default function ClinicalReport({ patient, captures, extraShots = [], onR
                           initialDoctorData={doctorData?.[assessment.id]}
                           onDoctorDataChange={onDoctorDataChange}
                           idealPostures={idealPostures}
+                          libraryImages={libraryImages}
                         />
                       ))}
                     </div>
@@ -383,6 +410,7 @@ function FindingCard({
   initialDoctorData,
   onDoctorDataChange,
   idealPostures = [],
+  libraryImages = [],
 }: {
   capture: AssessmentCapture;
   assessment: ClinicalAssessment;
@@ -390,13 +418,11 @@ function FindingCard({
   initialDoctorData?: DoctorFindingData;
   onDoctorDataChange?: (assessmentId: string, data: DoctorFindingData) => void;
   idealPostures?: IdealPostureSet[];
+  /** Full doctor-panel ideal-image library, offered as quick picks in the
+      manual "Select image" control for non-default findings. */
+  libraryImages?: { imageData: string; label?: string }[];
 }) {
   const idealImage = pickIdealImage(assessment, idealPostures);
-  // Curated library images, flattened — offered as quick picks when this
-  // finding's reference column is chosen by hand.
-  const libraryImages = idealPostures.flatMap((s) =>
-    s.images.map((img) => ({ imageData: img.imageData, label: img.label || s.condition }))
-  );
   const sev = capture.severity;
   const color = sev ? SEVERITY_COLOR[sev] : '#9ca3af';
   const gauge = ASSESSMENT_GAUGE[assessment.id];
