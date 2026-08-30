@@ -11,9 +11,8 @@ import {
   ASSESSMENT_GAUGE,
   View,
 } from '@/lib/clinicalKnowledge';
-import PoseIllustration from '@/components/common/PoseIllustration';
-import { useState, ReactNode } from 'react';
-import { FileText, Printer, RotateCcw, Activity, AlertTriangle, Stethoscope, ShieldAlert, Download, Link2, Check, ZoomIn, X } from 'lucide-react';
+import { useState, useRef, ReactNode } from 'react';
+import { FileText, Printer, RotateCcw, Activity, AlertTriangle, Stethoscope, ShieldAlert, Download, Link2, Check, ZoomIn, X, ImagePlus, Upload } from 'lucide-react';
 import { downloadReportPdf } from '@/lib/reportPdf';
 import type { DoctorFindingData } from '@/services/report.service';
 import type { IdealPostureSet } from '@/services/api';
@@ -43,12 +42,33 @@ interface Props {
 const SEVERITY_SCORE: Record<Severity, number> = { normal: 0, mild: 1, moderate: 2, severe: 3 };
 
 // Report sections, in clinical reading order.
-const VIEW_ORDER: View[] = ['front', 'side', 'back'];
+const VIEW_ORDER: View[] = ['front', 'back', 'side'];
 const VIEW_LABEL: Record<View, string> = {
   front: 'Front View',
   side: 'Side View',
   back: 'Back View',
 };
+
+// Default "ideal posture" reference illustrations shipped in /public/report.
+// Shown as the reference beside each finding. There are three references:
+// a frontal dotted-body view (for front & back photos) and two side profiles —
+// one facing left, one facing right — so left- and right-side findings each get
+// the matching profile. (encodeURI keeps the spaces in the filenames valid.)
+const IDEAL_REFERENCE = {
+  front: encodeURI('/report/WhatsApp Image 2026-08-17 at 10.28.34 PM.jpeg'),
+  left: encodeURI('/report/WhatsApp Image 2026-08-17 at 10.28.34 PM (1).jpeg'),
+  right: encodeURI('/report/WhatsApp Image 2026-08-17 at 10.28.34 PM (2).jpeg'),
+};
+
+// Choose the reference illustration for a finding. Front/back use the frontal
+// view; side views pick the left- or right-facing profile from the assessment
+// id/name (e.g. "full_body_left" → left profile), defaulting to left.
+function idealReferenceFor(assessment: ClinicalAssessment): string {
+  if (assessment.view !== 'side') return IDEAL_REFERENCE.front;
+  const tag = `${assessment.id} ${assessment.name}`.toLowerCase();
+  if (tag.includes('right')) return IDEAL_REFERENCE.right;
+  return IDEAL_REFERENCE.left;
+}
 
 export default function ClinicalReport({ patient, captures, extraShots = [], onRestart, restartLabel, notesSection, doctorMode = false, doctorData, onDoctorDataChange, shareUrl, idealPostures = [] }: Props) {
   const [downloading, setDownloading] = useState(false);
@@ -372,6 +392,11 @@ function FindingCard({
   idealPostures?: IdealPostureSet[];
 }) {
   const idealImage = pickIdealImage(assessment, idealPostures);
+  // Curated library images, flattened — offered as quick picks when this
+  // finding's reference column is chosen by hand.
+  const libraryImages = idealPostures.flatMap((s) =>
+    s.images.map((img) => ({ imageData: img.imageData, label: img.label || s.condition }))
+  );
   const sev = capture.severity;
   const color = sev ? SEVERITY_COLOR[sev] : '#9ca3af';
   const gauge = ASSESSMENT_GAUGE[assessment.id];
@@ -416,26 +441,22 @@ function FindingCard({
             />
           </figure>
           <figure className="relative">
-            {idealImage ? (
+            {assessment.defaultSelected ? (
+              /* The four default full-body poses (front / back / left / right)
+                 get their fixed /public/report reference illustration — no
+                 manual picker. A curated library image for the exact condition,
+                 if any, still takes precedence. */
               <ZoomableImage
-                src={idealImage.imageData}
-                alt={idealImage.label || `${assessment.name} — ideal position`}
+                src={idealImage ? idealImage.imageData : idealReferenceFor(assessment)}
+                alt={idealImage?.label || `${assessment.name} — ideal position`}
                 heightClass="h-80 sm:h-96"
-                badge={idealImage.label ? `Ideal · ${idealImage.label}` : 'Ideal Position'}
+                badge={idealImage?.label ? `Ideal · ${idealImage.label}` : 'Ideal Position'}
               />
             ) : (
-              <div className="relative flex h-80 sm:h-96 items-center justify-center bg-slate-50">
-                <PoseIllustration pose={assessment.id} className="w-full h-full" />
-                {/* Ideal plumb reference — the target vertical the patient's line
-                    (drawn on the left photo) should match. */}
-                <span
-                  className="absolute top-2 bottom-2 left-1/2 -translate-x-1/2 border-l-2 border-dashed border-green-500 pointer-events-none"
-                  aria-hidden
-                />
-                <figcaption className="absolute bottom-1 left-1 text-[10px] font-semibold bg-green-700 text-white px-1.5 py-0.5 rounded">
-                  Ideal Position · plumb
-                </figcaption>
-              </div>
+              /* Every other selected finding (shoulder, neck, …) has no default
+                 reference — the column stays blank until an image is chosen by
+                 hand, from the ideal-posture library or the device. */
+              <ManualIdealPicker libraryImages={libraryImages} />
             )}
           </figure>
         </div>
@@ -730,6 +751,116 @@ function CopyLinkButton({ url }: { url: string }) {
       {copied ? <Check className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
       {copied ? 'Link copied' : 'Copy link'}
     </button>
+  );
+}
+
+/**
+ * Reference column for a non-default finding (shoulder, neck, …). Starts blank
+ * with a "Select image" control — no auto/default illustration. The image is
+ * chosen by hand, either from the clinic's ideal-posture library (quick-pick
+ * thumbnails) or an upload from the device. The choice is local to this report
+ * view (kept in component state, not persisted).
+ */
+function ManualIdealPicker({
+  libraryImages,
+}: {
+  libraryImages: { imageData: string; label?: string }[];
+}) {
+  const [picked, setPicked] = useState<{ src: string; label?: string } | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPicked({ src: reader.result as string, label: file.name });
+      setPickerOpen(false);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  if (picked) {
+    return (
+      <div className="relative">
+        <ZoomableImage
+          src={picked.src}
+          alt={picked.label || 'Selected reference'}
+          heightClass="h-80 sm:h-96"
+          badge={picked.label ? `Ideal · ${picked.label}` : 'Ideal Position'}
+        />
+        <button
+          type="button"
+          onClick={() => setPicked(null)}
+          className="absolute z-30 top-1 left-1 rounded bg-black/60 hover:bg-black/80 text-white text-[10px] font-semibold px-1.5 py-0.5 print:hidden"
+        >
+          Change
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative flex h-80 sm:h-96 flex-col items-center justify-center bg-slate-50 p-4 print:hidden">
+      <input ref={fileRef} type="file" accept="image/*" onChange={onFile} className="hidden" />
+      {!pickerOpen ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 shadow-sm"
+          >
+            <ImagePlus className="w-4 h-4" /> Select image
+          </button>
+          <p className="mt-2 text-[11px] text-slate-400">Ideal reference (optional)</p>
+        </>
+      ) : (
+        <div className="w-full max-w-xs">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-slate-500">Choose a reference image</span>
+            <button
+              type="button"
+              onClick={() => setPickerOpen(false)}
+              className="text-slate-400 hover:text-slate-600"
+              aria-label="Cancel"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+          >
+            <Upload className="w-3.5 h-3.5" /> Upload from computer
+          </button>
+          {libraryImages.length > 0 && (
+            <>
+              <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">From ideal posture library</p>
+              <div className="grid max-h-40 grid-cols-3 gap-1.5 overflow-y-auto">
+                {libraryImages.map((im, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => {
+                      setPicked({ src: im.imageData, label: im.label });
+                      setPickerOpen(false);
+                    }}
+                    className="relative aspect-square overflow-hidden rounded border border-slate-200 hover:ring-2 hover:ring-emerald-400"
+                    title={im.label}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={im.imageData} alt={im.label || `Library ${i + 1}`} className="h-full w-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
