@@ -477,6 +477,7 @@ function FindingCard({
                 alt={idealImage?.label || `${assessment.name} — ideal position`}
                 heightClass="h-80 sm:h-96"
                 badge={idealImage?.label ? `Ideal · ${idealImage.label}` : 'Ideal Position'}
+                variant="reference"
               />
             ) : (
               /* Every other selected finding (shoulder, neck, …) has no default
@@ -816,6 +817,7 @@ function ManualIdealPicker({
           alt={picked.label || 'Selected reference'}
           heightClass="h-80 sm:h-96"
           badge={picked.label ? `Ideal · ${picked.label}` : 'Ideal Position'}
+          variant="reference"
         />
         <button
           type="button"
@@ -901,13 +903,19 @@ function ZoomableImage({
   alt,
   heightClass = 'h-72',
   badge,
+  variant = 'photo',
 }: {
   src?: string;
   alt: string;
   heightClass?: string;
   badge?: string;
+  /** 'photo' — dark backdrop + blurred fill (patient captures). 'reference' —
+      clean white backdrop, no blur (line-drawing / illustration references so
+      their white background blends and the figure shows crisply). */
+  variant?: 'photo' | 'reference';
 }) {
   const [zoom, setZoom] = useState(false);
+  const isReference = variant === 'reference';
   if (!src) {
     return (
       <div className={`flex w-full ${heightClass} items-center justify-center bg-slate-800 text-xs text-slate-400`}>
@@ -920,26 +928,29 @@ function ZoomableImage({
       <button
         type="button"
         onClick={() => setZoom(true)}
-        className={`group relative block w-full ${heightClass} cursor-zoom-in overflow-hidden bg-slate-900 print:cursor-default`}
+        className={`group relative block w-full ${heightClass} cursor-zoom-in overflow-hidden ${isReference ? 'bg-white' : 'bg-slate-900'} print:cursor-default`}
         aria-label={`View ${alt} full size`}
       >
         {/* Blurred, cover-sized copy of the same photo fills the empty margins so
             portrait/landscape shots look full and attractive without ever
-            cropping the measured image in front (which stays object-contain). */}
-        <img
-          src={src}
-          alt=""
-          aria-hidden
-          loading="lazy"
-          decoding="async"
-          className="absolute inset-0 w-full h-full object-cover scale-110 blur-xl opacity-40 print:hidden"
-        />
+            cropping the measured image in front (which stays object-contain).
+            Skipped for clean illustration references. */}
+        {!isReference && (
+          <img
+            src={src}
+            alt=""
+            aria-hidden
+            loading="lazy"
+            decoding="async"
+            className="absolute inset-0 w-full h-full object-cover scale-110 blur-xl opacity-40 print:hidden"
+          />
+        )}
         <img
           src={src}
           alt={alt}
           loading="lazy"
           decoding="async"
-          className="relative z-10 w-full h-full object-contain"
+          className={`relative z-10 w-full h-full object-contain ${isReference ? 'p-3' : ''}`}
         />
         {badge && (
           <span className="absolute z-20 bottom-1 left-1 text-[10px] font-semibold bg-black/70 text-white px-1.5 py-0.5 rounded">
