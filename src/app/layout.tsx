@@ -32,6 +32,8 @@ export const metadata: Metadata = {
   creator: SITE_NAME,
   publisher: SITE_NAME,
   alternates: { canonical: '/' },
+  manifest: '/manifest.webmanifest',
+  appleWebApp: { capable: true, statusBarStyle: 'default', title: SITE_NAME },
   icons: { icon: '/image.png', apple: '/image.png' },
   robots: {
     index: true,

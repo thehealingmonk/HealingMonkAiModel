@@ -1,10 +1,11 @@
-import { Users, FileText, CalendarDays, IndianRupee, Stethoscope, ClipboardList, ArrowRight, TrendingUp } from 'lucide-react';
+import { Users, FileText, CalendarDays, IndianRupee, Stethoscope, ClipboardList, ArrowRight, TrendingUp, Smartphone } from 'lucide-react';
 import { getAdminStats } from '@/services/api';
 import { formatMoney } from '@/utils/formatter';
 import { useLiveData } from '@/hooks/useLiveData';
 import LiveBadge from '@/features/admin/LiveBadge';
 import CountUp from '@/components/ui/CountUp';
 import AdminAnalytics from '@/features/admin/AdminAnalytics';
+import MobileAppCard from '@/features/admin/MobileAppCard';
 
 interface Props {
   /** Navigate to a section (patients / reports / appointments / payments / users). */
@@ -69,6 +70,14 @@ export default function AdminDashboard({ onNavigate }: Props) {
 
       {/* Charts: revenue / patients / reports trends, appointment mix, top doctors */}
       <AdminAnalytics />
+
+      {/* Install / share the mobile app (QR + link) */}
+      <h3 className="mb-3 mt-8 flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-slate-400" data-reveal="fade">
+        <Smartphone className="h-4 w-4 text-emerald-400" /> Mobile app
+      </h3>
+      <div className="mb-8">
+        <MobileAppCard />
+      </div>
 
       {/* Staff modules */}
       <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-slate-400" data-reveal="fade">

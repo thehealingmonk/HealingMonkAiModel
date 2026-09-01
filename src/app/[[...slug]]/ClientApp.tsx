@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import PWARegister from '@/components/common/PWARegister';
 
 // The whole app is client-only (camera, MediaPipe WASM, react-router, browser
 // storage), so we load it with ssr:false — Next never tries to render it on the
@@ -16,5 +17,10 @@ const AppShell = dynamic(() => import('@/features/router/AppShell'), {
 });
 
 export default function ClientApp() {
-  return <AppShell />;
+  return (
+    <>
+      <PWARegister />
+      <AppShell />
+    </>
+  );
 }
