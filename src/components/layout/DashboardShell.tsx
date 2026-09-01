@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { Activity, LogOut } from 'lucide-react';
 import AiBackdrop from '@/components/common/AiBackdrop';
+import PanelLockToggle from '@/components/common/PanelLockToggle';
 
 /**
  * Shared dark "AI scan" chrome for every signed-in console (admin, doctor,
@@ -38,13 +39,14 @@ export default function DashboardShell({
               <p className="text-xs leading-tight text-teal-300/80">{consoleName}</p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            {userLabel && <span className="hidden text-sm text-slate-300 sm:inline">{userLabel}</span>}
+          <div className="flex items-center gap-2 sm:gap-4">
+            {userLabel && <span className="hidden text-sm text-slate-300 md:inline">{userLabel}</span>}
+            <PanelLockToggle />
             <button
               onClick={onLogout}
               className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-300 transition-colors hover:text-white"
             >
-              <LogOut className="h-4 w-4" /> Sign out
+              <LogOut className="h-4 w-4" /> <span className="hidden sm:inline">Sign out</span>
             </button>
           </div>
         </div>

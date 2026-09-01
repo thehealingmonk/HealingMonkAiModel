@@ -2,7 +2,6 @@
 
 import dynamic from 'next/dynamic';
 import PWARegister from '@/components/common/PWARegister';
-import { FloatingInstallButton } from '@/components/common/InstallAppButton';
 
 // The whole app is client-only (camera, MediaPipe WASM, react-router, browser
 // storage), so we load it with ssr:false — Next never tries to render it on the
@@ -22,7 +21,6 @@ export default function ClientApp() {
     <>
       <PWARegister />
       <AppShell />
-      <FloatingInstallButton />
     </>
   );
 }

@@ -8,6 +8,7 @@ import {
   register as apiRegister,
   logout as apiLogout,
 } from '@/services/api';
+import { setPanelLock } from '@/lib/panelLock';
 // heelo
 interface AuthContextValue {
   user: AuthUser | null;
@@ -69,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     apiLogout();
+    setPanelLock(false); // signing out returns to normal (no forced panel on next launch)
     setUser(null);
     setPermissions([]);
   };

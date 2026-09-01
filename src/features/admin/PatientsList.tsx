@@ -170,7 +170,7 @@ export default function PatientsList() {
             {loaded.length === 0 ? 'No patients yet.' : 'No patients match these filters.'}
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-white/5 text-slate-400 text-left">
               <tr>
                 <th className="px-4 py-3 font-medium">ID</th>

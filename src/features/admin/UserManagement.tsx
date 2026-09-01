@@ -370,13 +370,13 @@ export default function UserManagement({ initialRole = 'all' }: Props) {
           </div>
         </div>
       )}
-      <div className="glass-dark rounded-xl overflow-hidden">
+      <div className="glass-dark rounded-xl overflow-x-auto">
         {loading ? (
           <div className="p-10 text-center text-slate-400">Loading users…</div>
         ) : users.length === 0 ? (
           <div className="p-10 text-center text-slate-400">No users found.</div>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-white/5 text-slate-400 text-left">
               <tr>
                 <th className="px-4 py-3 w-10">
@@ -655,13 +655,13 @@ function PatientAccountsPanel() {
         </div>
       )}
 
-      <div className="glass-dark rounded-xl overflow-hidden">
+      <div className="glass-dark rounded-xl overflow-x-auto">
         {loading ? (
           <div className="p-10 text-center text-slate-400">Loading patients…</div>
         ) : filtered.length === 0 ? (
           <div className="p-10 text-center text-slate-400">No patients found.</div>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-white/5 text-slate-400 text-left">
               <tr>
                 <th className="px-4 py-3 font-medium">Patient</th>

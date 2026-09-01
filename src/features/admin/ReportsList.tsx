@@ -125,8 +125,8 @@ function ReportDetailModal({ report, onClose }: { report: ReportListItem; onClos
             {report.findings.length === 0 ? (
               <p className="text-sm text-slate-400">No findings recorded.</p>
             ) : (
-              <div className="border border-white/10 rounded-xl overflow-hidden">
-                <table className="w-full text-sm">
+              <div className="border border-white/10 rounded-xl overflow-x-auto">
+                <table className="w-full min-w-[640px] text-sm">
                   <thead className="bg-white/5 text-slate-400 text-left">
                     <tr>
                       <th className="px-3 py-2 font-medium">Assessment</th>
@@ -459,7 +459,7 @@ export default function ReportsList() {
             {allReports.length === 0 ? 'No reports yet.' : 'No reports match these filters.'}
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-white/5 text-slate-400 text-left">
               <tr>
                 <th className="px-4 py-3 w-10">

@@ -56,7 +56,7 @@ export default function PaymentsList() {
         ) : payments.length === 0 ? (
           <div className="p-10 text-center text-slate-400">No payments recorded yet.</div>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-white/5 text-slate-400 text-left">
               <tr>
                 <th className="px-4 py-3 font-medium">Patient</th>

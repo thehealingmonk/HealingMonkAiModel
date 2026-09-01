@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Activity } from 'lucide-react';
+import { InstallAppButton } from '@/components/common/InstallAppButton';
 
 /** Marketing footer with grouped links and the clinical disclaimer. */
 export default function SiteFooter() {
@@ -17,6 +18,10 @@ export default function SiteFooter() {
             <p className="mt-3 max-w-xs text-sm text-slate-500">
               AI posture &amp; movement assessment that runs entirely in your browser — private by design.
             </p>
+            {/* Install HealingMonk as an app (only shows where the browser supports it). */}
+            <div className="mt-4">
+              <InstallAppButton />
+            </div>
           </div>
 
           <FooterCol

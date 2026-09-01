@@ -2,6 +2,7 @@ import { lazy, Suspense, ReactElement } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/store/auth.store';
 import { Role } from '@/services/api';
+import { isPanelLocked } from '@/lib/panelLock';
 import RouteMeta from '@/components/common/RouteMeta';
 
 // Each top-level app is lazy-loaded so a signed-in doctor never downloads the
@@ -44,6 +45,19 @@ function RequireRole({ role, children }: { role: Role; children: ReactElement })
   return children;
 }
 
+// Home entry: a signed-in user who has "locked" the app to their panel jumps
+// straight into that dashboard on launch instead of seeing the marketing home.
+// Only the exact root ("/") redirects, so public pages (pricing, about, the free
+// assessment demo) stay reachable.
+function HomeEntry() {
+  const { user } = useAuth();
+  const location = useLocation();
+  if (user && location.pathname === '/' && isPanelLocked()) {
+    return <Navigate to={HOME[user.role]} replace />;
+  }
+  return <PublicApp />;
+}
+
 export default function App() {
   const { user, loading } = useAuth();
   if (loading) return <Splash />;
@@ -62,7 +76,7 @@ export default function App() {
       <Route path="/patient/*" element={<RequireRole role="patient"><PatientHome /></RequireRole>} />
 
       {/* Public site + free AI assessment demo (also the catch-all) */}
-      <Route path="/*" element={<PublicApp />} />
+      <Route path="/*" element={<HomeEntry />} />
     </Routes>
     </Suspense>
   );
