@@ -34,7 +34,12 @@ export const metadata: Metadata = {
   alternates: { canonical: '/' },
   manifest: '/manifest.webmanifest',
   appleWebApp: { capable: true, statusBarStyle: 'default', title: SITE_NAME },
-  icons: { icon: '/image.png', apple: '/image.png' },
+  // Favicon comes from app/icon.svg (Next file convention). The Apple touch icon
+  // and PWA manifest icons are the pre-rendered brand PNGs in /public.
+  icons: {
+    icon: '/icon.svg',
+    apple: '/apple-icon.png',
+  },
   robots: {
     index: true,
     follow: true,
@@ -79,7 +84,7 @@ const jsonLd = {
       '@id': `${SITE_URL}/#organization`,
       name: SITE_NAME,
       url: SITE_URL,
-      logo: absoluteUrl('/image.png'),
+      logo: absoluteUrl('/icon-512.png'),
       description: SITE_DESCRIPTION,
     },
     {
