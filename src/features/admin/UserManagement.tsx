@@ -85,10 +85,14 @@ export default function UserManagement({ initialRole = 'all' }: Props) {
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Multi-select for bulk deletion of staff accounts.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   async function load() {
     setLoading(true);
     setError('');
+    setSelectedIds(new Set());
     try {
       const { users } = await listUsers(filter === 'all' ? undefined : filter);
       setUsers(users);
@@ -168,6 +172,40 @@ export default function UserManagement({ initialRole = 'all' }: Props) {
       setError(err instanceof Error ? err.message : 'Could not delete user');
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  // ---- Multi-select (excludes your own account, which can't be deleted) ----
+  const selectableIds = users.filter((u) => u.id !== me?.id).map((u) => u.id);
+  const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));
+  const someSelected = selectableIds.some((id) => selectedIds.has(id));
+
+  const toggleOne = (id: string) =>
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+
+  const toggleAll = () =>
+    setSelectedIds((prev) => (selectableIds.every((id) => prev.has(id)) ? new Set() : new Set(selectableIds)));
+
+  // Delete every selected staff account in one action.
+  const bulkDelete = async () => {
+    const ids = users.filter((u) => selectedIds.has(u.id) && u.id !== me?.id).map((u) => u.id);
+    if (ids.length === 0) return;
+    if (!window.confirm(`Delete ${ids.length} selected user${ids.length > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    setError('');
+    setBulkDeleting(true);
+    try {
+      for (const id of ids) await deleteUser(id);
+      setUsers((prev) => prev.filter((x) => !ids.includes(x.id)));
+      setSelectedIds(new Set());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete selected users');
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -307,6 +345,31 @@ export default function UserManagement({ initialRole = 'all' }: Props) {
       {filter === 'patient' ? (
         <PatientAccountsPanel />
       ) : (
+      <>
+      {/* Bulk action bar — appears once one or more users are selected. */}
+      {someSelected && (
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5">
+          <span className="text-sm font-medium text-emerald-200">
+            {[...selectedIds].filter((id) => selectableIds.includes(id)).length} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10"
+            >
+              Clear
+            </button>
+            <button
+              onClick={bulkDelete}
+              disabled={bulkDeleting}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-500 disabled:opacity-60"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {bulkDeleting ? 'Deleting…' : 'Delete selected'}
+            </button>
+          </div>
+        </div>
+      )}
       <div className="glass-dark rounded-xl overflow-hidden">
         {loading ? (
           <div className="p-10 text-center text-slate-400">Loading users…</div>
@@ -316,6 +379,18 @@ export default function UserManagement({ initialRole = 'all' }: Props) {
           <table className="w-full text-sm">
             <thead className="bg-white/5 text-slate-400 text-left">
               <tr>
+                <th className="px-4 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someSelected && !allSelected;
+                    }}
+                    onChange={toggleAll}
+                    className="h-4 w-4 cursor-pointer accent-emerald-500"
+                    aria-label="Select all users"
+                  />
+                </th>
                 <th className="px-4 py-3 font-medium">Name</th>
                 <th className="px-4 py-3 font-medium">Email</th>
                 <th className="px-4 py-3 font-medium">Role</th>
@@ -327,7 +402,18 @@ export default function UserManagement({ initialRole = 'all' }: Props) {
               {users.map((u) => {
                 const isSelf = me?.id === u.id;
                 return (
-                  <tr key={u.id} className="hover:bg-white/5">
+                  <tr key={u.id} className={selectedIds.has(u.id) ? 'bg-emerald-500/10' : 'hover:bg-white/5'}>
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(u.id)}
+                        onChange={() => toggleOne(u.id)}
+                        disabled={isSelf}
+                        title={isSelf ? 'You cannot delete your own account' : ''}
+                        className="h-4 w-4 cursor-pointer accent-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
+                        aria-label={`Select ${u.name}`}
+                      />
+                    </td>
                     <td className="px-4 py-3 font-medium text-white">
                       {u.name}
                       {isSelf && <span className="ml-2 text-xs text-slate-400">(you)</span>}
@@ -389,6 +475,7 @@ export default function UserManagement({ initialRole = 'all' }: Props) {
           </table>
         )}
       </div>
+      </>
       )}
 
       {editing && (

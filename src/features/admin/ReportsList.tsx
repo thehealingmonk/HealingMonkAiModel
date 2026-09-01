@@ -232,6 +232,9 @@ export default function ReportsList() {
   const [selected, setSelected] = useState<ReportListItem | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Multi-select for bulk deletion.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [dlError, setDlError] = useState('');
   const error = dlError || loadError;
 
@@ -320,11 +323,50 @@ export default function ReportsList() {
     setDeletingId(r.id);
     try {
       await deleteReport(r.id);
+      setSelectedIds((prev) => {
+        const n = new Set(prev);
+        n.delete(r.id);
+        return n;
+      });
       await refresh();
     } catch (e) {
       setDlError(e instanceof Error ? e.message : 'Could not delete report');
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  // ---- Multi-select ----
+  const visibleIds = reports.map((r) => r.id);
+  const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  const someSelected = visibleIds.some((id) => selectedIds.has(id));
+
+  const toggleOne = (id: string) =>
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+
+  const toggleAll = () =>
+    setSelectedIds((prev) => (visibleIds.every((id) => prev.has(id)) ? new Set() : new Set(visibleIds)));
+
+  // Delete every selected report in one action (loops the single-delete API).
+  const bulkDelete = async () => {
+    const ids = reports.filter((r) => selectedIds.has(r.id)).map((r) => r.id);
+    if (ids.length === 0) return;
+    if (!window.confirm(`Delete ${ids.length} selected report${ids.length > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    setDlError('');
+    setBulkDeleting(true);
+    try {
+      for (const id of ids) await deleteReport(id);
+      setSelectedIds(new Set());
+      await refresh();
+    } catch (e) {
+      setDlError(e instanceof Error ? e.message : 'Could not delete selected reports');
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -384,9 +426,34 @@ export default function ReportsList() {
         </label>
       </div>
 
+      {/* Bulk action bar — appears once one or more reports are selected. */}
+      {someSelected && (
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5">
+          <span className="text-sm font-medium text-emerald-200">
+            {[...selectedIds].filter((id) => visibleIds.includes(id)).length} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10"
+            >
+              Clear
+            </button>
+            <button
+              onClick={bulkDelete}
+              disabled={bulkDeleting}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-500 disabled:opacity-60"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {bulkDeleting ? 'Deleting…' : 'Delete selected'}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="glass-dark rounded-2xl overflow-x-auto" data-reveal>
         {loading ? (
-          <TableSkeleton rows={7} cols={7} />
+          <TableSkeleton rows={7} cols={8} />
         ) : reports.length === 0 ? (
           <div className="p-10 text-center text-slate-400">
             {allReports.length === 0 ? 'No reports yet.' : 'No reports match these filters.'}
@@ -395,6 +462,18 @@ export default function ReportsList() {
           <table className="w-full text-sm">
             <thead className="bg-white/5 text-slate-400 text-left">
               <tr>
+                <th className="px-4 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someSelected && !allSelected;
+                    }}
+                    onChange={toggleAll}
+                    className="h-4 w-4 cursor-pointer accent-emerald-500"
+                    aria-label="Select all reports"
+                  />
+                </th>
                 <th className="px-4 py-3 font-medium">Patient</th>
                 <th className="px-4 py-3 font-medium">Doctor</th>
                 <th className="px-4 py-3 font-medium">Score</th>
@@ -409,9 +488,20 @@ export default function ReportsList() {
                 <tr
                   key={r.id}
                   onClick={() => viewReport(r)}
-                  className="cursor-pointer hover:bg-white/5 transition-colors"
+                  className={`cursor-pointer transition-colors ${
+                    selectedIds.has(r.id) ? 'bg-emerald-500/10' : 'hover:bg-white/5'
+                  }`}
                   title="View this report"
                 >
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(r.id)}
+                      onChange={() => toggleOne(r.id)}
+                      className="h-4 w-4 cursor-pointer accent-emerald-500"
+                      aria-label={`Select report for ${r.patientInfo?.name || 'patient'}`}
+                    />
+                  </td>
                   <td className="px-4 py-3 font-medium text-white">
                     {r.patientInfo?.name || '—'}
                     {r.patientInfo?.patientId && (

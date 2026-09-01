@@ -10,9 +10,11 @@ import {
   GaugeConfig,
   ASSESSMENT_GAUGE,
   View,
+  CLINICAL_ASSESSMENTS,
 } from '@/lib/clinicalKnowledge';
+import PoseIllustration from '@/components/common/PoseIllustration';
 import { useState, useRef, useEffect, ReactNode } from 'react';
-import { FileText, Printer, RotateCcw, Activity, AlertTriangle, Stethoscope, ShieldAlert, Download, Link2, Check, ZoomIn, X, ImagePlus, Upload, FolderPlus, Plus, ImageIcon } from 'lucide-react';
+import { FileText, Printer, RotateCcw, Activity, AlertTriangle, Stethoscope, ShieldAlert, Download, Link2, Check, ZoomIn, X, ImagePlus, Upload, FolderPlus, Plus, ImageIcon, Trash2 } from 'lucide-react';
 import { downloadReportPdf } from '@/lib/reportPdf';
 import type { DoctorFindingData } from '@/services/report.service';
 import { listIdealPostures, saveIdealPosture, IDEAL_POSTURE_CONDITIONS, type IdealPostureSet, type IdealPostureImage } from '@/services/api';
@@ -124,6 +126,18 @@ export default function ClinicalReport({ patient, captures, extraShots = [], onR
       prev.some((s) => s.condition === condition)
         ? prev.map((s) => (s.condition === condition ? { ...s, images: nextImages } : s))
         : [...prev, { condition, images: nextImages, poses: [] }]
+    );
+  };
+
+  // Remove an image from a dictionary section and persist the change to the
+  // shared clinic library (doctor/admin only).
+  const removeImageFromLibrary = async (condition: string, index: number) => {
+    const existing = librarySets.find((s) => s.condition === condition);
+    if (!existing) return;
+    const nextImages = existing.images.filter((_, i) => i !== index);
+    await saveIdealPosture(condition, nextImages, existing.poses ?? []);
+    setLibrarySets((prev) =>
+      prev.map((s) => (s.condition === condition ? { ...s, images: nextImages } : s))
     );
   };
 
@@ -311,6 +325,7 @@ export default function ClinicalReport({ patient, captures, extraShots = [], onR
                           idealPostures={idealPostures}
                           librarySets={librarySets}
                           onAddToLibrary={addImageToLibrary}
+                          onRemoveFromLibrary={removeImageFromLibrary}
                           canEditLibrary={doctorMode}
                         />
                       ))}
@@ -423,6 +438,7 @@ function FindingCard({
   idealPostures = [],
   librarySets = [],
   onAddToLibrary,
+  onRemoveFromLibrary,
   canEditLibrary = false,
 }: {
   capture: AssessmentCapture;
@@ -436,6 +452,8 @@ function FindingCard({
   librarySets?: IdealPostureSet[];
   /** Persist a new image into a library section (doctor/admin). */
   onAddToLibrary?: (condition: string, image: IdealPostureImage) => Promise<void>;
+  /** Remove an image from a library section (doctor/admin). */
+  onRemoveFromLibrary?: (condition: string, index: number) => Promise<void>;
   /** Whether the current user may add images to the shared library. */
   canEditLibrary?: boolean;
 }) {
@@ -503,6 +521,7 @@ function FindingCard({
               <ManualIdealPicker
                 librarySets={librarySets}
                 onAddToLibrary={onAddToLibrary}
+                onRemoveFromLibrary={onRemoveFromLibrary}
                 canEdit={canEditLibrary}
               />
             )}
@@ -830,6 +849,69 @@ function fileToLibraryDataUrl(file: File, maxPx = 900, quality = 0.82): Promise<
   });
 }
 
+// Rasterise a rendered PoseIllustration <svg> into a JPEG data URL, so a built-in
+// position illustration can be picked as a reference image exactly like a photo.
+function svgToJpegDataUrl(svg: SVGSVGElement, targetH = 560, quality = 0.85, bg = '#f8fafc'): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const rect = svg.getBoundingClientRect();
+    const w = rect.width || 300;
+    const h = rect.height || 400;
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute('width', String(w));
+    clone.setAttribute('height', String(h));
+    if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const xml = new XMLSerializer().serializeToString(clone);
+    const src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
+    const img = new Image();
+    img.onload = () => {
+      const scale = targetH / h;
+      const outW = Math.round(w * scale);
+      const outH = Math.round(h * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = outW;
+      canvas.height = outH;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('Canvas not supported'));
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, outW, outH);
+      ctx.drawImage(img, 0, 0, outW, outH);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => reject(new Error('Could not render illustration'));
+    img.src = src;
+  });
+}
+
+// Which capture-pose body regions feed each dictionary section, so the built-in
+// "Select Position" illustrations show up under the matching section.
+const SECTION_REGIONS: Record<string, string[]> = {
+  Neck: ['Cervical'],
+  Shoulder: ['Shoulder'],
+  'Upper Back': ['Thoracic'],
+  'Lower Back': ['Spine', 'Pelvis'],
+  Hip: ['Hip'],
+  Knee: ['Knee'],
+  Ankle: ['Ankle'],
+};
+
+// Sentinel section that lists every position from the Select Position page, so
+// no capture pose is ever out of reach in the dictionary.
+const ALL_POSITIONS = 'All Positions';
+
+// The built-in position illustrations to show for a dictionary section. "All
+// Positions" returns everything; a clinical section returns its mapped regions;
+// a custom section falls back to any pose whose region/name matches its text.
+function positionsForSection(section: string) {
+  if (section === ALL_POSITIONS) return CLINICAL_ASSESSMENTS;
+  const regions = SECTION_REGIONS[section];
+  if (regions) return CLINICAL_ASSESSMENTS.filter((a) => regions.includes(a.bodyRegion));
+  const q = section.trim().toLowerCase();
+  if (!q) return [];
+  return CLINICAL_ASSESSMENTS.filter(
+    (a) => a.bodyRegion.toLowerCase().includes(q) || a.name.toLowerCase().includes(q)
+  );
+}
+
 /**
  * Reference column for a non-default finding (shoulder, neck, …). Starts blank
  * with a "Select image" control — no auto/default illustration. Clicking it
@@ -842,10 +924,12 @@ function fileToLibraryDataUrl(file: File, maxPx = 900, quality = 0.82): Promise<
 function ManualIdealPicker({
   librarySets,
   onAddToLibrary,
+  onRemoveFromLibrary,
   canEdit,
 }: {
   librarySets: IdealPostureSet[];
   onAddToLibrary?: (condition: string, image: IdealPostureImage) => Promise<void>;
+  onRemoveFromLibrary?: (condition: string, index: number) => Promise<void>;
   canEdit: boolean;
 }) {
   const [picked, setPicked] = useState<{ src: string; label?: string } | null>(null);
@@ -864,44 +948,50 @@ function ManualIdealPicker({
     e.target.value = '';
   };
 
-  if (picked) {
-    return (
-      <div className="relative">
-        <ZoomableImage
-          src={picked.src}
-          alt={picked.label || 'Selected reference'}
-          heightClass="h-80 sm:h-96"
-          badge={picked.label ? `Ideal · ${picked.label}` : 'Ideal Position'}
-          variant="reference"
-        />
-        <button
-          type="button"
-          onClick={() => setPicked(null)}
-          className="absolute z-30 top-1 left-1 rounded bg-black/60 hover:bg-black/80 text-white text-[10px] font-semibold px-1.5 py-0.5 print:hidden"
-        >
-          Change
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div className="relative flex h-80 sm:h-96 flex-col items-center justify-center bg-slate-50 p-4 print:hidden">
+    <>
+      {picked ? (
+        // A reference is chosen. Both the "Change" button and clicking the image
+        // reopen the dictionary, so a wrong pick can be swapped for the right one.
+        <div className="relative">
+          <button type="button" onClick={() => setOpen(true)} className="block w-full print:pointer-events-none">
+            <ZoomableImage
+              src={picked.src}
+              alt={picked.label || 'Selected reference'}
+              heightClass="h-80 sm:h-96"
+              badge={picked.label ? `Ideal · ${picked.label}` : 'Ideal Position'}
+              variant="reference"
+            />
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="absolute z-30 top-1 left-1 rounded bg-black/60 hover:bg-black/80 text-white text-[10px] font-semibold px-1.5 py-0.5 print:hidden"
+          >
+            Change
+          </button>
+        </div>
+      ) : (
+        <div className="relative flex h-80 sm:h-96 flex-col items-center justify-center bg-slate-50 p-4 print:hidden">
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 shadow-sm"
+          >
+            <ImagePlus className="w-4 h-4" /> Select image
+          </button>
+          <p className="mt-2 text-[11px] text-slate-400">Ideal reference (optional)</p>
+        </div>
+      )}
+
       <input ref={oneOffRef} type="file" accept="image/*" onChange={onOneOffFile} className="hidden" />
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 shadow-sm"
-      >
-        <ImagePlus className="w-4 h-4" /> Select image
-      </button>
-      <p className="mt-2 text-[11px] text-slate-400">Ideal reference (optional)</p>
 
       {open && (
         <ReferenceDictionary
           librarySets={librarySets}
           canEdit={canEdit}
           onAddToLibrary={onAddToLibrary}
+          onRemoveFromLibrary={onRemoveFromLibrary}
           onUploadOneOff={() => oneOffRef.current?.click()}
           onPick={(src, label) => {
             setPicked({ src, label });
@@ -910,7 +1000,7 @@ function ManualIdealPicker({
           onClose={() => setOpen(false)}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -924,6 +1014,7 @@ function ReferenceDictionary({
   librarySets,
   canEdit,
   onAddToLibrary,
+  onRemoveFromLibrary,
   onUploadOneOff,
   onPick,
   onClose,
@@ -931,6 +1022,7 @@ function ReferenceDictionary({
   librarySets: IdealPostureSet[];
   canEdit: boolean;
   onAddToLibrary?: (condition: string, image: IdealPostureImage) => Promise<void>;
+  onRemoveFromLibrary?: (condition: string, index: number) => Promise<void>;
   onUploadOneOff: () => void;
   onPick: (src: string, label?: string) => void;
   onClose: () => void;
@@ -943,6 +1035,7 @@ function ReferenceDictionary({
       ...IDEAL_POSTURE_CONDITIONS,
       ...librarySets.map((s) => s.condition),
       ...extraSections,
+      ALL_POSITIONS,
     ])
   );
   const [active, setActive] = useState<string>(sections[0] ?? 'Shoulder');
@@ -981,6 +1074,20 @@ function ReferenceDictionary({
     }
   };
 
+  const removeImage = async (index: number) => {
+    if (!onRemoveFromLibrary) return;
+    if (!window.confirm('Remove this image from the library?')) return;
+    setError('');
+    setBusy(true);
+    try {
+      await onRemoveFromLibrary(active, index);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not remove image');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 print:hidden"
@@ -996,9 +1103,28 @@ function ReferenceDictionary({
             <h3 className="text-sm font-semibold text-slate-800">Reference Image Library</h3>
             <p className="text-[11px] text-slate-400">Pick a section, then choose a reference image.</p>
           </div>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600" aria-label="Close">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {canEdit && onAddToLibrary && active !== ALL_POSITIONS && (
+              <label
+                className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-90 ${
+                  busy ? 'pointer-events-none opacity-60' : ''
+                }`}
+                title={`Add a new image to ${active}`}
+              >
+                <Plus className="w-3.5 h-3.5" /> {busy ? 'Adding…' : 'Add new image'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => onAddFiles(e.target.files)}
+                />
+              </label>
+            )}
+            <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600" aria-label="Close">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Section tabs */}
@@ -1041,69 +1167,82 @@ function ReferenceDictionary({
           {error && (
             <div className="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-600">{error}</div>
           )}
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-slate-500">
-              {active} · {activeImages.length} image{activeImages.length === 1 ? '' : 's'}
-            </span>
-            {canEdit && onAddToLibrary && (
-              <label
-                className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 ${
-                  busy ? 'pointer-events-none opacity-50' : ''
-                }`}
-                title={`Add images to ${active}`}
-              >
-                <Upload className="w-3.5 h-3.5" /> {busy ? 'Adding…' : `Add to ${active}`}
-                <input
-                  ref={addRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => onAddFiles(e.target.files)}
-                />
-              </label>
-            )}
-          </div>
+          {active !== ALL_POSITIONS && (
+            <>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-slate-500">
+                  {active} · {activeImages.length} image{activeImages.length === 1 ? '' : 's'}
+                </span>
+                {canEdit && onAddToLibrary && (
+                  <label
+                    className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 ${
+                      busy ? 'pointer-events-none opacity-50' : ''
+                    }`}
+                    title={`Add images to ${active}`}
+                  >
+                    <Upload className="w-3.5 h-3.5" /> {busy ? 'Adding…' : `Add to ${active}`}
+                    <input
+                      ref={addRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => onAddFiles(e.target.files)}
+                    />
+                  </label>
+                )}
+              </div>
 
-          {activeImages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 py-12 text-center text-slate-400">
-              <ImageIcon className="mb-2 h-8 w-8 text-slate-300" />
-              <p className="text-sm">No reference images in {active} yet.</p>
-              {canEdit && onAddToLibrary && (
-                <button
-                  type="button"
-                  onClick={() => addRef.current?.click()}
-                  className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 hover:text-emerald-700"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Add the first image
-                </button>
+              {activeImages.length > 0 && (
+                <div className="mb-4 grid grid-cols-3 gap-2.5 sm:grid-cols-4">
+                  {activeImages.map((im, i) => (
+                    <div
+                      key={i}
+                      className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-slate-200 bg-slate-50 hover:ring-2 hover:ring-emerald-400"
+                      title={im.label || `${active} ${i + 1}`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => onPick(im.imageData, im.label || active)}
+                        className="absolute inset-0 h-full w-full"
+                        aria-label={`Use ${im.label || active} reference`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={im.imageData}
+                          alt={im.label || `${active} reference ${i + 1}`}
+                          className="h-full w-full object-contain"
+                        />
+                      </button>
+                      {im.label && (
+                        <span className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-black/55 px-1.5 py-0.5 text-[10px] text-white">
+                          {im.label}
+                        </span>
+                      )}
+                      {canEdit && onRemoveFromLibrary && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeImage(i);
+                          }}
+                          disabled={busy}
+                          className="absolute right-1 top-1 z-10 rounded-md bg-rose-600/90 p-1 text-white opacity-0 shadow-sm transition-opacity hover:bg-rose-600 group-hover:opacity-100 disabled:opacity-40"
+                          title="Delete from library"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
-            </div>
-          ) : (
-            <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
-              {activeImages.map((im, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => onPick(im.imageData, im.label || active)}
-                  className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-slate-200 bg-slate-50 hover:ring-2 hover:ring-emerald-400"
-                  title={im.label || `${active} ${i + 1}`}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={im.imageData}
-                    alt={im.label || `${active} reference ${i + 1}`}
-                    className="h-full w-full object-contain"
-                  />
-                  {im.label && (
-                    <span className="absolute inset-x-0 bottom-0 truncate bg-black/55 px-1.5 py-0.5 text-[10px] text-white">
-                      {im.label}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
+            </>
           )}
+
+          {/* Built-in positions from the Select Position page — always available
+              to pick, grouped under the matching section. */}
+          <PositionGallery section={active} onPick={onPick} />
         </div>
 
         {/* Footer — one-off upload straight into this report (not saved to library) */}
@@ -1118,6 +1257,81 @@ function ReferenceDictionary({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * The built-in position illustrations (from the Select Position page) for one
+ * dictionary section. Each card renders the anatomical illustration; clicking it
+ * rasterises that exact <svg> to an image and picks it as the report reference.
+ */
+function PositionGallery({
+  section,
+  onPick,
+}: {
+  section: string;
+  onPick: (src: string, label?: string) => void;
+}) {
+  const poses = positionsForSection(section);
+  if (poses.length === 0) return null;
+
+  return (
+    <div>
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+        Positions {section === ALL_POSITIONS ? '' : `· ${section}`}
+      </p>
+      <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
+        {poses.map((a) => (
+          <PositionCard key={a.id} poseId={a.id} label={a.name} onPick={onPick} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// One position card. Holds a ref to its own illustration so it can rasterise
+// exactly this <svg> to a JPEG when picked.
+function PositionCard({
+  poseId,
+  label,
+  onPick,
+}: {
+  poseId: string;
+  label: string;
+  onPick: (src: string, label?: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  const handlePick = async () => {
+    const svg = ref.current?.querySelector('svg');
+    if (!svg) return;
+    setBusy(true);
+    try {
+      const src = await svgToJpegDataUrl(svg as unknown as SVGSVGElement);
+      onPick(src, label);
+    } catch {
+      /* ignore — picking simply does nothing if the illustration can't render */
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handlePick}
+      disabled={busy}
+      className="group relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50 text-left hover:ring-2 hover:ring-emerald-400 disabled:opacity-60"
+      title={label}
+    >
+      <div ref={ref} className="aspect-[3/4] w-full bg-slate-50">
+        <PoseIllustration pose={poseId} className="h-full w-full" />
+      </div>
+      <span className="block truncate border-t border-slate-100 px-1.5 py-1 text-[10px] font-medium text-slate-600">
+        {label}
+      </span>
+    </button>
   );
 }
 
