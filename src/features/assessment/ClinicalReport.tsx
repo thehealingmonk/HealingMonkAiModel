@@ -12,10 +12,10 @@ import {
   View,
 } from '@/lib/clinicalKnowledge';
 import { useState, useRef, useEffect, ReactNode } from 'react';
-import { FileText, Printer, RotateCcw, Activity, AlertTriangle, Stethoscope, ShieldAlert, Download, Link2, Check, ZoomIn, X, ImagePlus, Upload } from 'lucide-react';
+import { FileText, Printer, RotateCcw, Activity, AlertTriangle, Stethoscope, ShieldAlert, Download, Link2, Check, ZoomIn, X, ImagePlus, Upload, FolderPlus, Plus, ImageIcon } from 'lucide-react';
 import { downloadReportPdf } from '@/lib/reportPdf';
 import type { DoctorFindingData } from '@/services/report.service';
-import { listIdealPostures, type IdealPostureSet } from '@/services/api';
+import { listIdealPostures, saveIdealPosture, IDEAL_POSTURE_CONDITIONS, type IdealPostureSet, type IdealPostureImage } from '@/services/api';
 
 interface Props {
   patient: PatientInfo;
@@ -92,23 +92,18 @@ export default function ClinicalReport({ patient, captures, extraShots = [], onR
     .map((c) => ({ capture: c, assessment: getAssessment(c.assessmentId)! }))
     .filter((f) => f.assessment);
 
-  // Quick-pick images for the manual "Select image" control on non-default
-  // findings. Seed from the ideal-posture sets already on this report, then
-  // fetch the FULL doctor-panel library so every curated image is available —
-  // not just the ones auto-matched to the patient's pain areas. If the fetch
-  // fails (offline / not authenticated) we keep the seeded subset.
-  const [libraryImages, setLibraryImages] = useState<{ imageData: string; label?: string }[]>(() =>
-    idealPostures.flatMap((s) => s.images.map((img) => ({ imageData: img.imageData, label: img.label || s.condition })))
-  );
+  // The reference-image "dictionary" for the manual "Select image" control on
+  // non-default findings. Kept grouped by section/condition (Shoulder, Neck, …)
+  // exactly like the doctor's Ideal Posture Library, so the picker can open as a
+  // sectioned dictionary. Seed from the ideal-posture sets already on this
+  // report, then fetch the FULL doctor-panel library so every curated section is
+  // available — not just the ones auto-matched to the patient's pain areas.
+  const [librarySets, setLibrarySets] = useState<IdealPostureSet[]>(() => idealPostures);
   useEffect(() => {
     let cancelled = false;
     listIdealPostures()
       .then(({ sets }) => {
-        if (cancelled) return;
-        const imgs = sets.flatMap((s) =>
-          s.images.map((img) => ({ imageData: img.imageData, label: img.label || s.condition }))
-        );
-        if (imgs.length) setLibraryImages(imgs);
+        if (!cancelled && sets.length) setLibrarySets(sets);
       })
       .catch(() => {
         /* keep the seeded subset */
@@ -117,6 +112,20 @@ export default function ClinicalReport({ patient, captures, extraShots = [], onR
       cancelled = true;
     };
   }, []);
+
+  // Add an uploaded image into one dictionary section and persist it to the
+  // shared clinic library (doctor/admin only — the API enforces the role). The
+  // grouped state is updated so every open picker in this report reflects it.
+  const addImageToLibrary = async (condition: string, image: IdealPostureImage) => {
+    const existing = librarySets.find((s) => s.condition === condition);
+    const nextImages = [...(existing?.images ?? []), image];
+    await saveIdealPosture(condition, nextImages, existing?.poses ?? []);
+    setLibrarySets((prev) =>
+      prev.some((s) => s.condition === condition)
+        ? prev.map((s) => (s.condition === condition ? { ...s, images: nextImages } : s))
+        : [...prev, { condition, images: nextImages, poses: [] }]
+    );
+  };
 
   const flagged = findings.filter(
     (f) => f.capture.severity && f.capture.severity !== 'normal'
@@ -300,7 +309,9 @@ export default function ClinicalReport({ patient, captures, extraShots = [], onR
                           initialDoctorData={doctorData?.[assessment.id]}
                           onDoctorDataChange={onDoctorDataChange}
                           idealPostures={idealPostures}
-                          libraryImages={libraryImages}
+                          librarySets={librarySets}
+                          onAddToLibrary={addImageToLibrary}
+                          canEditLibrary={doctorMode}
                         />
                       ))}
                     </div>
@@ -410,7 +421,9 @@ function FindingCard({
   initialDoctorData,
   onDoctorDataChange,
   idealPostures = [],
-  libraryImages = [],
+  librarySets = [],
+  onAddToLibrary,
+  canEditLibrary = false,
 }: {
   capture: AssessmentCapture;
   assessment: ClinicalAssessment;
@@ -418,9 +431,13 @@ function FindingCard({
   initialDoctorData?: DoctorFindingData;
   onDoctorDataChange?: (assessmentId: string, data: DoctorFindingData) => void;
   idealPostures?: IdealPostureSet[];
-  /** Full doctor-panel ideal-image library, offered as quick picks in the
-      manual "Select image" control for non-default findings. */
-  libraryImages?: { imageData: string; label?: string }[];
+  /** Full doctor-panel reference library, grouped by section, offered as a
+      sectioned "dictionary" in the manual "Select image" control. */
+  librarySets?: IdealPostureSet[];
+  /** Persist a new image into a library section (doctor/admin). */
+  onAddToLibrary?: (condition: string, image: IdealPostureImage) => Promise<void>;
+  /** Whether the current user may add images to the shared library. */
+  canEditLibrary?: boolean;
 }) {
   const idealImage = pickIdealImage(assessment, idealPostures);
   const sev = capture.severity;
@@ -483,7 +500,11 @@ function FindingCard({
               /* Every other selected finding (shoulder, neck, …) has no default
                  reference — the column stays blank until an image is chosen by
                  hand, from the ideal-posture library or the device. */
-              <ManualIdealPicker libraryImages={libraryImages} />
+              <ManualIdealPicker
+                librarySets={librarySets}
+                onAddToLibrary={onAddToLibrary}
+                canEdit={canEditLibrary}
+              />
             )}
           </figure>
         </div>
@@ -781,29 +802,63 @@ function CopyLinkButton({ url }: { url: string }) {
   );
 }
 
+// Downscale an uploaded image and re-encode as JPEG so images saved into the
+// shared library stay small (they get baked into reports). Mirrors the helper
+// used by the doctor's Ideal Posture Library.
+function fileToLibraryDataUrl(file: File, maxPx = 900, quality = 0.82): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('Canvas not supported'));
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('Could not read image'));
+      img.src = reader.result as string;
+    };
+    reader.onerror = () => reject(new Error('Could not read file'));
+    reader.readAsDataURL(file);
+  });
+}
+
 /**
  * Reference column for a non-default finding (shoulder, neck, …). Starts blank
- * with a "Select image" control — no auto/default illustration. The image is
- * chosen by hand, either from the clinic's ideal-posture library (quick-pick
- * thumbnails) or an upload from the device. The choice is local to this report
- * view (kept in component state, not persisted).
+ * with a "Select image" control — no auto/default illustration. Clicking it
+ * opens a sectioned "dictionary" (the clinic's ideal-posture library grouped by
+ * body area). The doctor picks the section (Shoulder, Neck, …), chooses one of
+ * the reference images, and can also add new images into a section — which are
+ * saved back into the shared library so they appear everywhere. The picked
+ * image itself is local to this report view.
  */
 function ManualIdealPicker({
-  libraryImages,
+  librarySets,
+  onAddToLibrary,
+  canEdit,
 }: {
-  libraryImages: { imageData: string; label?: string }[];
+  librarySets: IdealPostureSet[];
+  onAddToLibrary?: (condition: string, image: IdealPostureImage) => Promise<void>;
+  canEdit: boolean;
 }) {
   const [picked, setPicked] = useState<{ src: string; label?: string } | null>(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false);
+  const oneOffRef = useRef<HTMLInputElement>(null);
 
-  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onOneOffFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
       setPicked({ src: reader.result as string, label: file.name });
-      setPickerOpen(false);
+      setOpen(false);
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -832,62 +887,236 @@ function ManualIdealPicker({
 
   return (
     <div className="relative flex h-80 sm:h-96 flex-col items-center justify-center bg-slate-50 p-4 print:hidden">
-      <input ref={fileRef} type="file" accept="image/*" onChange={onFile} className="hidden" />
-      {!pickerOpen ? (
-        <>
-          <button
-            type="button"
-            onClick={() => setPickerOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 shadow-sm"
-          >
-            <ImagePlus className="w-4 h-4" /> Select image
+      <input ref={oneOffRef} type="file" accept="image/*" onChange={onOneOffFile} className="hidden" />
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 shadow-sm"
+      >
+        <ImagePlus className="w-4 h-4" /> Select image
+      </button>
+      <p className="mt-2 text-[11px] text-slate-400">Ideal reference (optional)</p>
+
+      {open && (
+        <ReferenceDictionary
+          librarySets={librarySets}
+          canEdit={canEdit}
+          onAddToLibrary={onAddToLibrary}
+          onUploadOneOff={() => oneOffRef.current?.click()}
+          onPick={(src, label) => {
+            setPicked({ src, label });
+            setOpen(false);
+          }}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Full-screen "dictionary" of reference images, organised into sections by body
+ * area — the same library the doctor curates on the Ideal Posture page. Lets the
+ * user browse a section, pick an image for the report, add new images into a
+ * section (persisted to the shared library), or start a whole new section.
+ */
+function ReferenceDictionary({
+  librarySets,
+  canEdit,
+  onAddToLibrary,
+  onUploadOneOff,
+  onPick,
+  onClose,
+}: {
+  librarySets: IdealPostureSet[];
+  canEdit: boolean;
+  onAddToLibrary?: (condition: string, image: IdealPostureImage) => Promise<void>;
+  onUploadOneOff: () => void;
+  onPick: (src: string, label?: string) => void;
+  onClose: () => void;
+}) {
+  // Sections = the built-in body areas plus any custom ones already in the
+  // library, plus any the user creates this session.
+  const [extraSections, setExtraSections] = useState<string[]>([]);
+  const sections = Array.from(
+    new Set<string>([
+      ...IDEAL_POSTURE_CONDITIONS,
+      ...librarySets.map((s) => s.condition),
+      ...extraSections,
+    ])
+  );
+  const [active, setActive] = useState<string>(sections[0] ?? 'Shoulder');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const addRef = useRef<HTMLInputElement>(null);
+
+  const activeImages = librarySets.find((s) => s.condition === active)?.images ?? [];
+
+  const addNewSection = () => {
+    const name = window.prompt('New section name (e.g. Wrist, Full Body)')?.trim();
+    if (!name) return;
+    const existing = sections.find((s) => s.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      setActive(existing);
+      return;
+    }
+    setExtraSections((prev) => [...prev, name]);
+    setActive(name);
+  };
+
+  const onAddFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0 || !onAddToLibrary) return;
+    setError('');
+    setBusy(true);
+    try {
+      for (const file of Array.from(files)) {
+        const imageData = await fileToLibraryDataUrl(file);
+        await onAddToLibrary(active, { label: '', imageData });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add image');
+    } finally {
+      setBusy(false);
+      if (addRef.current) addRef.current.value = '';
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 print:hidden"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800">Reference Image Library</h3>
+            <p className="text-[11px] text-slate-400">Pick a section, then choose a reference image.</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600" aria-label="Close">
+            <X className="w-5 h-5" />
           </button>
-          <p className="mt-2 text-[11px] text-slate-400">Ideal reference (optional)</p>
-        </>
-      ) : (
-        <div className="w-full max-w-xs">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-slate-500">Choose a reference image</span>
+        </div>
+
+        {/* Section tabs */}
+        <div className="flex flex-wrap gap-1.5 border-b border-slate-100 px-5 py-3">
+          {sections.map((s) => {
+            const count = librarySets.find((set) => set.condition === s)?.images.length ?? 0;
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setActive(s)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  active === s
+                    ? 'bg-emerald-500 text-white shadow-sm'
+                    : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {s}
+                {count > 0 && (
+                  <span className={`ml-1.5 text-[10px] ${active === s ? 'text-white/80' : 'text-emerald-500'}`}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+          {canEdit && (
             <button
               type="button"
-              onClick={() => setPickerOpen(false)}
-              className="text-slate-400 hover:text-slate-600"
-              aria-label="Cancel"
+              onClick={addNewSection}
+              className="inline-flex items-center gap-1 rounded-lg border border-dashed border-emerald-300 bg-emerald-50/60 px-3 py-1.5 text-xs font-medium text-emerald-600 hover:bg-emerald-50"
             >
-              <X className="w-3.5 h-3.5" />
+              <FolderPlus className="w-3.5 h-3.5" /> New section
             </button>
-          </div>
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100"
-          >
-            <Upload className="w-3.5 h-3.5" /> Upload from computer
-          </button>
-          {libraryImages.length > 0 && (
-            <>
-              <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">From ideal posture library</p>
-              <div className="grid max-h-40 grid-cols-3 gap-1.5 overflow-y-auto">
-                {libraryImages.map((im, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => {
-                      setPicked({ src: im.imageData, label: im.label });
-                      setPickerOpen(false);
-                    }}
-                    className="relative aspect-square overflow-hidden rounded border border-slate-200 hover:ring-2 hover:ring-emerald-400"
-                    title={im.label}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={im.imageData} alt={im.label || `Library ${i + 1}`} className="h-full w-full object-cover" />
-                  </button>
-                ))}
-              </div>
-            </>
           )}
         </div>
-      )}
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {error && (
+            <div className="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-600">{error}</div>
+          )}
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-slate-500">
+              {active} · {activeImages.length} image{activeImages.length === 1 ? '' : 's'}
+            </span>
+            {canEdit && onAddToLibrary && (
+              <label
+                className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 ${
+                  busy ? 'pointer-events-none opacity-50' : ''
+                }`}
+                title={`Add images to ${active}`}
+              >
+                <Upload className="w-3.5 h-3.5" /> {busy ? 'Adding…' : `Add to ${active}`}
+                <input
+                  ref={addRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => onAddFiles(e.target.files)}
+                />
+              </label>
+            )}
+          </div>
+
+          {activeImages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 py-12 text-center text-slate-400">
+              <ImageIcon className="mb-2 h-8 w-8 text-slate-300" />
+              <p className="text-sm">No reference images in {active} yet.</p>
+              {canEdit && onAddToLibrary && (
+                <button
+                  type="button"
+                  onClick={() => addRef.current?.click()}
+                  className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 hover:text-emerald-700"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add the first image
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
+              {activeImages.map((im, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => onPick(im.imageData, im.label || active)}
+                  className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-slate-200 bg-slate-50 hover:ring-2 hover:ring-emerald-400"
+                  title={im.label || `${active} ${i + 1}`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={im.imageData}
+                    alt={im.label || `${active} reference ${i + 1}`}
+                    className="h-full w-full object-contain"
+                  />
+                  {im.label && (
+                    <span className="absolute inset-x-0 bottom-0 truncate bg-black/55 px-1.5 py-0.5 text-[10px] text-white">
+                      {im.label}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer — one-off upload straight into this report (not saved to library) */}
+        <div className="border-t border-slate-100 px-5 py-3">
+          <button
+            type="button"
+            onClick={onUploadOneOff}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700"
+          >
+            <ImagePlus className="w-3.5 h-3.5" /> Or upload a one-off image from computer
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
