@@ -8,7 +8,9 @@ export function signToken(user: any): string {
   return jwt.sign(
     { sub: user._id.toString(), role: user.role },
     process.env.JWT_SECRET as string,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' } as jwt.SignOptions
+    // Long-lived so a signed-in user stays logged in until they explicitly log
+    // out (the token lives in the browser's localStorage across sessions).
+    { expiresIn: process.env.JWT_EXPIRES_IN || '365d' } as jwt.SignOptions
   );
 }
 

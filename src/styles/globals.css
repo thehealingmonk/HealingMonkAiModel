@@ -7,11 +7,50 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    /* Never allow a horizontal scrollbar from an odd wide child. `clip` (unlike
+       `hidden`) blocks sideways scroll WITHOUT creating a scroll container, so
+       `position: sticky` headers keep working. */
+    overflow-x: clip;
+    /* Respect notches / safe areas and keep vertical scroll smooth on mobile. */
+    scroll-behavior: smooth;
   }
   body {
     font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
     font-feature-settings: 'cv11', 'ss01';
     letter-spacing: -0.011em;
+    overflow-x: clip;
+    max-width: 100%;
+    /* Avoid overscroll chaining to the browser UI (rubber-banding) on mobile. */
+    overscroll-behavior-y: none;
+  }
+  /* Media should shrink to its container, never force the page wider. Canvas
+     and video are intentionally excluded — the pose-capture overlay sizes those
+     itself (intrinsic-sized, object-cover) and must not be clamped here. */
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+  /* Slim, unobtrusive scrollbars that match the light theme. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(16, 185, 129, 0.35) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgba(16, 185, 129, 0.35);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgba(16, 185, 129, 0.55);
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
   }
   /* Slightly tighter tracking on large headings for a modern, professional feel. */
   h1, h2, h3 {

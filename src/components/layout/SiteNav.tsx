@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { Activity, Menu, X, ArrowRight } from 'lucide-react';
+import { InstallAppButton } from '@/components/common/InstallAppButton';
 
 /** Primary marketing navigation. Sticky and scroll-aware: it sits transparent
  *  over the light hero at the top of every page, then turns into a solid frosted
@@ -60,6 +61,7 @@ export default function SiteNav() {
         </nav>
 
         <div className="hidden items-center gap-3 md:flex">
+          <InstallAppButton />
           <button
             onClick={() => navigate('/login')}
             className="text-sm text-slate-600 transition-colors hover:text-slate-900"
@@ -104,6 +106,9 @@ export default function SiteNav() {
                 {l.label}
               </NavLink>
             ))}
+            <div className="mt-2" onClick={() => setOpen(false)}>
+              <InstallAppButton className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-50 px-2 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-100" />
+            </div>
             <button
               onClick={() => {
                 setOpen(false);
