@@ -67,12 +67,32 @@ export default function MeetingRoom() {
 
   const statusPatched = useRef<string>('');
 
-  // Resolve the room by its link token. Role is decided by the server.
+  // Resolve the room by its link token. Role is decided by the server. The
+  // shared Atlas cluster can cold-start, so a first attempt may transiently
+  // fail — retry a few times with backoff before showing an error, so the
+  // patient's link "just works" instead of flashing a 500.
   useEffect(() => {
     let cancelled = false;
-    getMeetingRoom(token)
-      .then((r) => !cancelled && setRoom(r))
-      .catch((err) => !cancelled && setLoadError(err instanceof Error ? err.message : 'Could not open meeting'));
+    (async () => {
+      const delays = [0, 700, 1500, 2500];
+      let lastErr: unknown;
+      for (const wait of delays) {
+        if (cancelled) return;
+        if (wait) await new Promise((r) => setTimeout(r, wait));
+        try {
+          const r = await getMeetingRoom(token);
+          if (!cancelled) setRoom(r);
+          return;
+        } catch (err) {
+          lastErr = err;
+          // Don't retry a genuine "not found" — the link is wrong/deleted.
+          if (err instanceof Error && /not found/i.test(err.message)) break;
+        }
+      }
+      if (!cancelled) {
+        setLoadError(lastErr instanceof Error ? lastErr.message : 'Could not open meeting');
+      }
+    })();
     return () => { cancelled = true; };
   }, [token]);
 

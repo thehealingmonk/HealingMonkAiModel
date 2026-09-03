@@ -27,22 +27,27 @@ async function joinableMeeting(token: string) {
 // Send one signal (offer / answer / ice / join / bye / presence / ai) to a peer
 // (or broadcast to the rest of the room when `to` is omitted).
 export async function POST(req: NextRequest) {
-  const body = (await req.json().catch(() => ({}))) || {};
-  const { token, from, to, kind, data } = body;
-  if (!token || !from || !kind) {
-    return NextResponse.json({ error: 'token, from and kind are required' }, { status: 400 });
-  }
-  const meeting = await joinableMeeting(token);
-  if (!meeting) return NextResponse.json({ error: 'Room not available' }, { status: 404 });
+  try {
+    const body = (await req.json().catch(() => ({}))) || {};
+    const { token, from, to, kind, data } = body;
+    if (!token || !from || !kind) {
+      return NextResponse.json({ error: 'token, from and kind are required' }, { status: 400 });
+    }
+    const meeting = await joinableMeeting(token);
+    if (!meeting) return NextResponse.json({ error: 'Room not available' }, { status: 404 });
 
-  await MeetingSignal.create({
-    roomToken: token,
-    from: String(from),
-    to: to ? String(to) : null,
-    kind,
-    data: data ?? null,
-  });
-  return NextResponse.json({ ok: true });
+    await MeetingSignal.create({
+      roomToken: token,
+      from: String(from),
+      to: to ? String(to) : null,
+      kind,
+      data: data ?? null,
+    });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error('signal POST error', err);
+    return NextResponse.json({ error: 'Signal relay unavailable' }, { status: 503 });
+  }
 }
 
 // Poll for signals addressed to this peer (or broadcast) that arrived after the
@@ -56,25 +61,32 @@ export async function GET(req: NextRequest) {
   if (!token || !peer) {
     return NextResponse.json({ error: 'token and peer are required' }, { status: 400 });
   }
-  await connectDB();
+  try {
+    await connectDB();
 
-  const filter: Record<string, unknown> = {
-    roomToken: token,
-    from: { $ne: peer }, // never echo a peer's own messages back to it
-    $or: [{ to: peer }, { to: null }], // addressed to me, or broadcast
-  };
-  if (after && mongoose.isValidObjectId(after)) {
-    filter._id = { $gt: new mongoose.Types.ObjectId(after) };
+    const filter: Record<string, unknown> = {
+      roomToken: token,
+      from: { $ne: peer }, // never echo a peer's own messages back to it
+      $or: [{ to: peer }, { to: null }], // addressed to me, or broadcast
+    };
+    if (after && mongoose.isValidObjectId(after)) {
+      filter._id = { $gt: new mongoose.Types.ObjectId(after) };
+    }
+
+    const signals = await MeetingSignal.find(filter).sort({ _id: 1 }).limit(50);
+    return NextResponse.json({
+      signals: signals.map((s: any) => ({
+        id: s._id.toString(),
+        from: s.from,
+        to: s.to,
+        kind: s.kind,
+        data: s.data,
+      })),
+    });
+  } catch (err) {
+    // Poll failures are non-fatal — the client keeps polling — so return an
+    // empty batch rather than a 500 that would spam the console.
+    console.error('signal GET error', err);
+    return NextResponse.json({ signals: [] });
   }
-
-  const signals = await MeetingSignal.find(filter).sort({ _id: 1 }).limit(50);
-  return NextResponse.json({
-    signals: signals.map((s: any) => ({
-      id: s._id.toString(),
-      from: s.from,
-      to: s.to,
-      kind: s.kind,
-      data: s.data,
-    })),
-  });
 }
