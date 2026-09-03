@@ -32,6 +32,14 @@ export async function sendSignal(msg: OutSignal): Promise<void> {
   });
 }
 
+// Wipe the room's signaling backlog (host calls this on start for a clean
+// negotiation). Best-effort — failure is non-fatal.
+export async function clearSignals(token: string): Promise<void> {
+  await fetch(`${API_URL}/meetings/signal?token=${encodeURIComponent(token)}`, {
+    method: 'DELETE',
+  }).catch(() => {});
+}
+
 // Fetch signals addressed to `peer` (or broadcast) newer than `after` (the last
 // signal id we processed). Returns [] on any error so the poll loop keeps going.
 export async function pollSignals(token: string, peer: string, after: string | null): Promise<Signal[]> {

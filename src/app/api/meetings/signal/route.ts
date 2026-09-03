@@ -50,6 +50,22 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// Clear the room's signaling backlog. The host calls this when (re)starting a
+// meeting so a fresh negotiation isn't confused by stale offers/candidates left
+// over from earlier attempts (signals otherwise live for their TTL window).
+export async function DELETE(req: NextRequest) {
+  const token = req.nextUrl.searchParams.get('token');
+  if (!token) return NextResponse.json({ error: 'token is required' }, { status: 400 });
+  try {
+    await connectDB();
+    await MeetingSignal.deleteMany({ roomToken: token });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error('signal DELETE error', err);
+    return NextResponse.json({ ok: false });
+  }
+}
+
 // Poll for signals addressed to this peer (or broadcast) that arrived after the
 // last one we saw. `after` is the last signal id the client processed; ObjectId
 // ordering is time-based so `_id > after` yields exactly the new messages.
