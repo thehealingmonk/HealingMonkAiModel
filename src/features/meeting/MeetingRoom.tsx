@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Mic, MicOff, Video as VideoIcon, VideoOff, PhoneOff, Sparkles, Loader2, Wifi, WifiOff,
   Activity, ShieldCheck, AlertTriangle,
@@ -50,6 +50,9 @@ type AiStage = 'off' | 'select' | 'capture' | 'report';
 
 export default function MeetingRoom() {
   const { token = '' } = useParams();
+  const [searchParams] = useSearchParams();
+  // Only the dashboard "Join Meeting" action requests the host (staff) view.
+  const wantsHost = searchParams.get('host') === '1';
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -80,7 +83,7 @@ export default function MeetingRoom() {
         if (cancelled) return;
         if (wait) await new Promise((r) => setTimeout(r, wait));
         try {
-          const r = await getMeetingRoom(token);
+          const r = await getMeetingRoom(token, wantsHost);
           if (!cancelled) setRoom(r);
           return;
         } catch (err) {
@@ -94,7 +97,7 @@ export default function MeetingRoom() {
       }
     })();
     return () => { cancelled = true; };
-  }, [token]);
+  }, [token, wantsHost]);
 
   const role = room?.role ?? 'patient';
   const meetingStatus = room?.meeting.status;

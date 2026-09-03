@@ -27,14 +27,21 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
 
     const iceServers = getIceServers();
 
-    // Optional auth: identify the caller if they carry a valid token.
-    const user = await getUser(req).catch(() => null);
+    // Staff (host) view is granted ONLY when the caller explicitly joins as host
+    // (the dashboard "Join Meeting" button sends ?host=1) AND is authorised. The
+    // plain shared link (no ?host) is ALWAYS the patient view — so s-admin can
+    // copy it, open it themselves, and still see the patient experience, and the
+    // link they forward on WhatsApp/email always joins the recipient as patient.
+    const wantsHost = req.nextUrl.searchParams.get('host') === '1';
     let isStaff = false;
-    if (user) {
-      if (user.role === 'admin') isStaff = true;
-      else if (user.role === 'doctor') {
-        const docId = meeting.assignedDoctor?._id || meeting.assignedDoctor;
-        isStaff = !!docId && docId.toString() === user._id.toString();
+    if (wantsHost) {
+      const user = await getUser(req).catch(() => null);
+      if (user) {
+        if (user.role === 'admin') isStaff = true;
+        else if (user.role === 'doctor') {
+          const docId = meeting.assignedDoctor?._id || meeting.assignedDoctor;
+          isStaff = !!docId && docId.toString() === user._id.toString();
+        }
       }
     }
 

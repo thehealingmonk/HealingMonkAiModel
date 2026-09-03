@@ -643,8 +643,9 @@ export async function endMeeting(id: string): Promise<{ meeting: OnlineMeeting }
   return request(`/meetings/${id}`, { method: 'DELETE' });
 }
 
-// Resolve a room by its secret link token. Works signed-in (staff) or as a guest
-// patient — the token itself is the credential.
-export async function getMeetingRoom(token: string): Promise<MeetingRoomInfo> {
-  return request(`/meetings/room/${encodeURIComponent(token)}`);
+// Resolve a room by its secret link token. Pass host=true only for the
+// dashboard "Join Meeting" action (staff/host); the plain shared link resolves
+// as the patient regardless of who opens it.
+export async function getMeetingRoom(token: string, host = false): Promise<MeetingRoomInfo> {
+  return request(`/meetings/room/${encodeURIComponent(token)}${host ? '?host=1' : ''}`);
 }

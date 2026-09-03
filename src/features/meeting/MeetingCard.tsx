@@ -55,6 +55,8 @@ export default function MeetingCard({ patient }: { patient: Patient }) {
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [patient.id]);
 
+  // The shared/copied link is the PATIENT link — no host flag — so whoever opens
+  // it (WhatsApp/email/etc.) joins as the patient, even in a staff browser.
   const linkFor = (token: string) => `${window.location.origin}/m/${token}`;
 
   const create = async () => {
@@ -155,7 +157,7 @@ export default function MeetingCard({ patient }: { patient: Patient }) {
                 <div className="flex flex-wrap items-center gap-2 mt-2">
                   {live && (
                     <button
-                      onClick={() => navigate(`/m/${m.roomToken}`)}
+                      onClick={() => navigate(`/m/${m.roomToken}?host=1`)}
                       className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold py-2 px-4 rounded-lg"
                     >
                       <Video className="w-4 h-4" /> Join Meeting
