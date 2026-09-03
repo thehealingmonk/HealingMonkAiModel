@@ -559,3 +559,92 @@ export async function myAppointments(): Promise<{ appointments: Appointment[] }>
 export async function myPayments(): Promise<{ payments: Payment[]; totalPaid: number }> {
   return request('/me/payments');
 }
+
+// ---- Online meetings (Flow B: remote AI assessment) ----
+
+export type MeetingStatus =
+  | 'created'
+  | 'waiting'
+  | 'active'
+  | 'ai_active'
+  | 'completed'
+  | 'ended'
+  | 'expired';
+
+export interface IceServer {
+  urls: string | string[];
+  username?: string;
+  credential?: string;
+}
+
+// Full staff view of a meeting (admin / assigned doctor).
+export interface OnlineMeeting {
+  id: string;
+  roomToken: string;
+  status: MeetingStatus;
+  selectedPositions: string[];
+  startedAt: string | null;
+  aiStartedAt: string | null;
+  endedAt: string | null;
+  expiresAt: string | null;
+  report: string | null;
+  shareId: string | null;
+  createdAt: string;
+  patient:
+    | {
+        id: string;
+        patientId: string;
+        name: string;
+        age: number | null;
+        gender: string;
+        mobile: string;
+        email: string;
+        height: number | null;
+        weight: number | null;
+        painAreas: string[];
+        complaint: string;
+      }
+    | string;
+  assignedDoctor: { id: string; name: string } | string | null;
+}
+
+// What the room page gets when resolving a link by token. `role` is decided by
+// the server from the caller's auth — the patient view carries no clinical data.
+export interface MeetingRoomInfo {
+  role: 'staff' | 'patient';
+  iceServers: IceServer[];
+  meeting:
+    | OnlineMeeting
+    | { roomToken: string; status: MeetingStatus; patientName: string };
+}
+
+// S-Admin creates a meeting for a patient; it auto-binds to the assigned doctor.
+export async function createMeeting(patientId: string): Promise<{ meeting: OnlineMeeting }> {
+  return request('/meetings', { method: 'POST', body: JSON.stringify({ patientId }) });
+}
+
+// Admin: all meetings (optionally for one patient). Doctor: only their own.
+export async function listMeetings(patientId?: string): Promise<{ meetings: OnlineMeeting[] }> {
+  return request(`/meetings${patientId ? `?patient=${patientId}` : ''}`);
+}
+
+export async function getMeeting(id: string): Promise<{ meeting: OnlineMeeting }> {
+  return request(`/meetings/${id}`);
+}
+
+export async function updateMeeting(
+  id: string,
+  patch: { status?: MeetingStatus; selectedPositions?: string[]; reportId?: string; shareId?: string }
+): Promise<{ meeting: OnlineMeeting }> {
+  return request(`/meetings/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+}
+
+export async function endMeeting(id: string): Promise<{ meeting: OnlineMeeting }> {
+  return request(`/meetings/${id}`, { method: 'DELETE' });
+}
+
+// Resolve a room by its secret link token. Works signed-in (staff) or as a guest
+// patient — the token itself is the credential.
+export async function getMeetingRoom(token: string): Promise<MeetingRoomInfo> {
+  return request(`/meetings/room/${encodeURIComponent(token)}`);
+}

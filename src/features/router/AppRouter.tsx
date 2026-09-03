@@ -14,6 +14,7 @@ const AdminApp = lazy(() => import('@/features/admin/AdminApp'));
 const DoctorApp = lazy(() => import('@/features/doctor/DoctorApp'));
 const ReceptionApp = lazy(() => import('@/features/reception/ReceptionApp'));
 const PatientHome = lazy(() => import('@/features/patient/PatientHome'));
+const MeetingRoom = lazy(() => import('@/features/meeting/MeetingRoom'));
 
 // Each role gets its own URL space. Signed-in users land on their role home.
 const HOME: Record<Role, string> = {
@@ -68,6 +69,12 @@ export default function App() {
     <Routes>
       {/* Auth */}
       <Route path="/login" element={user ? <Navigate to={HOME[user.role]} replace /> : <Login />} />
+
+      {/* Online meeting room — reachable by everyone via the secure link token:
+          the guest patient (no login), a signed-in patient, and staff (admin /
+          assigned doctor). The server decides the caller's role from their auth,
+          so this single route serves all three without leaking staff controls. */}
+      <Route path="/m/:token" element={<MeetingRoom />} />
 
       {/* Role-scoped URL spaces */}
       <Route path="/admin/*" element={<RequireRole role="admin"><AdminApp /></RequireRole>} />

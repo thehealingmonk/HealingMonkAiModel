@@ -8,8 +8,9 @@ const securityHeaders = [
   { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'X-DNS-Prefetch-Control', value: 'on' },
-  // Camera is required for the on-device pose capture flow.
-  { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=()' },
+  // Camera is required for the on-device pose capture flow; microphone is
+  // required for the online meeting (WebRTC audio). Both are limited to same-origin.
+  { key: 'Permissions-Policy', value: 'camera=(self), microphone=(self), geolocation=()' },
   {
     key: 'Strict-Transport-Security',
     value: 'max-age=63072000; includeSubDomains; preload',

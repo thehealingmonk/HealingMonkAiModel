@@ -19,6 +19,7 @@ import {
 import RecordPaymentModal from '@/features/reception/RecordPaymentModal';
 import PatientEditModal from '@/components/common/PatientEditModal';
 import PatientDocuments from '@/components/common/PatientDocuments';
+import MeetingCard from '@/features/meeting/MeetingCard';
 import {
   Patient,
   Report,
@@ -203,6 +204,10 @@ export default function PatientProfile({ patient, onBack, onStartAssessment }: P
       {/* Patient login — admin sets a password so the patient can sign in and
           see all their sessions & reports. */}
       {hasRole('admin') && <PatientLoginCard patient={current} />}
+
+      {/* Online meeting — S-Admin creates a secure video room; the assigned
+          doctor sees & joins the same meeting. (Flow B: remote AI assessment.) */}
+      {(hasRole('admin') || hasRole('doctor')) && <MeetingCard patient={current} />}
 
       {/* Progress: posture-score trend across sessions */}
       {!loading && reports.length > 0 && <ProgressCard reports={reports} />}

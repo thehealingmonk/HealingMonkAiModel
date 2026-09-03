@@ -1,0 +1,44 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { connectDB } from '@/lib/server/db';
+import { OnlineMeeting } from '@/lib/server/models/OnlineMeeting';
+import { getUser } from '@/middleware/auth';
+import { getIceServers } from '@/lib/server/ice';
+
+export const dynamic = 'force-dynamic';
+
+// Resolve a room by its secret token (the link). Works for BOTH:
+//   • the patient joining via the shared link (no login) — the token itself is
+//     the credential, so they only ever reach THEIR room, never another's;
+//   • staff (admin, or the patient's assigned doctor) who are also signed in —
+//     they get the full staff view + patient detail to run the assessment.
+//
+// The caller's role is decided server-side from their auth, not trusted from
+// the client, so a patient can never obtain staff controls.
+export async function GET(req: NextRequest, { params }: { params: { token: string } }) {
+  await connectDB();
+  const meeting = await OnlineMeeting.findOne({ roomToken: params.token })
+    .populate('patient', 'name patientId age gender mobile email height weight painAreas complaint')
+    .populate('assignedDoctor', 'name');
+
+  if (!meeting) {
+    return NextResponse.json({ error: 'Meeting not found' }, { status: 404 });
+  }
+
+  const iceServers = getIceServers();
+
+  // Optional auth: identify the caller if they carry a valid token.
+  const user = await getUser(req).catch(() => null);
+  let isStaff = false;
+  if (user) {
+    if (user.role === 'admin') isStaff = true;
+    else if (user.role === 'doctor') {
+      const docId = meeting.assignedDoctor?._id || meeting.assignedDoctor;
+      isStaff = !!docId && docId.toString() === user._id.toString();
+    }
+  }
+
+  if (isStaff) {
+    return NextResponse.json({ role: 'staff', iceServers, meeting: meeting.toStaffJSON() });
+  }
+  return NextResponse.json({ role: 'patient', iceServers, meeting: meeting.toPatientJSON() });
+}

@@ -22,6 +22,14 @@ interface Props {
   assessments: ClinicalAssessment[];
   onComplete: (captures: AssessmentCapture[], extraShots: ExtraShot[]) => void;
   onBack: () => void;
+  // Online (Flow B) mode: run the SAME pose pipeline on the patient's remote
+  // WebRTC stream instead of opening this device's camera. When set, the local
+  // camera is never touched and the front/back toggle is hidden. Everything else
+  // — overlay, measurement, capture, report — is identical to the clinic flow.
+  externalStream?: MediaStream | null;
+  // Render as a fill-parent overlay (inside the meeting room) rather than a
+  // full-screen page. Default (clinic flow) is unchanged.
+  embedded?: boolean;
 }
 
 // Skeleton connections (MediaPipe Pose indices) — clinically relevant joints
@@ -55,7 +63,11 @@ const CLINICAL_POINTS = new Set<number>([
 // landmarks (2 = left_eye, 5 = right_eye) — no positional fudging.
 const FACE_DOTS = new Set<number>([2, 5]);
 
-export default function ClinicalCapture({ assessments, onComplete, onBack }: Props) {
+export default function ClinicalCapture({ assessments, onComplete, onBack, externalStream, embedded }: Props) {
+  // In online mode the video source is the patient's remote stream, which we do
+  // NOT own (the meeting room manages its lifecycle) — so we never stop its
+  // tracks and never open/flip a local camera.
+  const remoteMode = !!externalStream;
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Separate overlay for the guidance arrow so it is NEVER baked into a capture.
@@ -107,14 +119,21 @@ export default function ClinicalCapture({ assessments, onComplete, onBack }: Pro
   currentRef.current = current;
 
   // (Re)open the camera with the requested lens, stopping any previous stream
-  // first so switching front↔back never leaves a second camera running.
+  // first so switching front↔back never leaves a second camera running. In
+  // online mode this instead binds the patient's remote stream (no camera open).
   const startStream = async (mode: 'user' | 'environment') => {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    const stream = await openCamera(mode);
-    streamRef.current = stream;
     const video = videoRef.current;
     if (!video) return;
-    video.srcObject = stream;
+    if (remoteMode) {
+      // Attach the patient's remote stream; a MediaStream can back several
+      // <video> elements at once, so the meeting's own video keeps playing too.
+      if (video.srcObject !== externalStream) video.srcObject = externalStream!;
+    } else {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      const stream = await openCamera(mode);
+      streamRef.current = stream;
+      video.srcObject = stream;
+    }
     const begin = async () => {
       try {
         await video.play();
@@ -180,7 +199,9 @@ export default function ClinicalCapture({ assessments, onComplete, onBack }: Pro
     return () => {
       // Stop the loop for good: flip the dispose flag, retire the generation so
       // any in-flight async frame won't reschedule, cancel the pending frame,
-      // and release the camera + speech.
+      // and release the camera + speech. In online mode streamRef is null (we
+      // never own the remote stream), so the patient's camera keeps running for
+      // the ongoing meeting.
       disposed.current = true;
       loopGen.current++;
       cancelFrame();
@@ -189,6 +210,18 @@ export default function ClinicalCapture({ assessments, onComplete, onBack }: Pro
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Online mode: if the meeting hands us a fresh remote stream (e.g. after a
+  // reconnection / ICE restart), rebind it so the AI keeps analysing the live
+  // patient video without a remount.
+  useEffect(() => {
+    if (!remoteMode) return;
+    const video = videoRef.current;
+    if (video && externalStream && video.srcObject !== externalStream) {
+      video.srcObject = externalStream;
+      video.play().catch(() => {});
+    }
+  }, [externalStream, remoteMode]);
 
   // Speak the current pose's instruction ("stand sideways…") whenever the pose
   // changes (or when voice is switched on), so the user knows what to do.
@@ -503,7 +536,7 @@ export default function ClinicalCapture({ assessments, onComplete, onBack }: Pro
   const currentExtras = extraShots.filter((s) => s.assessmentId === current?.id);
 
   return (
-    <div className="min-h-screen bg-black flex flex-col relative">
+    <div className={`bg-black flex flex-col ${embedded ? 'absolute inset-0' : 'min-h-screen relative'}`}>
       <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover absolute inset-0" />
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover" />
       {/* Guidance arrow overlay — separate canvas, never captured into a photo. */}
@@ -579,22 +612,25 @@ export default function ClinicalCapture({ assessments, onComplete, onBack }: Pro
       </div>
 
       {/* Front/back camera toggle — floats in the clear right-middle area so it
-          never sits under the top-bar text and stays easy to tap. */}
-      <button
-        onClick={flipCamera}
-        title={facingMode === 'user' ? 'Switch to back camera' : 'Switch to front camera'}
-        className="absolute top-1/2 -translate-y-1/2 right-3 z-30 bg-black/70 hover:bg-black/90 active:scale-95 text-white text-sm font-semibold pl-3 pr-4 py-3 rounded-full flex items-center gap-2 shadow-lg"
-      >
-        <SwitchCamera className="w-5 h-5" />
-        {facingMode === 'user' ? 'Front' : 'Back'}
-      </button>
+          never sits under the top-bar text and stays easy to tap. Hidden in
+          online mode, where the source is the patient's remote camera. */}
+      {!remoteMode && (
+        <button
+          onClick={flipCamera}
+          title={facingMode === 'user' ? 'Switch to back camera' : 'Switch to front camera'}
+          className="absolute top-1/2 -translate-y-1/2 right-3 z-30 bg-black/70 hover:bg-black/90 active:scale-95 text-white text-sm font-semibold pl-3 pr-4 py-3 rounded-full flex items-center gap-2 shadow-lg"
+        >
+          <SwitchCamera className="w-5 h-5" />
+          {facingMode === 'user' ? 'Front' : 'Back'}
+        </button>
+      )}
 
       {/* Top bar: current assessment + instruction */}
       <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/85 to-transparent p-4 z-20">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-between mb-2">
             <button onClick={onBack} className="text-white/80 text-sm flex items-center gap-1 hover:text-white">
-              <ChevronLeft className="w-4 h-4" /> Back
+              <ChevronLeft className="w-4 h-4" /> {embedded ? 'Stop AI' : 'Back'}
             </button>
             <span className="text-white/80 text-sm">
               {index + 1} / {assessments.length} · {capturedCount} captured

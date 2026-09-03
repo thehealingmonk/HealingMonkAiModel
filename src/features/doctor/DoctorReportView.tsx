@@ -10,6 +10,10 @@ interface Props {
   patient: Patient;
   captures: AssessmentCapture[];
   onDone: () => void;
+  // Optional: notified once the report is persisted (used by the online meeting
+  // flow to link the report to the meeting). Fires with the structured report id
+  // and the public share slug.
+  onSaved?: (info: { reportId: string; shareId: string }) => void;
 }
 
 // Maps a DB patient onto the PatientInfo shape ClinicalReport renders.
@@ -27,7 +31,7 @@ function toPatientInfo(p: Patient): PatientInfo {
   };
 }
 
-export default function DoctorReportView({ patient, captures, onDone }: Props) {
+export default function DoctorReportView({ patient, captures, onDone, onSaved }: Props) {
   const [reportId, setReportId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState('');
   const [shareUrl, setShareUrl] = useState<string>('');
@@ -71,6 +75,7 @@ export default function DoctorReportView({ patient, captures, onDone }: Props) {
         const payload = { ...buildReportPayload(patient.id, captures, patient.painAreas), shareId: slug };
         const { report } = await createReport(payload);
         setReportId(report.id);
+        onSaved?.({ reportId: report.id, shareId: slug });
       } catch (err) {
         setSaveError(err instanceof Error ? err.message : 'Could not save report to the patient record');
       }
