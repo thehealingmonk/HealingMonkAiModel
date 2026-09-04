@@ -94,22 +94,32 @@ export function useMeetingPeer({ token, role, iceServers, enabled, onAppSignal }
     }
   }, [isOfferer, send]);
 
+  // Mark that the other media peer is actually present. IMPORTANT: only real
+  // media signals count — NOT lobby 'knock'/'admit'/'deny' (a knocking patient
+  // hasn't started their media peer yet). Treating a knock as "present" made the
+  // host offer prematurely and poisoned the real negotiation after admit.
+  const markRemote = () => {
+    if (!sawRemote.current) {
+      sawRemote.current = true;
+      setStatus((s) => (s === 'connected' ? s : 'connecting'));
+    }
+  };
+
   const handleSignal = useCallback(
     async (sig: Signal) => {
       const pc = pcRef.current;
       if (!pc) return;
 
-      // Any message from the other side means they're here.
-      if (!sawRemote.current) { sawRemote.current = true; setStatus((s) => (s === 'connected' ? s : 'connecting')); }
-
       switch (sig.kind) {
         case 'join': {
-          // The other side is present — the offerer (re)starts negotiation.
+          markRemote();
+          // The other media peer is present — the offerer (re)starts negotiation.
           if (isOfferer) await makeOffer();
           break;
         }
         case 'offer': {
           if (isOfferer) break; // host never accepts an offer
+          markRemote();
           await pc.setRemoteDescription(new RTCSessionDescription(sig.data));
           await flushCandidates();
           const answer = await pc.createAnswer();
@@ -119,6 +129,7 @@ export function useMeetingPeer({ token, role, iceServers, enabled, onAppSignal }
         }
         case 'answer': {
           if (!isOfferer) break;
+          markRemote();
           // Only accept an answer we're actually waiting for (ignore stale ones).
           if (pc.signalingState === 'have-local-offer') {
             await pc.setRemoteDescription(new RTCSessionDescription(sig.data));
@@ -127,6 +138,7 @@ export function useMeetingPeer({ token, role, iceServers, enabled, onAppSignal }
           break;
         }
         case 'ice': {
+          markRemote();
           if (pc.remoteDescription) {
             try { await pc.addIceCandidate(sig.data); } catch (err) { console.error('addIceCandidate', err); }
           } else {
@@ -144,6 +156,7 @@ export function useMeetingPeer({ token, role, iceServers, enabled, onAppSignal }
           onAppSignalRef.current?.(sig.data);
           break;
         }
+        // 'knock' / 'admit' / 'deny' are lobby-only — the media peer ignores them.
         default:
           break;
       }

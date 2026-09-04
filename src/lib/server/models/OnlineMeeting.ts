@@ -136,11 +136,11 @@ const meetingSignalSchema = new mongoose.Schema(
     from: { type: String, required: true },
     // Target peer id, or null for a broadcast to everyone else in the room.
     to: { type: String, default: null },
-    kind: {
-      type: String,
-      enum: ['offer', 'answer', 'ice', 'join', 'bye', 'presence', 'ai', 'knock', 'admit', 'deny'],
-      required: true,
-    },
+    // Signal type (offer/answer/ice/join/bye/ai/knock/admit/deny). Kept as a
+    // free string — NOT an enum — so the relay never rejects a new signal kind
+    // (an enum here also broke silently after hot-reload, since Mongoose reuses
+    // the first-compiled schema until a full server restart).
+    kind: { type: String, required: true },
     data: { type: mongoose.Schema.Types.Mixed, default: null },
     createdAt: { type: Date, default: Date.now },
   },
