@@ -1,13 +1,21 @@
-/* HealingMonk service worker — makes the app installable (PWA) and keeps the
-   static shell available offline. It is deliberately conservative:
-   - only same-origin GET requests are cached,
-   - API / auth responses (/api/*) are never cached (always live, private),
-   - everything is network-first so clinic data stays fresh; the cache is only
-     a fallback when the device is offline. */
-const CACHE = 'hm-shell-v2';
+/* HealingMonk service worker — makes the app installable (PWA) and keeps a
+   minimal shell available offline. Deliberately conservative and FRESH-FIRST so
+   clinic data and new deploys are never stale:
+   - only same-origin GET is handled; API/auth (/api/*) is never touched,
+   - HTML navigations are ALWAYS network-first (so a new deploy's fresh page +
+     current JS chunks load; stale HTML referencing dead chunks is what caused
+     the 504/"Failed to convert to Response" errors),
+   - only content-hashed static assets (/_next/static, images, fonts) are cached,
+   - respondWith() ALWAYS receives a valid Response (never undefined). */
+const CACHE = 'hm-shell-v3';
+const SHELL = '/';
 
-self.addEventListener('install', () => {
-  self.skipWaiting();
+self.addEventListener('install', (event) => {
+  // Precache the app shell so a failed/offline navigation always has a valid
+  // fallback Response to return.
+  event.waitUntil(
+    caches.open(CACHE).then((c) => c.add(SHELL)).catch(() => {}).then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (event) => {
@@ -19,31 +27,41 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Is this a content-hashed / immutable static asset that is safe to cache?
+function isCacheableAsset(url) {
+  return (
+    url.pathname.startsWith('/_next/static/') ||
+    /\.(?:js|css|woff2?|ttf|otf|png|jpg|jpeg|gif|svg|webp|avif|ico)$/i.test(url.pathname)
+  );
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
+
+  // Only handle same-origin GET. Everything else (API, cross-origin, POST…) is
+  // left to the browser's default handling — we don't call respondWith at all.
   if (req.method !== 'GET' || url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith('/api/')) return; // never cache dynamic/private data
+  if (url.pathname.startsWith('/api/')) return; // dynamic/private — always live
+
+  const isNavigation = req.mode === 'navigate';
 
   event.respondWith(
     fetch(req)
       .then((res) => {
-        if (res && res.status === 200 && res.type === 'basic') {
+        // Cache only successful, cacheable static assets (never HTML pages).
+        if (res && res.status === 200 && res.type === 'basic' && !isNavigation && isCacheableAsset(url)) {
           const copy = res.clone();
           caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
         }
         return res;
       })
       .catch(async () => {
-        // Network failed — fall back to the cache. CRITICAL: respondWith() must
-        // ALWAYS receive a Response. If nothing is cached, caches.match resolves
-        // to `undefined`, which throws "Failed to convert value to 'Response'"
-        // and breaks the page. So we guard every path and, for a navigation,
-        // fall back to the cached app shell so the SPA still boots offline.
+        // Network failed — return a valid Response on EVERY path.
         const cached = await caches.match(req);
         if (cached) return cached;
-        if (req.mode === 'navigate') {
-          const shell = (await caches.match('/')) || (await caches.match('/index.html'));
+        if (isNavigation) {
+          const shell = await caches.match(SHELL);
           if (shell) return shell;
         }
         return new Response('', { status: 504, statusText: 'Offline' });
