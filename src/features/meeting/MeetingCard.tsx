@@ -87,8 +87,9 @@ export default function MeetingCard({ patient }: { patient: Patient }) {
     } catch { /* ignore */ }
   };
 
-  const liveMeetings = meetings.filter((m) => isLiveStatus(m.status));
-  const canCreate = isAdmin && liveMeetings.length === 0;
+  // Admin can always create another meeting (multiple meetings per patient are
+  // allowed — e.g. a fresh room for each session).
+  const canCreate = isAdmin;
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-6">

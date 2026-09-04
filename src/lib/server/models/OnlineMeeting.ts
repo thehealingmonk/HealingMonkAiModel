@@ -138,7 +138,7 @@ const meetingSignalSchema = new mongoose.Schema(
     to: { type: String, default: null },
     kind: {
       type: String,
-      enum: ['offer', 'answer', 'ice', 'join', 'bye', 'presence', 'ai'],
+      enum: ['offer', 'answer', 'ice', 'join', 'bye', 'presence', 'ai', 'knock', 'admit', 'deny'],
       required: true,
     },
     data: { type: mongoose.Schema.Types.Mixed, default: null },

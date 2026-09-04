@@ -10,6 +10,7 @@ import {
   MeetingRoomInfo, OnlineMeeting, Patient,
 } from '@/services/api';
 import { useMeetingPeer, PeerStatus } from '@/features/meeting/useMeetingPeer';
+import { useMeetingLobby } from '@/features/meeting/useMeetingLobby';
 import { CLINICAL_ASSESSMENTS, AssessmentCapture } from '@/lib/clinicalKnowledge';
 import { listIdealPostures } from '@/services/api';
 import PositionSelect from '@/features/assessment/PositionSelect';
@@ -105,11 +106,33 @@ export default function MeetingRoom() {
   const staffMeeting = role === 'staff' ? (room?.meeting as OnlineMeeting) : null;
   const meetingId = staffMeeting?.id;
 
+  // Patient's display name (for the host's admit prompt).
+  const roomPatientName =
+    room && typeof room.meeting === 'object'
+      ? 'patientName' in room.meeting
+        ? (room.meeting as any).patientName
+        : typeof (room.meeting as any).patient === 'object'
+        ? (room.meeting as any).patient.name
+        : ''
+      : '';
+
+  // Waiting room: the patient must be admitted by the host before connecting;
+  // the host sees and admits/denies incoming requests.
+  const lobby = useMeetingLobby({
+    token,
+    role,
+    patientName: roomPatientName,
+    enabled: joinable && !left,
+  });
+
+  // Media connects immediately for the host; for the patient only after admit.
+  const peerEnabled = joinable && !left && (role === 'staff' || lobby.admitted);
+
   const peer = useMeetingPeer({
     token,
     role,
     iceServers: room?.iceServers ?? [],
-    enabled: joinable && !left,
+    enabled: peerEnabled,
     onAppSignal: (d) => setPatientAiActive(!!d?.aiActive),
   });
 
@@ -219,7 +242,26 @@ export default function MeetingRoom() {
         icon={<PhoneOff className="w-8 h-8 text-slate-400" />}
         title="You left the meeting"
         body="You can rejoin using the same link."
-        action={<button onClick={() => setLeft(false)} className="mt-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-5 py-2.5 font-semibold text-white">Rejoin</button>}
+        action={<button onClick={() => { setLeft(false); window.location.reload(); }} className="mt-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-5 py-2.5 font-semibold text-white">Rejoin</button>}
+      />
+    );
+  }
+  if (role === 'patient' && lobby.denied) {
+    return (
+      <CenterCard
+        icon={<ShieldCheck className="w-8 h-8 text-red-400" />}
+        title="The host declined your request"
+        body="Please contact the clinic if you believe this is a mistake."
+      />
+    );
+  }
+  // Patient waiting room — knock sent, waiting for the host to admit.
+  if (role === 'patient' && !lobby.admitted) {
+    return (
+      <CenterCard
+        icon={<Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />}
+        title="Waiting for the host to let you in…"
+        body={`Your request to join has been sent${roomPatientName ? ` as ${roomPatientName}` : ''}. Please keep this page open — the doctor will admit you shortly.`}
       />
     );
   }
@@ -257,6 +299,34 @@ export default function MeetingRoom() {
           </span>
         )}
       </div>
+
+      {/* Host: incoming join requests (admit / deny). */}
+      {role === 'staff' && lobby.requests.length > 0 && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-md space-y-2">
+          {lobby.requests.map((r) => (
+            <div key={r.reqId} className="flex items-center justify-between gap-3 rounded-xl bg-slate-800/95 border border-white/10 shadow-xl px-4 py-3">
+              <p className="text-sm min-w-0 truncate">
+                <span className="font-semibold">{r.name}</span>
+                <span className="text-slate-400"> wants to join</span>
+              </p>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={() => lobby.deny(r.reqId)}
+                  className="rounded-lg border border-white/15 hover:bg-white/10 text-slate-200 text-sm font-semibold px-3 py-1.5"
+                >
+                  Deny
+                </button>
+                <button
+                  onClick={() => lobby.admit(r.reqId)}
+                  className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3 py-1.5"
+                >
+                  Admit
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Video stage */}
       <div className="relative flex-1 min-h-0">

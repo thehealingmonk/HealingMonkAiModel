@@ -22,8 +22,21 @@ const STUN_SERVERS: IceServer[] = [
   { urls: 'stun:stun1.l.google.com:19302' },
 ];
 
+// Free public TURN relay (Open Relay by Metered). TURN is what makes calls
+// connect across the internet — between two devices on DIFFERENT networks,
+// behind home/mobile/corporate NATs, STUN alone often fails, and the media has
+// to be relayed. This zero-config default makes remote (e.g. far-away patient)
+// calls work out of the box. For production scale/reliability, set your own
+// TURN via the env vars below (self-hosted coturn or a paid provider), which is
+// added on top of these.
+const FREE_TURN: IceServer[] = [
+  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+];
+
 export function getIceServers(): IceServer[] {
-  const servers: IceServer[] = [...STUN_SERVERS];
+  const servers: IceServer[] = [...STUN_SERVERS, ...FREE_TURN];
 
   const turnUrl = process.env.TURN_URL;
   if (turnUrl) {
