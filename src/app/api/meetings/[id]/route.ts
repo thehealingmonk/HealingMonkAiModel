@@ -52,23 +52,39 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if ('error' in res) return res.error;
   const { meeting } = res;
 
-  const body = (await req.json().catch(() => ({}))) || {};
+  try {
+    const body = (await req.json().catch(() => ({}))) || {};
 
-  if (typeof body.status === 'string') {
-    const next = body.status as MeetingStatus;
-    // Never resurrect a finished meeting via status; those are terminal.
-    if (meeting.status !== 'ended') {
-      meeting.status = next;
-      if (next === 'active' && !meeting.startedAt) meeting.startedAt = new Date();
-      if (next === 'ai_active' && !meeting.aiStartedAt) meeting.aiStartedAt = new Date();
+    if (typeof body.status === 'string') {
+      const next = body.status as MeetingStatus;
+      // Never resurrect a finished meeting via status; those are terminal.
+      if (meeting.status !== 'ended') {
+        meeting.status = next;
+        if (next === 'active' && !meeting.startedAt) meeting.startedAt = new Date();
+        if (next === 'ai_active' && !meeting.aiStartedAt) meeting.aiStartedAt = new Date();
+      }
     }
-  }
-  if (Array.isArray(body.selectedPositions)) meeting.selectedPositions = body.selectedPositions;
-  if (typeof body.reportId === 'string') meeting.report = body.reportId;
-  if (typeof body.shareId === 'string') meeting.shareId = body.shareId;
+    if (Array.isArray(body.selectedPositions)) meeting.selectedPositions = body.selectedPositions;
+    if (typeof body.reportId === 'string') meeting.report = body.reportId;
+    if (typeof body.shareId === 'string') meeting.shareId = body.shareId;
 
-  await meeting.save();
-  return NextResponse.json({ meeting: meeting.toStaffJSON() });
+    // Persist only the changed fields. `.save()` on a doc loaded WITH populated
+    // refs can re-validate the populated ref paths and throw; updating the plain
+    // fields directly avoids that and is what actually caused the PATCH 500s.
+    const update: Record<string, unknown> = {
+      status: meeting.status,
+      startedAt: meeting.startedAt,
+      aiStartedAt: meeting.aiStartedAt,
+      selectedPositions: meeting.selectedPositions,
+      report: meeting.report,
+      shareId: meeting.shareId,
+    };
+    await OnlineMeeting.updateOne({ _id: meeting._id }, { $set: update });
+    return NextResponse.json({ meeting: meeting.toStaffJSON() });
+  } catch (err) {
+    console.error('update meeting error', err);
+    return NextResponse.json({ error: 'Could not update meeting' }, { status: 500 });
+  }
 }
 
 // End a meeting (terminal). Staff only.
@@ -76,8 +92,13 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const res = await loadOwned(req, params.id);
   if ('error' in res) return res.error;
   const { meeting } = res;
-  meeting.status = 'ended';
-  meeting.endedAt = new Date();
-  await meeting.save();
-  return NextResponse.json({ meeting: meeting.toStaffJSON() });
+  try {
+    await OnlineMeeting.updateOne({ _id: meeting._id }, { $set: { status: 'ended', endedAt: new Date() } });
+    meeting.status = 'ended';
+    meeting.endedAt = new Date();
+    return NextResponse.json({ meeting: meeting.toStaffJSON() });
+  } catch (err) {
+    console.error('end meeting error', err);
+    return NextResponse.json({ error: 'Could not end meeting' }, { status: 500 });
+  }
 }
