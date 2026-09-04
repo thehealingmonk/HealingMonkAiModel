@@ -34,6 +34,9 @@ export const metadata: Metadata = {
   alternates: { canonical: '/' },
   manifest: '/manifest.webmanifest',
   appleWebApp: { capable: true, statusBarStyle: 'default', title: SITE_NAME },
+  // Standard (non-Apple) PWA capability meta — pairs with the Apple one above so
+  // modern browsers stop warning that `apple-mobile-web-app-capable` is deprecated.
+  other: { 'mobile-web-app-capable': 'yes' },
   // Favicon comes from app/icon.svg (Next file convention). The Apple touch icon
   // and PWA manifest icons are the pre-rendered brand PNGs in /public.
   icons: {

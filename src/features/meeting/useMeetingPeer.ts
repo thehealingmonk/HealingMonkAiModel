@@ -2,23 +2,24 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { IceServer } from '@/services/api';
 import { sendSignal, pollSignals, clearSignals, Signal } from '@/features/meeting/signaling';
 
-// A 1:1 WebRTC peer connection driven by the Mongo-polled signaling relay.
+// A 1:1 WebRTC peer connection driven by the Mongo-polled signaling relay, using
+// the standard **perfect negotiation** pattern so it connects reliably from any
+// network and never desyncs.
 //
-// Design goals: connect FAST and RELIABLY regardless of who opens the link
-// first, and survive page refreshes that leave stale signals behind.
+// Why perfect negotiation: the earlier hand-rolled "offerer re-offers / rolls
+// back" logic could cross an offer with a stale answer, which the browser
+// rejects with "m-lines order in answer doesn't match offer". Perfect
+// negotiation instead lets BOTH peers create offers freely and resolves any
+// collision deterministically by politeness (the patient is polite and rolls
+// back; the host is impolite and wins), which is glare- and m-line-safe.
 //
-//  • Identity is the MEETING ROLE ('staff' | 'patient') — there is exactly one
-//    of each in a 1:1 room, so we address everything by role and BROADCAST.
-//    This removes fragile per-connection peer-id targeting (the source of
-//    "stuck connecting" when a stale peer id from a previous tab was targeted).
-//  • A JOIN HEARTBEAT is re-broadcast every ~1.5s until connected, so the two
-//    sides always discover each other no matter the join order, and recover if
-//    one refreshes.
-//  • The STAFF (host) is the sole offerer; it clears the room's stale signals on
-//    start and (re)offers whenever it sees the patient and isn't yet connected,
-//    rolling back a stuck offer so negotiation never dead-ends.
-//  • The async media boot is guarded by a per-run flag so React StrictMode's
-//    mount→unmount→mount in dev can't stomp the live connection.
+//   • Identity is the MEETING ROLE ('staff' | 'patient') — exactly one of each
+//     in a 1:1 room — so signals are broadcast and role-addressed.
+//   • A join heartbeat (1.5s) handles discovery/recovery regardless of order.
+//   • Lobby signals ('knock'/'admit'/'deny') are ignored by the media peer.
+//   • ICE is queued until the remote description is set; ICE failure triggers a
+//     restart (which renegotiates a fresh path without dropping media).
+//   • StrictMode-safe: the async boot is bound to a per-run `active` flag.
 
 export type PeerStatus = 'idle' | 'connecting' | 'waiting' | 'connected' | 'failed';
 
@@ -32,7 +33,6 @@ interface Options {
 
 const POLL_MS = 500;
 const HEARTBEAT_MS = 1500;
-const OFFER_RETRY_MS = 4000;
 
 export function useMeetingPeer({ token, role, iceServers, enabled, onAppSignal }: Options) {
   const onAppSignalRef = useRef(onAppSignal);
@@ -45,23 +45,31 @@ export function useMeetingPeer({ token, role, iceServers, enabled, onAppSignal }
   const [camOn, setCamOn] = useState(true);
   const [error, setError] = useState('');
 
-  const isOfferer = role === 'staff';
+  // The host is "impolite" (wins glare); the patient is "polite" (rolls back).
+  const polite = role === 'patient';
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localRef = useRef<MediaStream | null>(null);
   const lastSignalId = useRef<string | null>(null);
   const pendingCandidates = useRef<RTCIceCandidateInit[]>([]);
-  const lastOfferAt = useRef(0);
+  const makingOffer = useRef(false);
+  const ignoreOffer = useRef(false);
   const sawRemote = useRef(false);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const heartbeatTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const disposed = useRef(false);
 
-  // Broadcast a signal to the other role (from = our role).
   const send = useCallback(
     (kind: Signal['kind'], data?: any) => sendSignal({ token, from: role, to: null, kind, data }),
     [token, role]
   );
+
+  const markRemote = useCallback(() => {
+    if (!sawRemote.current) {
+      sawRemote.current = true;
+      setStatus((s) => (s === 'connected' ? s : 'connecting'));
+    }
+  }, []);
 
   const flushCandidates = useCallback(async () => {
     const pc = pcRef.current;
@@ -69,41 +77,9 @@ export function useMeetingPeer({ token, role, iceServers, enabled, onAppSignal }
     const queued = pendingCandidates.current;
     pendingCandidates.current = [];
     for (const c of queued) {
-      try { await pc.addIceCandidate(c); } catch (err) { console.error('addIceCandidate(flush)', err); }
+      try { await pc.addIceCandidate(c); } catch (err) { if (!ignoreOffer.current) console.error('addIceCandidate(flush)', err); }
     }
   }, []);
-
-  // Offerer only: (re)create the offer. Rolls back a stale, unanswered offer so a
-  // dropped answer doesn't permanently wedge negotiation.
-  const makeOffer = useCallback(async () => {
-    const pc = pcRef.current;
-    if (!pc || !isOfferer) return;
-    if (pc.connectionState === 'connected') return;
-    const now = Date.now();
-    if (pc.signalingState !== 'stable') {
-      if (now - lastOfferAt.current < OFFER_RETRY_MS) return; // an offer is still pending
-      try { await pc.setLocalDescription({ type: 'rollback' } as RTCSessionDescriptionInit); } catch { /* not supported / not needed */ }
-    }
-    try {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      lastOfferAt.current = Date.now();
-      send('offer', pc.localDescription);
-    } catch (err) {
-      console.error('makeOffer error', err);
-    }
-  }, [isOfferer, send]);
-
-  // Mark that the other media peer is actually present. IMPORTANT: only real
-  // media signals count — NOT lobby 'knock'/'admit'/'deny' (a knocking patient
-  // hasn't started their media peer yet). Treating a knock as "present" made the
-  // host offer prematurely and poisoned the real negotiation after admit.
-  const markRemote = () => {
-    if (!sawRemote.current) {
-      sawRemote.current = true;
-      setStatus((s) => (s === 'connected' ? s : 'connecting'));
-    }
-  };
 
   const handleSignal = useCallback(
     async (sig: Signal) => {
@@ -112,35 +88,36 @@ export function useMeetingPeer({ token, role, iceServers, enabled, onAppSignal }
 
       switch (sig.kind) {
         case 'join': {
+          // Presence only — perfect negotiation drives offers via
+          // onnegotiationneeded, so we don't manually offer here.
           markRemote();
-          // The other media peer is present — the offerer (re)starts negotiation.
-          if (isOfferer) await makeOffer();
           break;
         }
-        case 'offer': {
-          if (isOfferer) break; // host never accepts an offer
+        case 'sdp': {
           markRemote();
-          await pc.setRemoteDescription(new RTCSessionDescription(sig.data));
-          await flushCandidates();
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          send('answer', pc.localDescription);
-          break;
-        }
-        case 'answer': {
-          if (!isOfferer) break;
-          markRemote();
-          // Only accept an answer we're actually waiting for (ignore stale ones).
-          if (pc.signalingState === 'have-local-offer') {
-            await pc.setRemoteDescription(new RTCSessionDescription(sig.data));
+          const description = sig.data as RTCSessionDescriptionInit;
+          const offerCollision =
+            description.type === 'offer' && (makingOffer.current || pc.signalingState !== 'stable');
+          ignoreOffer.current = !polite && offerCollision;
+          if (ignoreOffer.current) return; // impolite peer ignores a colliding offer
+          try {
+            // Polite peer: setRemoteDescription implicitly rolls back its own
+            // offer on collision (modern browsers), so m-lines stay consistent.
+            await pc.setRemoteDescription(description);
             await flushCandidates();
+            if (description.type === 'offer') {
+              await pc.setLocalDescription(); // implicit createAnswer
+              send('sdp', pc.localDescription);
+            }
+          } catch (err) {
+            console.error('sdp handling error', err);
           }
           break;
         }
         case 'ice': {
           markRemote();
           if (pc.remoteDescription) {
-            try { await pc.addIceCandidate(sig.data); } catch (err) { console.error('addIceCandidate', err); }
+            try { await pc.addIceCandidate(sig.data); } catch (err) { if (!ignoreOffer.current) console.error('addIceCandidate', err); }
           } else {
             pendingCandidates.current.push(sig.data);
           }
@@ -156,12 +133,12 @@ export function useMeetingPeer({ token, role, iceServers, enabled, onAppSignal }
           onAppSignalRef.current?.(sig.data);
           break;
         }
-        // 'knock' / 'admit' / 'deny' are lobby-only — the media peer ignores them.
+        // 'knock' / 'admit' / 'deny' are lobby-only — ignored by the media peer.
         default:
           break;
       }
     },
-    [isOfferer, makeOffer, flushCandidates, send]
+    [polite, flushCandidates, send, markRemote]
   );
 
   const poll = useCallback(async () => {
@@ -178,14 +155,13 @@ export function useMeetingPeer({ token, role, iceServers, enabled, onAppSignal }
   useEffect(() => {
     if (!enabled) return;
     disposed.current = false;
-    // Per-run guard so a StrictMode remount can't let this run's async work
-    // touch the next run's connection.
     let active = true;
     setStatus('connecting');
     setError('');
     sawRemote.current = false;
     lastSignalId.current = null;
-    lastOfferAt.current = 0;
+    makingOffer.current = false;
+    ignoreOffer.current = false;
 
     (async () => {
       let stream: MediaStream;
@@ -206,14 +182,24 @@ export function useMeetingPeer({ token, role, iceServers, enabled, onAppSignal }
 
       localRef.current = stream;
       setLocalStream(stream);
-      // Reflect current toggle intent onto the tracks.
       stream.getAudioTracks().forEach((t) => (t.enabled = micOn));
       stream.getVideoTracks().forEach((t) => (t.enabled = camOn));
 
       const pc = new RTCPeerConnection({ iceServers });
       pcRef.current = pc;
-      stream.getTracks().forEach((t) => pc.addTrack(t, stream));
 
+      // Perfect-negotiation handlers.
+      pc.onnegotiationneeded = async () => {
+        try {
+          makingOffer.current = true;
+          await pc.setLocalDescription(); // implicit createOffer
+          send('sdp', pc.localDescription);
+        } catch (err) {
+          console.error('onnegotiationneeded error', err);
+        } finally {
+          makingOffer.current = false;
+        }
+      };
       pc.onicecandidate = (e) => { if (e.candidate) send('ice', e.candidate.toJSON()); };
       pc.ontrack = (e) => { const [s] = e.streams; if (s) setRemoteStream(s); };
       pc.onconnectionstatechange = () => {
@@ -223,26 +209,28 @@ export function useMeetingPeer({ token, role, iceServers, enabled, onAppSignal }
         else if (st === 'disconnected') setStatus('connecting');
       };
       pc.oniceconnectionstatechange = () => {
-        if (pc.iceConnectionState === 'failed' && isOfferer) makeOffer();
+        if (pc.iceConnectionState === 'failed') {
+          // Renegotiate a fresh path without tearing down media.
+          try { pc.restartIce(); } catch { /* older browsers */ }
+        }
       };
 
-      // Host starts from a clean slate so stale signals from earlier attempts
-      // can't confuse this negotiation.
-      if (isOfferer) await clearSignals(token);
+      // Adding tracks fires onnegotiationneeded → the initial offer is created
+      // and broadcast; whoever joins later picks it up from the relay.
+      stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+
+      // Host starts from a clean slate so stale SDP/candidates from an earlier
+      // attempt can't confuse this negotiation.
+      if (!polite) await clearSignals(token);
       if (!active) return;
 
       setStatus('waiting');
       await send('join', { role });
       poll();
 
-      // Keep announcing presence until connected, so discovery/recovery is fast
-      // regardless of who joined first or refreshed.
       heartbeatTimer.current = setInterval(() => {
         if (disposed.current) return;
-        if (pcRef.current?.connectionState !== 'connected') {
-          send('join', { role });
-          if (isOfferer && sawRemote.current) makeOffer();
-        }
+        if (pcRef.current?.connectionState !== 'connected') send('join', { role });
       }, HEARTBEAT_MS);
     })();
 
