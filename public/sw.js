@@ -4,7 +4,7 @@
    - API / auth responses (/api/*) are never cached (always live, private),
    - everything is network-first so clinic data stays fresh; the cache is only
      a fallback when the device is offline. */
-const CACHE = 'hm-shell-v1';
+const CACHE = 'hm-shell-v2';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -34,6 +34,19 @@ self.addEventListener('fetch', (event) => {
         }
         return res;
       })
-      .catch(() => caches.match(req))
+      .catch(async () => {
+        // Network failed — fall back to the cache. CRITICAL: respondWith() must
+        // ALWAYS receive a Response. If nothing is cached, caches.match resolves
+        // to `undefined`, which throws "Failed to convert value to 'Response'"
+        // and breaks the page. So we guard every path and, for a navigation,
+        // fall back to the cached app shell so the SPA still boots offline.
+        const cached = await caches.match(req);
+        if (cached) return cached;
+        if (req.mode === 'navigate') {
+          const shell = (await caches.match('/')) || (await caches.match('/index.html'));
+          if (shell) return shell;
+        }
+        return new Response('', { status: 504, statusText: 'Offline' });
+      })
   );
 });
