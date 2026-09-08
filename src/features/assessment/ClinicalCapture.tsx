@@ -535,12 +535,21 @@ export default function ClinicalCapture({ assessments, onComplete, onBack, exter
 
   const currentExtras = extraShots.filter((s) => s.assessmentId === current?.id);
 
+  // Online (embedded) mode renders inside the video-call stage, so the frame is
+  // shown WHOLE (object-contain) — exactly like the live meeting tile — instead
+  // of cropping-to-fill. This is what removes the "zoom" the moment AI starts:
+  // the displayed framing no longer changes. Video, skeleton canvas and guide
+  // canvas MUST share the same object-fit so the overlay stays pixel-aligned to
+  // the video (both letterbox identically). The in-clinic full-screen flow keeps
+  // object-cover for its immersive selfie framing — unchanged.
+  const fit = embedded ? 'object-contain' : 'object-cover';
+
   return (
     <div className={`bg-black flex flex-col ${embedded ? 'absolute inset-0' : 'min-h-screen relative'}`}>
-      <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover absolute inset-0" />
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover" />
+      <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full ${fit} absolute inset-0`} />
+      <canvas ref={canvasRef} className={`absolute inset-0 w-full h-full ${fit}`} />
       {/* Guidance arrow overlay — separate canvas, never captured into a photo. */}
-      <canvas ref={guideCanvasRef} className="absolute inset-0 w-full h-full object-cover z-10 pointer-events-none" />
+      <canvas ref={guideCanvasRef} className={`absolute inset-0 w-full h-full ${fit} z-10 pointer-events-none`} />
 
       {/* Shutter flash on capture */}
       <div

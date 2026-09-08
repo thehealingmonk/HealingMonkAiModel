@@ -4,8 +4,8 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 export type SignalKind =
-  | 'offer' | 'answer' | 'ice' | 'join' | 'bye' | 'presence' | 'ai'
-  | 'knock' | 'admit' | 'deny';
+  | 'offer' | 'answer' | 'sdp' | 'ice' | 'join' | 'bye' | 'presence' | 'ai'
+  | 'chat' | 'screen' | 'knock' | 'admit' | 'deny';
 
 export interface Signal {
   id: string;
