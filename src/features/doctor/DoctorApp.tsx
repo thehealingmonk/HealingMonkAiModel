@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, Outlet, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/store/auth.store';
 import DashboardShell from '@/components/layout/DashboardShell';
-import { Patient, getPatient, listIdealPostures } from '@/services/api';
+import { Patient, getPatient, getMyPositionPreset } from '@/services/api';
 import { CLINICAL_ASSESSMENTS, AssessmentCapture } from '@/lib/clinicalKnowledge';
 import DoctorDashboard from '@/features/doctor/DoctorDashboard';
+import DoctorPositions from '@/features/doctor/DoctorPositions';
 import PatientForm from '@/features/doctor/PatientForm';
 import PatientProfile from '@/features/doctor/PatientProfile';
 import DoctorReportView from '@/features/doctor/DoctorReportView';
@@ -121,6 +122,7 @@ export default function DoctorApp() {
           element={
             <DoctorDashboard
               onRegister={() => navigate('/doctor/register')}
+              onManagePositions={() => navigate('/doctor/positions')}
               onOpenPatient={(p) => {
                 setPatient(p);
                 navigate(`/doctor/patient/${p.id}`);
@@ -140,6 +142,7 @@ export default function DoctorApp() {
             />
           }
         />
+        <Route path="positions" element={<DoctorPositions onBack={() => navigate('/doctor')} />} />
         <Route
           path="patient/:id"
           element={
@@ -149,23 +152,28 @@ export default function DoctorApp() {
               onStart={async (p) => {
                 setPatient(p);
                 setCaptures([]);
-                // Open the position screen with the default full-body poses PLUS
-                // the extra poses the doctor curated for this patient's pain areas
-                // (e.g. shoulder), all pre-ticked. Keep knowledge-base order so the
-                // full-body shots stay first.
-                const curated = new Set<string>();
-                if (p.painAreas?.length) {
-                  try {
-                    const { sets } = await listIdealPostures(p.painAreas);
-                    for (const s of sets) for (const id of s.poses ?? []) curated.add(id);
-                  } catch {
-                    /* Non-fatal — fall back to just the defaults. */
+                // Pre-tick this doctor's own default positions PLUS the poses they
+                // curated for this patient's pain areas (e.g. Shoulder). Falls back
+                // to the built-in defaults if the doctor hasn't set a preset yet.
+                const wanted = new Set<string>();
+                try {
+                  const { preset } = await getMyPositionPreset();
+                  if (preset) {
+                    for (const id of preset.defaultPoses) wanted.add(id);
+                    const areas = new Set((p.painAreas ?? []).map((a) => a.toLowerCase()));
+                    for (const c of preset.byCondition) {
+                      if (areas.has(c.condition.toLowerCase())) for (const id of c.poses) wanted.add(id);
+                    }
                   }
+                } catch {
+                  /* Non-fatal — fall back to the built-in defaults below. */
                 }
-                const preset = CLINICAL_ASSESSMENTS.filter(
-                  (a) => a.defaultSelected || curated.has(a.id)
-                ).map((a) => a.id);
-                setAssessmentIds(preset);
+                // If the doctor has no preset (empty), fall back to the built-in defaults.
+                const preselect =
+                  wanted.size > 0
+                    ? CLINICAL_ASSESSMENTS.filter((a) => wanted.has(a.id)).map((a) => a.id)
+                    : CLINICAL_ASSESSMENTS.filter((a) => a.defaultSelected).map((a) => a.id);
+                setAssessmentIds(preselect);
                 navigate(`/doctor/patient/${p.id}/assess`);
               }}
             />

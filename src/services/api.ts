@@ -389,6 +389,34 @@ export async function saveIdealPosture(
   });
 }
 
+// ---- Per-doctor default-positions preset ----
+
+export interface ConditionPreset {
+  condition: string;
+  poses: string[];
+}
+
+export interface PositionPreset {
+  /** Poses always pre-selected when this doctor starts an assessment. */
+  defaultPoses: string[];
+  /** Extra poses to pre-select per pain area (e.g. Shoulder → [...]). */
+  byCondition: ConditionPreset[];
+  updatedAt?: string;
+}
+
+// The calling doctor's default-positions preset (null if never saved).
+export async function getMyPositionPreset(): Promise<{ preset: PositionPreset | null }> {
+  return request('/position-presets');
+}
+
+// Save (upsert) the calling doctor's default-positions preset.
+export async function saveMyPositionPreset(payload: {
+  defaultPoses: string[];
+  byCondition: ConditionPreset[];
+}): Promise<{ preset: PositionPreset }> {
+  return request('/position-presets', { method: 'PUT', body: JSON.stringify(payload) });
+}
+
 // ---- Custom (reference-only) positions ----
 
 // A clinic-added reference position, grouped by category (body region). Shown in
