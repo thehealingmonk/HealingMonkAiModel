@@ -1,8 +1,9 @@
-import { UserPlus, CalendarDays, IndianRupee } from 'lucide-react';
+import { UserPlus, CalendarDays, IndianRupee, CalendarRange } from 'lucide-react';
 import { Routes, Route, Navigate, Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/store/auth.store';
 import DashboardShell, { dashNavCls } from '@/components/layout/DashboardShell';
 import ReceptionDashboard from '@/features/reception/ReceptionDashboard';
+import ReceptionCalendar from '@/features/reception/ReceptionCalendar';
 import ReceptionCollections from '@/features/reception/ReceptionCollections';
 import ReceptionBilling from '@/features/reception/ReceptionBilling';
 import BookAppointment from '@/features/reception/BookAppointment';
@@ -26,6 +27,9 @@ function Chrome() {
           <NavLink to="/reception" end className={dashNavCls}>
             <CalendarDays className="w-4 h-4" /> Schedule
           </NavLink>
+          <NavLink to="/reception/calendar" className={dashNavCls}>
+            <CalendarRange className="w-4 h-4" /> Calendar
+          </NavLink>
           <NavLink to="/reception/register" className={dashNavCls}>
             <UserPlus className="w-4 h-4" /> Register patient
           </NavLink>
@@ -46,6 +50,7 @@ export default function ReceptionApp() {
     <Routes>
       <Route element={<Chrome />}>
         <Route index element={<ReceptionDashboard onBook={() => navigate('/reception/book')} />} />
+        <Route path="calendar" element={<ReceptionCalendar />} />
         <Route
           path="register"
           element={
