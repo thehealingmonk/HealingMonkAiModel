@@ -13,6 +13,9 @@ interface Props {
   onBack: () => void;
 }
 
+// The full-body poses are the always-on baseline (the built-in defaults live here).
+const FULL_BODY_POSES = CLINICAL_ASSESSMENTS.filter((a) => a.bodyRegion === 'Full Body');
+const FULL_BODY_IDS = new Set(FULL_BODY_POSES.map((a) => a.id));
 const BUILTIN_DEFAULTS = CLINICAL_ASSESSMENTS.filter((a) => a.defaultSelected).map((a) => a.id);
 
 // Doctor's own "default positions" setup. Two parts:
@@ -35,7 +38,9 @@ export default function DoctorPositions({ onBack }: Props) {
       try {
         const { preset } = await getMyPositionPreset();
         if (preset) {
-          if (preset.defaultPoses.length) setDefaultPoses(preset.defaultPoses);
+          // Always-on set is full-body only; drop any legacy non-full-body ids so
+          // they no longer apply to every patient (they belong under a pain area).
+          if (preset.defaultPoses.length) setDefaultPoses(preset.defaultPoses.filter((id) => FULL_BODY_IDS.has(id)));
           const map: Record<string, string[]> = {};
           for (const c of preset.byCondition) map[c.condition] = c.poses;
           setByCondition(map);
@@ -118,14 +123,15 @@ export default function DoctorPositions({ onBack }: Props) {
             <div className="mb-1 flex items-center gap-2">
               <Star className="w-4 h-4 text-amber-400" />
               <h3 className="font-semibold text-white">
-                Always pre-selected{' '}
+                Always pre-selected · full body{' '}
                 <span className="text-slate-400 font-normal text-sm">· {defaultPoses.length} selected</span>
               </h3>
             </div>
             <p className="text-slate-400 text-sm mb-4">
-              These poses are ticked for every assessment you start, regardless of the patient's pain area.
+              These full-body poses are ticked for <b>every</b> assessment, whatever the pain area. Pain-area specific
+              poses go in the section below — they only load when the patient has that pain area.
             </p>
-            <PoseGrid selected={defaultPoses} onToggle={toggleDefault} />
+            <PoseGrid items={FULL_BODY_POSES} selected={defaultPoses} onToggle={toggleDefault} />
           </section>
 
           {/* Per-condition */}
@@ -168,12 +174,21 @@ export default function DoctorPositions({ onBack }: Props) {
   );
 }
 
-// A grid of every capture pose with an explicit "Add to default" / "Remove from
-// default" button per card, so it's clear what's in the default set.
-function PoseGrid({ selected, onToggle }: { selected: string[]; onToggle: (id: string) => void }) {
+// A grid of capture poses with an explicit "Add to default" / "Remove from
+// default" button per card, so it's clear what's in the default set. `items`
+// limits which poses are shown (e.g. full-body only for the always section).
+function PoseGrid({
+  selected,
+  onToggle,
+  items = CLINICAL_ASSESSMENTS,
+}: {
+  selected: string[];
+  onToggle: (id: string) => void;
+  items?: typeof CLINICAL_ASSESSMENTS;
+}) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-      {CLINICAL_ASSESSMENTS.map((a) => {
+      {items.map((a) => {
         const active = selected.includes(a.id);
         return (
           <div

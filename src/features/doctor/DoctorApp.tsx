@@ -152,27 +152,31 @@ export default function DoctorApp() {
               onStart={async (p) => {
                 setPatient(p);
                 setCaptures([]);
-                // Pre-tick this doctor's own default positions PLUS the poses they
-                // curated for this patient's pain areas (e.g. Shoulder). Falls back
-                // to the built-in defaults if the doctor hasn't set a preset yet.
+                // Pre-tick = the full-body baseline (always) + ONLY the poses the
+                // doctor curated for THIS patient's pain areas. Other categories'
+                // defaults are NOT added — a Shoulder patient gets full-body +
+                // shoulder poses only. Extra poses can still be added on the next
+                // screen. Full-body baseline always applies regardless of preset.
+                const fullBody = new Set(
+                  CLINICAL_ASSESSMENTS.filter((a) => a.bodyRegion === 'Full Body').map((a) => a.id)
+                );
                 const wanted = new Set<string>();
+                for (const a of CLINICAL_ASSESSMENTS) if (a.defaultSelected) wanted.add(a.id);
                 try {
                   const { preset } = await getMyPositionPreset();
                   if (preset) {
-                    for (const id of preset.defaultPoses) wanted.add(id);
+                    // Always-on part: keep only the doctor's FULL-BODY defaults.
+                    for (const id of preset.defaultPoses) if (fullBody.has(id)) wanted.add(id);
+                    // Condition part: poses curated for this patient's pain areas.
                     const areas = new Set((p.painAreas ?? []).map((a) => a.toLowerCase()));
                     for (const c of preset.byCondition) {
                       if (areas.has(c.condition.toLowerCase())) for (const id of c.poses) wanted.add(id);
                     }
                   }
                 } catch {
-                  /* Non-fatal — fall back to the built-in defaults below. */
+                  /* Non-fatal — the full-body baseline above still applies. */
                 }
-                // If the doctor has no preset (empty), fall back to the built-in defaults.
-                const preselect =
-                  wanted.size > 0
-                    ? CLINICAL_ASSESSMENTS.filter((a) => wanted.has(a.id)).map((a) => a.id)
-                    : CLINICAL_ASSESSMENTS.filter((a) => a.defaultSelected).map((a) => a.id);
+                const preselect = CLINICAL_ASSESSMENTS.filter((a) => wanted.has(a.id)).map((a) => a.id);
                 setAssessmentIds(preselect);
                 navigate(`/doctor/patient/${p.id}/assess`);
               }}

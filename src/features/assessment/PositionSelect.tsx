@@ -6,7 +6,7 @@ import PageShell from '@/components/common/PageShell';
 import { useAuth } from '@/store/auth.store';
 import {
   CustomPosition, listCustomPositions, createCustomPosition, deleteCustomPosition,
-  ConditionPreset, getMyPositionPreset, saveMyPositionPreset,
+  getMyPositionPreset, saveMyPositionPreset,
 } from '@/services/api';
 import {
   CheckCircle2, ChevronLeft, AlertCircle, Activity, ArrowRight, LayoutGrid, Plus, Trash2, X, Upload, ImageIcon, Loader2, Star,
@@ -20,6 +20,22 @@ interface Props {
 
 // Sentinel tab id for the "All" overview (every category at once).
 const ALL_TAB = '__all__';
+
+// Maps a body-region section to the pain-area condition its "default" poses
+// belong to (must match Patient.painAreas / IDEAL_POSTURE_CONDITIONS so a
+// patient assigned for that pain area auto-loads them). "Full Body" is handled
+// separately as the always-on baseline; unmapped regions (e.g. Elbow) get no
+// default button since no patient pain area targets them.
+const REGION_TO_CONDITION: Record<string, string> = {
+  Cervical: 'Neck',
+  Shoulder: 'Shoulder',
+  Thoracic: 'Upper Back',
+  Spine: 'Lower Back',
+  Pelvis: 'Hip',
+  Hip: 'Hip',
+  Knee: 'Knee',
+  Ankle: 'Ankle',
+};
 
 // Downscale + JPEG-encode an uploaded image so the stored reference stays small.
 function fileToDataUrl(file: File, maxPx = 900, quality = 0.82): Promise<string> {
@@ -64,11 +80,11 @@ export default function PositionSelect({ initial, onBack, onStart }: Props) {
   const [adding, setAdding] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // The doctor's persisted "default positions" set (the poses always pre-ticked
-  // on Start Assessment), so we can add/remove a pose to it right here. We keep
-  // the preset's per-condition part too so saving never wipes it.
+  // The doctor's persisted defaults, split into the always-on (full-body) set and
+  // the per-pain-area map, so "Add to default" in a category only affects THAT
+  // category — a Shoulder default applies only to Shoulder patients.
   const [defaultIds, setDefaultIds] = useState<Set<string>>(new Set(defaults));
-  const [presetByCondition, setPresetByCondition] = useState<ConditionPreset[]>([]);
+  const [byCondMap, setByCondMap] = useState<Record<string, string[]>>({});
   const [savingDefaultId, setSavingDefaultId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -77,7 +93,9 @@ export default function PositionSelect({ initial, onBack, onStart }: Props) {
       .then(({ preset }) => {
         if (preset) {
           setDefaultIds(new Set(preset.defaultPoses.length ? preset.defaultPoses : defaults));
-          setPresetByCondition(preset.byCondition);
+          const m: Record<string, string[]> = {};
+          for (const c of preset.byCondition) m[c.condition] = c.poses;
+          setByCondMap(m);
         }
       })
       .catch(() => {
@@ -86,22 +104,52 @@ export default function PositionSelect({ initial, onBack, onStart }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canManageDefaults]);
 
-  // Add/remove a pose to the doctor's persisted defaults. Adding also ticks it
-  // for the current assessment, so "Add to default" does the obvious thing now.
-  const toggleDefault = async (id: string) => {
-    const willAdd = !defaultIds.has(id);
-    const next = new Set(defaultIds);
-    if (willAdd) next.add(id);
-    else next.delete(id);
-    setDefaultIds(next);
-    if (willAdd) setSelected((s) => (s.includes(id) ? s : [...s, id]));
+  // Which default bucket a category maps to.
+  const defaultTargetFor = (cat: string): { type: 'always' } | { type: 'condition'; condition: string } | null => {
+    if (cat === 'Full Body') return { type: 'always' };
+    const condition = REGION_TO_CONDITION[cat];
+    return condition ? { type: 'condition', condition } : null;
+  };
+
+  const isInDefault = (id: string, cat: string) => {
+    const t = defaultTargetFor(cat);
+    if (!t) return false;
+    return t.type === 'always' ? defaultIds.has(id) : (byCondMap[t.condition] ?? []).includes(id);
+  };
+
+  // Add/remove a pose to the right default bucket (always for Full Body, else the
+  // section's pain-area condition) and persist. Adding also ticks it for now.
+  const toggleDefault = async (id: string, cat: string) => {
+    const t = defaultTargetFor(cat);
+    if (!t) return;
+    const adding = !isInDefault(id, cat);
+    const prevDefaults = defaultIds;
+    const prevMap = byCondMap;
+    let nextDefaults = defaultIds;
+    let nextMap = byCondMap;
+    if (t.type === 'always') {
+      nextDefaults = new Set(defaultIds);
+      if (adding) nextDefaults.add(id);
+      else nextDefaults.delete(id);
+      setDefaultIds(nextDefaults);
+    } else {
+      const cur = byCondMap[t.condition] ?? [];
+      nextMap = { ...byCondMap, [t.condition]: adding ? [...cur, id] : cur.filter((x) => x !== id) };
+      setByCondMap(nextMap);
+    }
+    if (adding) setSelected((s) => (s.includes(id) ? s : [...s, id]));
     setSavingDefaultId(id);
     setError('');
     try {
-      await saveMyPositionPreset({ defaultPoses: [...next], byCondition: presetByCondition });
+      await saveMyPositionPreset({
+        defaultPoses: [...nextDefaults],
+        byCondition: Object.entries(nextMap)
+          .filter(([, poses]) => poses.length > 0)
+          .map(([condition, poses]) => ({ condition, poses })),
+      });
     } catch (e) {
-      // Revert on failure.
-      setDefaultIds(defaultIds);
+      setDefaultIds(prevDefaults);
+      setByCondMap(prevMap);
       setError(e instanceof Error ? e.message : 'Could not update your defaults');
     } finally {
       setSavingDefaultId(null);
@@ -273,7 +321,8 @@ export default function PositionSelect({ initial, onBack, onStart }: Props) {
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
                 {poses.map((a) => {
                   const active = selected.includes(a.id);
-                  const inDefault = canManageDefaults ? defaultIds.has(a.id) : a.defaultSelected;
+                  const inDefault = canManageDefaults ? isInDefault(a.id, cat) : a.defaultSelected;
+                  const canDefault = canManageDefaults && defaultTargetFor(cat) !== null;
                   return (
                     <div
                       key={a.id}
@@ -301,11 +350,11 @@ export default function PositionSelect({ initial, onBack, onStart }: Props) {
                           </div>
                         </div>
                       </button>
-                      {canManageDefaults && (
+                      {canDefault && (
                         <div className="px-3 pb-3 pt-2">
                           <button
                             type="button"
-                            onClick={() => toggleDefault(a.id)}
+                            onClick={() => toggleDefault(a.id, cat)}
                             disabled={savingDefaultId === a.id}
                             className={`inline-flex w-full items-center justify-center gap-1 rounded-lg py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-60 ${
                               inDefault
