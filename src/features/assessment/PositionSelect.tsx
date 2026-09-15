@@ -3,11 +3,13 @@ import { CLINICAL_ASSESSMENTS } from '@/lib/clinicalKnowledge';
 import { initializePoseLandmarker } from '@/lib/poseDetection';
 import PoseIllustration from '@/components/common/PoseIllustration';
 import PageShell from '@/components/common/PageShell';
+import { useAuth } from '@/store/auth.store';
 import {
   CustomPosition, listCustomPositions, createCustomPosition, deleteCustomPosition,
+  ConditionPreset, getMyPositionPreset, saveMyPositionPreset,
 } from '@/services/api';
 import {
-  CheckCircle2, ChevronLeft, AlertCircle, Activity, ArrowRight, LayoutGrid, Plus, Trash2, X, Upload, ImageIcon, Loader2,
+  CheckCircle2, ChevronLeft, AlertCircle, Activity, ArrowRight, LayoutGrid, Plus, Trash2, X, Upload, ImageIcon, Loader2, Star,
 } from 'lucide-react';
 
 interface Props {
@@ -46,6 +48,10 @@ function fileToDataUrl(file: File, maxPx = 900, quality = 0.82): Promise<string>
 }
 
 export default function PositionSelect({ initial, onBack, onStart }: Props) {
+  const { hasRole } = useAuth();
+  // Only staff who own a preset can manage their defaults (guests/patients can't).
+  const canManageDefaults = hasRole('doctor') || hasRole('admin');
+
   const defaults = CLINICAL_ASSESSMENTS.filter((a) => a.defaultSelected).map((a) => a.id);
   const [selected, setSelected] = useState<string[]>(initial?.length ? initial : defaults);
   const [error, setError] = useState('');
@@ -57,6 +63,50 @@ export default function PositionSelect({ initial, onBack, onStart }: Props) {
   // Add-position modal (null = closed); pre-fills the category.
   const [adding, setAdding] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // The doctor's persisted "default positions" set (the poses always pre-ticked
+  // on Start Assessment), so we can add/remove a pose to it right here. We keep
+  // the preset's per-condition part too so saving never wipes it.
+  const [defaultIds, setDefaultIds] = useState<Set<string>>(new Set(defaults));
+  const [presetByCondition, setPresetByCondition] = useState<ConditionPreset[]>([]);
+  const [savingDefaultId, setSavingDefaultId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!canManageDefaults) return;
+    getMyPositionPreset()
+      .then(({ preset }) => {
+        if (preset) {
+          setDefaultIds(new Set(preset.defaultPoses.length ? preset.defaultPoses : defaults));
+          setPresetByCondition(preset.byCondition);
+        }
+      })
+      .catch(() => {
+        /* non-fatal — fall back to the built-in defaults */
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canManageDefaults]);
+
+  // Add/remove a pose to the doctor's persisted defaults. Adding also ticks it
+  // for the current assessment, so "Add to default" does the obvious thing now.
+  const toggleDefault = async (id: string) => {
+    const willAdd = !defaultIds.has(id);
+    const next = new Set(defaultIds);
+    if (willAdd) next.add(id);
+    else next.delete(id);
+    setDefaultIds(next);
+    if (willAdd) setSelected((s) => (s.includes(id) ? s : [...s, id]));
+    setSavingDefaultId(id);
+    setError('');
+    try {
+      await saveMyPositionPreset({ defaultPoses: [...next], byCondition: presetByCondition });
+    } catch (e) {
+      // Revert on failure.
+      setDefaultIds(defaultIds);
+      setError(e instanceof Error ? e.message : 'Could not update your defaults');
+    } finally {
+      setSavingDefaultId(null);
+    }
+  };
 
   // Warm up the (multi-MB) pose model now, while the doctor is picking positions.
   useEffect(() => {
@@ -223,16 +273,15 @@ export default function PositionSelect({ initial, onBack, onStart }: Props) {
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
                 {poses.map((a) => {
                   const active = selected.includes(a.id);
+                  const inDefault = canManageDefaults ? defaultIds.has(a.id) : a.defaultSelected;
                   return (
-                    <button
+                    <div
                       key={a.id}
-                      type="button"
-                      onClick={() => toggle(a.id)}
                       className={`relative overflow-hidden rounded-2xl border-2 bg-white text-left shadow-sm transition-all ${
                         active ? 'border-emerald-500 ring-2 ring-emerald-200' : 'border-slate-200 hover:border-emerald-300 hover:shadow-md'
                       }`}
                     >
-                      {a.defaultSelected && (
+                      {inDefault && (
                         <span className="absolute left-2 top-2 z-10 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-2 py-0.5 text-[10px] font-semibold text-white">
                           Default
                         </span>
@@ -242,15 +291,43 @@ export default function PositionSelect({ initial, onBack, onStart }: Props) {
                           <CheckCircle2 className="h-4 w-4" />
                         </span>
                       )}
-                      <PoseIllustration pose={a.id} className="h-36 w-full bg-slate-50" />
-                      <div className="border-t border-slate-100 p-3">
-                        <p className="text-sm font-semibold leading-tight text-slate-900">{a.name}</p>
-                        <p className="mt-0.5 text-[11px] text-slate-400">{a.nameHi}</p>
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] capitalize text-slate-600">{a.view} view</span>
+                      <button type="button" onClick={() => toggle(a.id)} className="block w-full text-left">
+                        <PoseIllustration pose={a.id} className="h-36 w-full bg-slate-50" />
+                        <div className="border-t border-slate-100 px-3 pt-3">
+                          <p className="text-sm font-semibold leading-tight text-slate-900">{a.name}</p>
+                          <p className="mt-0.5 text-[11px] text-slate-400">{a.nameHi}</p>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] capitalize text-slate-600">{a.view} view</span>
+                          </div>
                         </div>
-                      </div>
-                    </button>
+                      </button>
+                      {canManageDefaults && (
+                        <div className="px-3 pb-3 pt-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleDefault(a.id)}
+                            disabled={savingDefaultId === a.id}
+                            className={`inline-flex w-full items-center justify-center gap-1 rounded-lg py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-60 ${
+                              inDefault
+                                ? 'border border-rose-300 text-rose-600 hover:bg-rose-50'
+                                : 'border border-emerald-300 text-emerald-700 hover:bg-emerald-50'
+                            }`}
+                          >
+                            {savingDefaultId === a.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : inDefault ? (
+                              <>
+                                <X className="h-3.5 w-3.5" /> Remove from default
+                              </>
+                            ) : (
+                              <>
+                                <Star className="h-3.5 w-3.5" /> Add to default
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
 
