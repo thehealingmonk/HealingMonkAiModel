@@ -389,6 +389,38 @@ export async function saveIdealPosture(
   });
 }
 
+// ---- Custom (reference-only) positions ----
+
+// A clinic-added reference position, grouped by category (body region). Shown in
+// the Select Positions dictionary alongside the built-in assessments; the AI does
+// not measure these — they document the clinic's own poses/images per category.
+export interface CustomPosition {
+  id: string;
+  category: string;
+  name: string;
+  imageData: string; // data URL
+  createdAt?: string;
+}
+
+// List custom positions, optionally for one category.
+export async function listCustomPositions(category?: string): Promise<{ positions: CustomPosition[] }> {
+  return request(`/custom-positions${category ? `?category=${encodeURIComponent(category)}` : ''}`);
+}
+
+// Add a custom reference position to a category. Doctor/admin only.
+export async function createCustomPosition(payload: {
+  category: string;
+  name: string;
+  imageData: string;
+}): Promise<{ position: CustomPosition }> {
+  return request('/custom-positions', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// Delete a custom position. Doctor/admin only.
+export async function deleteCustomPosition(id: string): Promise<{ ok: boolean; id: string }> {
+  return request(`/custom-positions/${id}`, { method: 'DELETE' });
+}
+
 // ---- Appointments ----
 
 export type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled' | 'no_show';
