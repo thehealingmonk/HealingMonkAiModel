@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LayoutGrid, CalendarDays, Users, FileText, IndianRupee, UserCog } from 'lucide-react';
+import { LayoutGrid, CalendarDays, Users, FileText, IndianRupee, UserCog, Video } from 'lucide-react';
 import { Routes, Route, Navigate, Outlet, NavLink, useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { useAuth } from '@/store/auth.store';
 import DashboardShell, { dashNavCls } from '@/components/layout/DashboardShell';
@@ -9,6 +9,7 @@ import AdminDashboard from '@/features/admin/AdminDashboard';
 import UserManagement from '@/features/admin/UserManagement';
 import PatientsList from '@/features/admin/PatientsList';
 import ReportsList from '@/features/admin/ReportsList';
+import MeetingsScheduler from '@/features/admin/MeetingsScheduler';
 import AppointmentsList from '@/features/admin/AppointmentsList';
 import PaymentsList from '@/features/admin/PaymentsList';
 import ReceptionDashboard from '@/features/reception/ReceptionDashboard';
@@ -33,6 +34,7 @@ const NAV = [
   { to: '/admin/patients', icon: Users, label: 'Patients' },
   { to: '/admin/reports', icon: FileText, label: 'Reports' },
   { to: '/admin/appointments', icon: CalendarDays, label: 'Appointments' },
+  { to: '/admin/meetings', icon: Video, label: 'Meetings' },
   { to: '/admin/payments', icon: IndianRupee, label: 'Payments' },
   { to: '/admin/users', icon: UserCog, label: 'Users' },
 ];
@@ -161,6 +163,7 @@ export default function AdminApp() {
           }
         />
         <Route path="reports" element={<ReportsList />} />
+        <Route path="meetings" element={<MeetingsScheduler />} />
         <Route path="appointments" element={<AppointmentsList />} />
         <Route path="payments" element={<PaymentsList />} />
         <Route path="users" element={<UsersRoute />} />

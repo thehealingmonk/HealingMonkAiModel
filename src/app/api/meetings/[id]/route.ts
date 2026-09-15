@@ -67,6 +67,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (Array.isArray(body.selectedPositions)) meeting.selectedPositions = body.selectedPositions;
     if (typeof body.reportId === 'string') meeting.report = body.reportId;
     if (typeof body.shareId === 'string') meeting.shareId = body.shareId;
+    // Reschedule: accept an ISO date, or null/'' to clear the planned time.
+    if ('scheduledAt' in body) {
+      if (body.scheduledAt) {
+        const d = new Date(body.scheduledAt);
+        if (!Number.isNaN(d.getTime())) meeting.scheduledAt = d;
+      } else {
+        meeting.scheduledAt = null;
+      }
+    }
 
     // Persist only the changed fields. `.save()` on a doc loaded WITH populated
     // refs can re-validate the populated ref paths and throw; updating the plain
@@ -75,6 +84,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       status: meeting.status,
       startedAt: meeting.startedAt,
       aiStartedAt: meeting.aiStartedAt,
+      scheduledAt: meeting.scheduledAt,
       selectedPositions: meeting.selectedPositions,
       report: meeting.report,
       shareId: meeting.shareId,

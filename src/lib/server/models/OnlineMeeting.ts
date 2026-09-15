@@ -33,6 +33,11 @@ const onlineMeetingSchema = new mongoose.Schema(
     // The s-admin/staff who created the meeting.
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     status: { type: String, enum: MEETING_STATUSES, default: 'created', index: true },
+    // Optional planned date & time of the consultation, emailed to the patient.
+    // The room link itself stays valid until `expiresAt` regardless of this.
+    scheduledAt: { type: Date, default: null, index: true },
+    // Whether an invite email has been sent to the patient (for UI feedback).
+    inviteSentAt: { type: Date, default: null },
     // Positions the doctor chose to assess online (mirrors the clinic flow).
     selectedPositions: { type: [String], default: [] },
     startedAt: { type: Date, default: null },
@@ -71,6 +76,8 @@ onlineMeetingSchema.methods.toStaffJSON = function toStaffJSON(this: any) {
     id: this._id.toString(),
     roomToken: this.roomToken,
     status: this.effectiveStatus(),
+    scheduledAt: this.scheduledAt,
+    inviteSentAt: this.inviteSentAt,
     selectedPositions: this.selectedPositions || [],
     startedAt: this.startedAt,
     aiStartedAt: this.aiStartedAt,
@@ -110,6 +117,7 @@ onlineMeetingSchema.methods.toPatientJSON = function toPatientJSON(this: any) {
   return {
     roomToken: this.roomToken,
     status: this.effectiveStatus(),
+    scheduledAt: this.scheduledAt,
     patientName: p && p._id ? p.name : '',
   };
 };

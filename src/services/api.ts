@@ -334,6 +334,15 @@ export async function deleteReport(id: string): Promise<{ ok: boolean }> {
   return request(`/reports/${id}`, { method: 'DELETE' });
 }
 
+// Doctor/admin: (re)send a report to the patient by email, including the public
+// no-login report link. `to` overrides the patient's stored email.
+export async function sendReportEmail(id: string, to?: string): Promise<{ ok: boolean; to: string }> {
+  return request(`/reports/${id}/send`, {
+    method: 'POST',
+    body: JSON.stringify(to ? { to } : {}),
+  });
+}
+
 // ---- Ideal posture library ----
 
 // The canonical conditions a doctor can curate a reference library for. Matches
@@ -508,6 +517,19 @@ export async function recordPayment(payload: {
   return request('/payments/cash', { method: 'POST', body: JSON.stringify(payload) });
 }
 
+// Reception/admin: edit a recorded bill (fix amount / method / service / notes).
+export async function updatePayment(
+  id: string,
+  patch: { amount?: number; method?: ManualPaymentMethod; plan?: string; notes?: string; status?: PaymentStatus }
+): Promise<{ payment: Payment }> {
+  return request(`/payments/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+}
+
+// Reception/admin: delete a recorded bill (mistaken/duplicate entry).
+export async function deletePayment(id: string): Promise<{ ok: boolean; id: string }> {
+  return request(`/payments/${id}`, { method: 'DELETE' });
+}
+
 // ---- Admin analytics ----
 
 export interface AdminStats {
@@ -582,6 +604,10 @@ export interface OnlineMeeting {
   id: string;
   roomToken: string;
   status: MeetingStatus;
+  /** Planned date & time of the consultation (ISO), or null if unscheduled. */
+  scheduledAt: string | null;
+  /** When the invite email was last sent to the patient, or null. */
+  inviteSentAt?: string | null;
   selectedPositions: string[];
   startedAt: string | null;
   aiStartedAt: string | null;
@@ -619,8 +645,36 @@ export interface MeetingRoomInfo {
 }
 
 // S-Admin creates a meeting for a patient; it auto-binds to the assigned doctor.
-export async function createMeeting(patientId: string): Promise<{ meeting: OnlineMeeting }> {
-  return request('/meetings', { method: 'POST', body: JSON.stringify({ patientId }) });
+// Optionally schedule a time and email the patient the invite (default: email on).
+export async function createMeeting(
+  patientId: string,
+  opts: { scheduledAt?: string | null; sendEmail?: boolean } = {}
+): Promise<{ meeting: OnlineMeeting }> {
+  return request('/meetings', {
+    method: 'POST',
+    body: JSON.stringify({ patientId, ...opts }),
+  });
+}
+
+// Bulk-create meetings for many patients at once (each row can have its own time
+// and email toggle). Returns the created meetings plus any per-row failures.
+export interface BulkMeetingRow {
+  patientId: string;
+  scheduledAt?: string | null;
+  sendEmail?: boolean;
+}
+export async function createMeetingsBulk(
+  rows: BulkMeetingRow[]
+): Promise<{ meetings: OnlineMeeting[]; failed: Array<{ patientId?: string; error: string }> }> {
+  return request('/meetings', { method: 'POST', body: JSON.stringify({ meetings: rows }) });
+}
+
+// (Re)send the meeting invite email to the patient with the room link + time.
+export async function sendMeetingEmail(id: string, to?: string): Promise<{ ok: boolean; to: string }> {
+  return request(`/meetings/${id}/send`, {
+    method: 'POST',
+    body: JSON.stringify(to ? { to } : {}),
+  });
 }
 
 // Admin: all meetings (optionally for one patient). Doctor: only their own.
@@ -634,7 +688,13 @@ export async function getMeeting(id: string): Promise<{ meeting: OnlineMeeting }
 
 export async function updateMeeting(
   id: string,
-  patch: { status?: MeetingStatus; selectedPositions?: string[]; reportId?: string; shareId?: string }
+  patch: {
+    status?: MeetingStatus;
+    selectedPositions?: string[];
+    reportId?: string;
+    shareId?: string;
+    scheduledAt?: string | null;
+  }
 ): Promise<{ meeting: OnlineMeeting }> {
   return request(`/meetings/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
 }

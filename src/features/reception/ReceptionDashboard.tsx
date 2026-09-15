@@ -414,8 +414,8 @@ function RescheduleModal({
   const patientName = appointment.patient && typeof appointment.patient === 'object' ? appointment.patient.name : 'patient';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-200 hm-page-enter">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 backdrop-blur-sm p-4 sm:py-10">
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-200 hm-page-enter my-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
             <CalendarClock className="w-5 h-5 text-sky-600" /> Reschedule

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Save, Check, AlertCircle, Link2, Copy } from 'lucide-react';
+import { Save, Check, AlertCircle, Link2, Copy, Mail, Loader2 } from 'lucide-react';
 import ClinicalReport from '@/features/assessment/ClinicalReport';
 import { PatientInfo, AssessmentCapture } from '@/lib/clinicalKnowledge';
-import { Patient, createReport, updateReportNotes, listIdealPostures, IdealPostureSet } from '@/services/api';
+import { Patient, createReport, updateReportNotes, listIdealPostures, IdealPostureSet, sendReportEmail } from '@/services/api';
 import { buildReportPayload } from '@/lib/reportBuilder';
 import { createStoredReport } from '@/services/report.service';
 
@@ -39,6 +39,8 @@ export default function DoctorReportView({ patient, captures, onDone, onSaved }:
   const [notes, setNotes] = useState('');
   const [notesStatus, setNotesStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [idealPostures, setIdealPostures] = useState<IdealPostureSet[]>([]);
+  const [emailStatus, setEmailStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [emailMsg, setEmailMsg] = useState('');
   const created = useRef(false);
 
   // Persist the report once when the view mounts. Two things are saved:
@@ -93,6 +95,21 @@ export default function DoctorReportView({ patient, captures, onDone, onSaved }:
     }
   };
 
+  const emailReport = async () => {
+    if (!reportId) return;
+    setEmailStatus('sending');
+    setEmailMsg('');
+    try {
+      const { to } = await sendReportEmail(reportId);
+      setEmailStatus('sent');
+      setEmailMsg(`Sent to ${to}`);
+      setTimeout(() => setEmailStatus('idle'), 4000);
+    } catch (err) {
+      setEmailStatus('error');
+      setEmailMsg(err instanceof Error ? err.message : 'Could not send email');
+    }
+  };
+
   const handleSaveNotes = async () => {
     if (!reportId) return;
     setNotesStatus('saving');
@@ -132,7 +149,27 @@ export default function DoctorReportView({ patient, captures, onDone, onSaved }:
             {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
             {copied ? 'Copied' : 'Copy'}
           </button>
+          <button
+            onClick={emailReport}
+            disabled={!reportId || emailStatus === 'sending'}
+            title="Email this report link to the patient"
+            className="inline-flex items-center gap-1.5 border border-emerald-300 bg-white hover:bg-emerald-100 disabled:opacity-50 text-emerald-700 text-sm font-semibold py-2 px-3 rounded-lg transition-colors"
+          >
+            {emailStatus === 'sending' ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : emailStatus === 'sent' ? (
+              <Check className="w-4 h-4" />
+            ) : (
+              <Mail className="w-4 h-4" />
+            )}
+            {emailStatus === 'sending' ? 'Sending…' : emailStatus === 'sent' ? 'Emailed' : 'Email to patient'}
+          </button>
         </div>
+        {emailMsg && (
+          <p className={`text-[11px] mt-1.5 ${emailStatus === 'error' ? 'text-red-600' : 'text-emerald-700'}`}>
+            {emailMsg}
+          </p>
+        )}
         <p className="text-[11px] text-emerald-700/80 mt-1.5">
           Anyone with this link can open this patient's report anytime — no sign-in required.
         </p>

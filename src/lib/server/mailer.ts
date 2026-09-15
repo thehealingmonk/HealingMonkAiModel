@@ -159,11 +159,14 @@ export function reportReadyEmail({
   doctorName,
   overallScore,
   flaggedCount,
+  reportUrl,
 }: {
   patientName: string;
   doctorName?: string;
   overallScore?: number | null;
   flaggedCount?: number;
+  /** Public, no-login link to the full visual report (`/r/:slug`). */
+  reportUrl?: string;
 }) {
   return {
     subject: 'Your HealingMonk assessment report is ready',
@@ -174,7 +177,44 @@ export function reportReadyEmail({
          ${overallScore != null ? row('Overall score', `${overallScore}/100`) : ''}
          ${row('Areas flagged', String(flaggedCount ?? 0))}
        </table>
-       <p style="font-size:13px;color:#6b7280">Your doctor will review the findings and prescribed exercises with you.</p>`
+       ${
+         reportUrl
+           ? `<a href="${reportUrl}" style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px">View your full report</a>
+              <p style="font-size:12px;color:#6b7280;margin-top:10px;word-break:break-all">Or open this link: <a href="${reportUrl}" style="color:#16a34a">${reportUrl}</a></p>`
+           : ''
+       }
+       <p style="font-size:13px;color:#6b7280;margin-top:12px">Your doctor will review the findings and prescribed exercises with you.</p>`
+    ),
+  };
+}
+
+// Invite / reminder for an online (remote) AI-assessment video consultation.
+// Carries the secure room link and, when scheduled, the date & time.
+export function meetingInviteEmail({
+  patientName,
+  doctorName,
+  when,
+  link,
+}: {
+  patientName: string;
+  doctorName?: string;
+  when?: string;
+  link: string;
+}) {
+  return {
+    subject: when ? `Your online consultation — ${when}` : 'Your online consultation link',
+    html: layout(
+      'Your online consultation',
+      `<p style="font-size:14px">Hi ${patientName}, an online video consultation${
+        doctorName ? ` with Dr. ${doctorName}` : ''
+      } has been arranged for you.</p>
+       <table style="margin:12px 0">
+         ${when ? row('Date &amp; time', when) : ''}
+         ${doctorName ? row('Doctor', `Dr. ${doctorName}`) : ''}
+       </table>
+       <a href="${link}" style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px">Join the meeting</a>
+       <p style="font-size:12px;color:#6b7280;margin-top:10px;word-break:break-all">Or open this link at your appointment time: <a href="${link}" style="color:#16a34a">${link}</a></p>
+       <p style="font-size:13px;color:#6b7280;margin-top:12px">Please join from Google Chrome and allow camera &amp; microphone access when asked.</p>`
     ),
   };
 }

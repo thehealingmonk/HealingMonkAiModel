@@ -69,13 +69,16 @@ export async function POST(req: NextRequest) {
     await report.save();
     await report.populate('doctor', 'name');
 
-    // Email the patient that their report is ready (if they have an email).
+    // Email the patient that their report is ready (if they have an email),
+    // including the public, no-login link to the full visual report.
     if (patient.email) {
+      const base = process.env.APP_BASE_URL || '';
       const mail = reportReadyEmail({
         patientName: patient.name,
         doctorName: report.doctor?.name,
         overallScore: report.overallScore,
         flaggedCount: report.flaggedCount,
+        reportUrl: report.shareId && base ? `${base}/r/${report.shareId}` : undefined,
       });
       sendMail({ to: patient.email, ...mail });
     }

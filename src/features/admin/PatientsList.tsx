@@ -4,6 +4,8 @@ import { Search, Stethoscope, Pencil, Trash2, ArrowDownUp } from 'lucide-react';
 import { Patient, listPatients, deletePatient } from '@/services/api';
 import { formatDate } from '@/utils/formatter';
 import { useLiveData } from '@/hooks/useLiveData';
+import { useRowSelection } from '@/hooks/useRowSelection';
+import { BulkBar, SelectCheckbox } from '@/components/ui/BulkBar';
 import LiveBadge from '@/features/admin/LiveBadge';
 import TableSkeleton from '@/components/ui/TableSkeleton';
 import ExportButton from '@/components/ui/ExportButton';
@@ -61,6 +63,26 @@ export default function PatientsList() {
   const [delPatient, setDelPatient] = useState<Patient | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [delError, setDelError] = useState('');
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const sel = useRowSelection(patients.map((p) => p.id));
+
+  const bulkDelete = async () => {
+    const ids = sel.selectedVisible;
+    if (ids.length === 0) return;
+    if (!window.confirm(`Delete ${ids.length} selected patient${ids.length > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    setDelError('');
+    setBulkDeleting(true);
+    try {
+      for (const id of ids) await deletePatient(id);
+      sel.clear();
+      refresh();
+    } catch (err) {
+      setDelError(err instanceof Error ? err.message : 'Could not delete selected patients');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
 
   const handleDelete = async () => {
     if (!delPatient) return;
@@ -162,6 +184,8 @@ export default function PatientsList() {
         </label>
       </div>
 
+      <BulkBar count={sel.count} onClear={sel.clear} onDelete={bulkDelete} deleting={bulkDeleting} variant="dark" />
+
       <div className="glass-dark rounded-2xl overflow-x-auto" data-reveal>
         {loading ? (
           <TableSkeleton rows={7} cols={8} />
@@ -170,9 +194,17 @@ export default function PatientsList() {
             {loaded.length === 0 ? 'No patients yet.' : 'No patients match these filters.'}
           </div>
         ) : (
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full min-w-[720px] text-sm">
             <thead className="bg-white/5 text-slate-400 text-left">
               <tr>
+                <th className="px-4 py-3 w-10">
+                  <SelectCheckbox
+                    checked={sel.allSelected}
+                    indeterminate={sel.someSelected}
+                    onChange={sel.toggleAll}
+                    ariaLabel="Select all patients"
+                  />
+                </th>
                 <th className="px-4 py-3 font-medium">ID</th>
                 <th className="px-4 py-3 font-medium">Name</th>
                 <th className="px-4 py-3 font-medium">Age / Gender</th>
@@ -188,8 +220,15 @@ export default function PatientsList() {
                 <tr
                   key={p.id}
                   onClick={() => navigate(`/admin/patient/${p.id}`)}
-                  className="hover:bg-white/5 cursor-pointer transition-colors"
+                  className={`cursor-pointer transition-colors ${sel.isSelected(p.id) ? 'bg-emerald-500/10' : 'hover:bg-white/5'}`}
                 >
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <SelectCheckbox
+                      checked={sel.isSelected(p.id)}
+                      onChange={() => sel.toggle(p.id)}
+                      ariaLabel={`Select ${p.name}`}
+                    />
+                  </td>
                   <td className="px-4 py-3 font-mono text-xs text-slate-400">{p.patientId}</td>
                   <td className="px-4 py-3 font-medium text-white">{p.name}</td>
                   <td className="px-4 py-3 text-slate-300">{p.age ?? '—'}{p.gender ? ` · ${p.gender}` : ''}</td>
@@ -249,8 +288,8 @@ export default function PatientsList() {
       )}
 
       {delPatient && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-200 p-6 hm-page-enter">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 backdrop-blur-sm p-4 sm:py-10">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-200 p-6 hm-page-enter my-auto">
             <div className="flex items-center gap-2 mb-2">
               <Trash2 className="w-5 h-5 text-red-600" />
               <h3 className="text-lg font-bold text-slate-900">Delete patient?</h3>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { ExternalLink, Eye, X, Download, Trash2, ArrowDownUp } from 'lucide-react';
-import { ReportListItem, listAllReports, deleteReport } from '@/services/api';
+import { ExternalLink, Eye, X, Download, Trash2, ArrowDownUp, Mail, Check } from 'lucide-react';
+import { ReportListItem, listAllReports, deleteReport, sendReportEmail } from '@/services/api';
 import { fetchStoredReport } from '@/services/report.service';
 import { downloadReportPdf } from '@/lib/reportPdf';
 import { formatDate } from '@/utils/formatter';
@@ -232,6 +232,8 @@ export default function ReportsList() {
   const [selected, setSelected] = useState<ReportListItem | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [emailingId, setEmailingId] = useState<string | null>(null);
+  const [emailedId, setEmailedId] = useState<string | null>(null);
   // Multi-select for bulk deletion.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -312,6 +314,22 @@ export default function ReportsList() {
       setDlError(e instanceof Error ? e.message : 'Could not download report');
     } finally {
       setDownloadingId(null);
+    }
+  };
+
+  // Email the report link to the patient (uses the patient's stored email).
+  const emailReport = async (r: ReportListItem) => {
+    setDlError('');
+    setEmailingId(r.id);
+    try {
+      const { to } = await sendReportEmail(r.id);
+      setEmailedId(r.id);
+      setTimeout(() => setEmailedId((e) => (e === r.id ? null : e)), 3000);
+      console.info(`Report emailed to ${to}`);
+    } catch (e) {
+      setDlError(e instanceof Error ? e.message : 'Could not email report');
+    } finally {
+      setEmailingId(null);
     }
   };
 
@@ -548,6 +566,18 @@ export default function ReportsList() {
                           {downloadingId === r.id ? 'Preparing…' : 'Download'}
                         </button>
                       )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          emailReport(r);
+                        }}
+                        disabled={emailingId === r.id}
+                        className="inline-flex items-center gap-1.5 text-sky-300 hover:text-sky-200 disabled:opacity-60 text-xs font-semibold"
+                        title="Email this report link to the patient"
+                      >
+                        {emailedId === r.id ? <Check className="w-3.5 h-3.5" /> : <Mail className="w-3.5 h-3.5" />}
+                        {emailingId === r.id ? 'Sending…' : emailedId === r.id ? 'Emailed' : 'Email'}
+                      </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();

@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Appointment, AppointmentStatus, listAppointments } from '@/services/api';
+import { Appointment, AppointmentStatus, listAppointments, setAppointmentStatus } from '@/services/api';
 import { formatDate } from '@/utils/formatter';
 import { useLiveData } from '@/hooks/useLiveData';
+import { useRowSelection } from '@/hooks/useRowSelection';
+import { BulkBar, SelectCheckbox } from '@/components/ui/BulkBar';
 import LiveBadge from '@/features/admin/LiveBadge';
 import TableSkeleton from '@/components/ui/TableSkeleton';
 import ExportButton from '@/components/ui/ExportButton';
@@ -28,7 +30,7 @@ const name = (v: Appointment['patient'] | Appointment['doctor']) =>
 type StatusFilter = 'all' | AppointmentStatus;
 
 export default function AppointmentsList() {
-  const { data, loading, refreshing, error, lastUpdated, refresh } = useLiveData(() =>
+  const { data, loading, refreshing, error: loadError, lastUpdated, refresh } = useLiveData(() =>
     listAppointments({ scope: 'all' })
   );
   const allAppts = data?.appointments ?? [];
@@ -36,6 +38,9 @@ export default function AppointmentsList() {
   const [q, setQ] = useState('');
   const [range, setRange] = useState<DateRange>('all');
   const [status, setStatus] = useState<StatusFilter>('all');
+  const [bulkCancelling, setBulkCancelling] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const error = actionError || loadError;
 
   // Counts over the full dataset so the pills/strip stay stable while filtering.
   const counts = useMemo(() => {
@@ -62,6 +67,27 @@ export default function AppointmentsList() {
       })
       .sort((x, y) => new Date(y.scheduledAt).getTime() - new Date(x.scheduledAt).getTime());
   }, [allAppts, q, range, status]);
+
+  const sel = useRowSelection(appts.map((a) => a.id));
+
+  // Bulk "cancel selected" — appointments aren't deleted, they're cancelled
+  // (keeps history). Skips any already-cancelled rows.
+  const bulkCancel = async () => {
+    const ids = appts.filter((a) => sel.isSelected(a.id) && a.status !== 'cancelled').map((a) => a.id);
+    if (ids.length === 0) return;
+    if (!window.confirm(`Cancel ${ids.length} selected appointment${ids.length > 1 ? 's' : ''}?`)) return;
+    setActionError('');
+    setBulkCancelling(true);
+    try {
+      for (const id of ids) await setAppointmentStatus(id, 'cancelled');
+      sel.clear();
+      await refresh();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Could not cancel selected appointments');
+    } finally {
+      setBulkCancelling(false);
+    }
+  };
 
   const exportColumns = [
     { header: 'When', value: (a: Appointment) => formatDate(a.scheduledAt, true) },
@@ -113,17 +139,34 @@ export default function AppointmentsList() {
         />
       </div>
 
+      <BulkBar
+        count={sel.count}
+        onClear={sel.clear}
+        onDelete={bulkCancel}
+        deleting={bulkCancelling}
+        variant="dark"
+        deleteLabel="Cancel selected"
+      />
+
       <div className="glass-dark rounded-2xl overflow-x-auto" data-reveal>
         {loading ? (
-          <TableSkeleton rows={6} cols={5} />
+          <TableSkeleton rows={6} cols={6} />
         ) : appts.length === 0 ? (
           <div className="p-10 text-center text-slate-400">
             {allAppts.length === 0 ? 'No appointments yet.' : 'No appointments match these filters.'}
           </div>
         ) : (
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full min-w-[720px] text-sm">
             <thead className="bg-white/5 text-slate-400 text-left">
               <tr>
+                <th className="px-4 py-3 w-10">
+                  <SelectCheckbox
+                    checked={sel.allSelected}
+                    indeterminate={sel.someSelected}
+                    onChange={sel.toggleAll}
+                    ariaLabel="Select all appointments"
+                  />
+                </th>
                 <th className="px-4 py-3 font-medium">When</th>
                 <th className="px-4 py-3 font-medium">Patient</th>
                 <th className="px-4 py-3 font-medium">Doctor</th>
@@ -133,7 +176,14 @@ export default function AppointmentsList() {
             </thead>
             <tbody className="divide-y divide-white/10">
               {appts.map((a) => (
-                <tr key={a.id} className="hover:bg-white/5 transition-colors">
+                <tr key={a.id} className={`transition-colors ${sel.isSelected(a.id) ? 'bg-emerald-500/10' : 'hover:bg-white/5'}`}>
+                  <td className="px-4 py-3">
+                    <SelectCheckbox
+                      checked={sel.isSelected(a.id)}
+                      onChange={() => sel.toggle(a.id)}
+                      ariaLabel={`Select appointment for ${name(a.patient)}`}
+                    />
+                  </td>
                   <td className="px-4 py-3 text-white">{formatDate(a.scheduledAt, true)}</td>
                   <td className="px-4 py-3 font-medium text-white">{name(a.patient)}</td>
                   <td className="px-4 py-3 text-slate-300">{name(a.doctor)}</td>

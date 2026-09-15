@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Video, Copy, Check, ExternalLink, Plus, Loader2, PhoneOff, FileText, Radio,
+  Video, Copy, Check, ExternalLink, Plus, Loader2, PhoneOff, FileText, Radio, Mail, Clock,
 } from 'lucide-react';
 import { useAuth } from '@/store/auth.store';
 import {
   Patient, OnlineMeeting, MeetingStatus,
-  listMeetings, createMeeting, endMeeting,
+  listMeetings, createMeeting, endMeeting, sendMeetingEmail,
 } from '@/services/api';
 
 // Online-meeting panel shown on a patient's profile. S-Admin can create a
@@ -41,6 +41,12 @@ export default function MeetingCard({ patient }: { patient: Patient }) {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  // Optional schedule + email-on-create controls (admin).
+  const [scheduleAt, setScheduleAt] = useState('');
+  const [emailOnCreate, setEmailOnCreate] = useState(true);
+  // Per-meeting "email link" feedback, keyed by meeting id.
+  const [emailingId, setEmailingId] = useState<string | null>(null);
+  const [emailNote, setEmailNote] = useState<{ id: string; ok: boolean; msg: string } | null>(null);
 
   const load = async () => {
     try {
@@ -63,12 +69,39 @@ export default function MeetingCard({ patient }: { patient: Patient }) {
     setError('');
     setCreating(true);
     try {
-      const { meeting } = await createMeeting(patient.id);
+      // datetime-local is wall-clock without a zone; send as ISO so the server
+      // stores an absolute instant.
+      const scheduledAt = scheduleAt ? new Date(scheduleAt).toISOString() : null;
+      const { meeting } = await createMeeting(patient.id, { scheduledAt, sendEmail: emailOnCreate });
       setMeetings((prev) => [meeting, ...prev]);
+      setScheduleAt('');
+      if (emailOnCreate) {
+        setEmailNote({
+          id: meeting.id,
+          ok: !!meeting.inviteSentAt,
+          msg: meeting.inviteSentAt
+            ? `Invite emailed to ${patient.name}`
+            : 'Meeting created — no email on file for this patient.',
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create meeting');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const emailLink = async (id: string) => {
+    setEmailingId(id);
+    setEmailNote(null);
+    try {
+      const { to } = await sendMeetingEmail(id);
+      setMeetings((prev) => prev.map((m) => (m.id === id ? { ...m, inviteSentAt: new Date().toISOString() } : m)));
+      setEmailNote({ id, ok: true, msg: `Link emailed to ${to}` });
+    } catch (err) {
+      setEmailNote({ id, ok: false, msg: err instanceof Error ? err.message : 'Could not send email' });
+    } finally {
+      setEmailingId(null);
     }
   };
 
@@ -87,9 +120,9 @@ export default function MeetingCard({ patient }: { patient: Patient }) {
     } catch { /* ignore */ }
   };
 
-  // Admin can always create another meeting (multiple meetings per patient are
-  // allowed — e.g. a fresh room for each session).
-  const canCreate = isAdmin;
+  // Admin and doctor can both create meetings (multiple per patient allowed — a
+  // fresh room per session). A doctor's meeting binds to them automatically.
+  const canCreate = isAdmin || hasRole('doctor');
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-6">
@@ -98,22 +131,51 @@ export default function MeetingCard({ patient }: { patient: Patient }) {
           <Video className="w-4 h-4 text-emerald-600" />
           <h3 className="font-semibold text-gray-900">Online Meeting</h3>
         </div>
-        {canCreate && (
-          <button
-            onClick={create}
-            disabled={creating}
-            className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors"
-          >
-            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-            Create Meeting
-          </button>
-        )}
       </div>
       <p className="text-sm text-gray-500 mb-4">
-        {isAdmin
-          ? 'Create a secure video room, copy the link and share it with the patient. The assigned doctor sees it here too and can start the AI assessment live.'
+        {canCreate
+          ? 'Create a secure video room and send the patient the link by email (with the time). You and the patient join the same link; start the AI assessment live from inside.'
           : 'Join the video room created for this patient, then start the AI assessment live.'}
       </p>
+
+      {/* Schedule + create (admin). Set a time and email the invite in one step. */}
+      {canCreate && (
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="text-sm">
+              <span className="block text-xs font-medium text-gray-600 mb-1">Meeting time (optional)</span>
+              <input
+                type="datetime-local"
+                value={scheduleAt}
+                onChange={(e) => setScheduleAt(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700 pb-2.5">
+              <input
+                type="checkbox"
+                checked={emailOnCreate}
+                onChange={(e) => setEmailOnCreate(e.target.checked)}
+                className="w-4 h-4 accent-emerald-600"
+              />
+              Email the patient the link
+            </label>
+            <button
+              onClick={create}
+              disabled={creating}
+              className="ml-auto inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-sm font-semibold px-3 py-2 rounded-lg transition-colors"
+            >
+              {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              Create Meeting
+            </button>
+          </div>
+          {!patient.email && emailOnCreate && (
+            <p className="text-[11px] text-amber-600 mt-2">
+              This patient has no email on file — the link won't be emailed. Add an email on their profile first.
+            </p>
+          )}
+        </div>
+      )}
 
       {error && <div className="mb-3 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">{error}</div>}
 
@@ -136,6 +198,16 @@ export default function MeetingCard({ patient }: { patient: Patient }) {
                   </span>
                   <span className="text-[11px] text-gray-400">{new Date(m.createdAt).toLocaleString()}</span>
                 </div>
+
+                {m.scheduledAt && (
+                  <div className="flex items-center gap-1.5 text-xs text-emerald-700 font-medium mb-2">
+                    <Clock className="w-3.5 h-3.5" />
+                    {new Date(m.scheduledAt).toLocaleString('en-IN', {
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                    })}
+                  </div>
+                )}
 
                 {live && (
                   <div className="flex items-center gap-2">
@@ -164,6 +236,17 @@ export default function MeetingCard({ patient }: { patient: Patient }) {
                       <Video className="w-4 h-4" /> Join Meeting
                     </button>
                   )}
+                  {live && canCreate && (
+                    <button
+                      onClick={() => emailLink(m.id)}
+                      disabled={emailingId === m.id}
+                      title="Email this link to the patient"
+                      className="inline-flex items-center gap-1.5 border border-gray-300 hover:bg-gray-50 disabled:opacity-50 text-gray-700 text-sm font-semibold py-2 px-3 rounded-lg"
+                    >
+                      {emailingId === m.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                      {m.inviteSentAt ? 'Resend email' : 'Email link'}
+                    </button>
+                  )}
                   {m.shareId && (
                     <button
                       onClick={() => window.open(`/r/${m.shareId}`, '_blank', 'noopener')}
@@ -181,6 +264,11 @@ export default function MeetingCard({ patient }: { patient: Patient }) {
                     </button>
                   )}
                 </div>
+                {emailNote?.id === m.id && (
+                  <p className={`text-[11px] mt-2 ${emailNote.ok ? 'text-emerald-700' : 'text-red-600'}`}>
+                    {emailNote.msg}
+                  </p>
+                )}
               </li>
             );
           })}
