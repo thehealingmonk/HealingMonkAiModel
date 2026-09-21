@@ -20,19 +20,24 @@ import { sendSignal, pollSignals, clearSignals, Signal } from '@/features/meetin
 //     offer so negotiation never dead-ends.
 //   • ICE is queued until the remote description is set. StrictMode-safe boot.
 //
-// Phase-1 additions (all keep the 1:1 handshake above intact):
-//   • Media is OPTIONAL — a denied/absent camera or mic no longer fails the join;
-//     the peer connects with whatever tracks exist (or none).
-//   • Initial mic/cam enabled state is caller-controlled (OFF by default, chosen
-//     on the pre-join screen).
+// Reliability layer (all keep the 1:1 handshake above intact):
+//   • Media is OPTIONAL — a denied/absent camera or mic no longer fails the join.
+//   • Initial mic/cam enabled state is caller-controlled (OFF by default).
 //   • Screen share swaps the outgoing VIDEO track via replaceTrack (no
-//     renegotiation needed — same kind), and restores the camera track on stop.
-//   • Chat + remote screen-share state ride the SAME poll loop as a new signal
-//     `kind` ('chat' / 'screen'), so no extra pollers are spun up.
-//   • A distinct 'reconnecting' status is surfaced once a live call drops, so the
-//     UI can show recovery instead of a cold "connecting".
+//     renegotiation) and restores the camera on stop.
+//   • Chat + remote screen-share state ride the SAME poll loop.
+//   • RECONNECTION: a live call that drops to 'disconnected' gets a short grace
+//     window, then the host triggers an ICE RESTART (fresh candidates / relay
+//     path) without tearing down media. A 'failed' state restarts immediately.
+//     Network changes (Wi-Fi↔mobile, sleep/wake) also trigger an ICE restart via
+//     the browser 'online' event.
+//   • ADAPTIVE VIDEO: outgoing video bitrate/degradation is tuned to the measured
+//     connection so weak networks degrade video gracefully while audio survives.
+//   • QUALITY: real WebRTC getStats (RTT, packet loss, jitter) drives an honest
+//     Excellent/Good/Fair/Poor signal — never a fake timer.
 
 export type PeerStatus = 'idle' | 'connecting' | 'waiting' | 'connected' | 'reconnecting' | 'failed';
+export type PeerQuality = 'unknown' | 'excellent' | 'good' | 'fair' | 'poor';
 
 export interface ChatMessage {
   from: 'staff' | 'patient' | string;
@@ -55,9 +60,20 @@ interface Options {
   onRemoteScreen?: (sharing: boolean) => void;
 }
 
-const POLL_MS = 500;
+const POLL_MS = 400;              // signaling poll cadence (faster = quicker setup)
 const HEARTBEAT_MS = 1500;
 const OFFER_STUCK_MS = 6000;
+const STATS_MS = 3000;            // connection-quality sampling cadence
+const DISCONNECT_GRACE_MS = 3500; // wait this long on 'disconnected' before ICE restart
+
+// Adaptive outgoing-video ceilings per measured quality tier (bits/sec). Audio
+// is never capped, so it stays intelligible as video degrades.
+const VIDEO_BITRATE: Record<Exclude<PeerQuality, 'unknown'>, number> = {
+  excellent: 1_500_000,
+  good: 900_000,
+  fair: 400_000,
+  poor: 150_000,
+};
 
 export function useMeetingPeer({
   token, role, iceServers, enabled, initialMicOn = false, initialCamOn = false,
@@ -71,6 +87,7 @@ export function useMeetingPeer({
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [status, setStatus] = useState<PeerStatus>('idle');
+  const [quality, setQuality] = useState<PeerQuality>('unknown');
   const [micOn, setMicOn] = useState(initialMicOn);
   const [camOn, setCamOn] = useState(initialCamOn);
   const [sharingScreen, setSharingScreen] = useState(false);
@@ -91,7 +108,13 @@ export function useMeetingPeer({
   const wasConnected = useRef(false);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const heartbeatTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const statsTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const disconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const disposed = useRef(false);
+  // Quality bookkeeping across stats samples.
+  const prevStats = useRef<{ lost: number; recv: number } | null>(null);
+  const appliedTier = useRef<PeerQuality>('unknown');
+  const sharingRef = useRef(false); sharingRef.current = sharingScreen;
   // Read-through refs so the media effect (which runs once per enable) always
   // sees the caller's latest initial-device choice without re-subscribing.
   const initialMicRef = useRef(initialMicOn); initialMicRef.current = initialMicOn;
@@ -123,10 +146,9 @@ export function useMeetingPeer({
   // negotiation at a time so we never crash an in-flight connection or reorder
   // m-lines:
   //   • only from a 'stable' signalingState (no offer already pending),
-  //   • not once connected,
+  //   • not once connected (unless iceRestart),
   //   • and — crucially — NOT once we already have the patient's answer and ICE
-  //     is progressing (that spurious re-offer used to reset a connecting call).
-  //     `iceRestart` bypasses that last guard to recover a failed connection.
+  //     is progressing. `iceRestart` bypasses that guard to recover a call.
   const makeOffer = useCallback(async (iceRestart = false) => {
     const pc = pcRef.current;
     if (!pc || !isHost) return;
@@ -138,10 +160,79 @@ export function useMeetingPeer({
       await pc.setLocalDescription(offer);
       lastOfferAt.current = Date.now();
       send('sdp', pc.localDescription);
+      if (iceRestart) console.info('[meeting] host issued ICE restart');
     } catch (err) {
       console.error('makeOffer error', err);
     }
   }, [isHost, send]);
+
+  // Apply an outgoing-video bitrate ceiling + a degradation preference that keeps
+  // audio/framerate sane under pressure. Called whenever the measured tier moves.
+  const applyVideoTier = useCallback(async (tier: Exclude<PeerQuality, 'unknown'>) => {
+    const pc = pcRef.current;
+    if (!pc) return;
+    const sender = pc.getSenders().find((s) => s.track?.kind === 'video');
+    if (!sender) return;
+    try {
+      const params = sender.getParameters();
+      if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
+      params.encodings[0].maxBitrate = VIDEO_BITRATE[tier];
+      // Poor networks: also cap the capture scale so encoder isn't overwhelmed.
+      params.encodings[0].scaleResolutionDownBy = tier === 'poor' ? 2 : 1;
+      (params as any).degradationPreference = 'balanced';
+      await sender.setParameters(params);
+    } catch (err) {
+      // setParameters can reject if encodings shape changed mid-negotiation — the
+      // next sample retries, so this is non-fatal.
+      console.debug('applyVideoTier skipped', err);
+    }
+  }, []);
+
+  // Sample real WebRTC stats and derive an honest quality tier from RTT + inbound
+  // packet loss. Also nudges the adaptive video bitrate when the tier changes.
+  const sampleQuality = useCallback(async () => {
+    const pc = pcRef.current;
+    if (!pc || pc.connectionState !== 'connected') return;
+    let rtt = 0;
+    let lost = 0;
+    let recv = 0;
+    try {
+      const stats = await pc.getStats();
+      stats.forEach((r: any) => {
+        if (r.type === 'candidate-pair' && r.state === 'succeeded' && r.nominated) {
+          if (typeof r.currentRoundTripTime === 'number') rtt = r.currentRoundTripTime;
+        }
+        if (r.type === 'remote-inbound-rtp' && typeof r.roundTripTime === 'number' && !rtt) {
+          rtt = r.roundTripTime;
+        }
+        if (r.type === 'inbound-rtp' && !r.isRemote) {
+          lost += r.packetsLost || 0;
+          recv += r.packetsReceived || 0;
+        }
+      });
+    } catch { return; }
+
+    // Loss over the last interval (delta), guarding the first sample.
+    let lossFrac = 0;
+    if (prevStats.current) {
+      const dLost = Math.max(0, lost - prevStats.current.lost);
+      const dRecv = Math.max(0, recv - prevStats.current.recv);
+      const total = dLost + dRecv;
+      if (total > 0) lossFrac = dLost / total;
+    }
+    prevStats.current = { lost, recv };
+
+    const rttTier: PeerQuality = rtt < 0.15 ? 'excellent' : rtt < 0.3 ? 'good' : rtt < 0.5 ? 'fair' : 'poor';
+    const lossTier: PeerQuality = lossFrac < 0.02 ? 'excellent' : lossFrac < 0.05 ? 'good' : lossFrac < 0.1 ? 'fair' : 'poor';
+    const order: PeerQuality[] = ['excellent', 'good', 'fair', 'poor'];
+    const tier = order[Math.max(order.indexOf(rttTier), order.indexOf(lossTier))];
+
+    setQuality(tier);
+    if (tier !== 'unknown' && tier !== appliedTier.current) {
+      appliedTier.current = tier;
+      void applyVideoTier(tier as Exclude<PeerQuality, 'unknown'>);
+    }
+  }, [applyVideoTier]);
 
   const handleSignal = useCallback(
     async (sig: Signal) => {
@@ -189,6 +280,8 @@ export function useMeetingPeer({
         case 'bye': {
           sawRemote.current = false;
           setRemoteStream(null);
+          setQuality('unknown');
+          prevStats.current = null;
           onRemoteScreenRef.current?.(false);
           setStatus('waiting');
           break;
@@ -237,27 +330,29 @@ export function useMeetingPeer({
     let active = true;
     setStatus('connecting');
     setError('');
+    setQuality('unknown');
     sawRemote.current = false;
     wasConnected.current = false;
     lastSignalId.current = null;
     lastOfferAt.current = 0;
     pendingCandidates.current = [];
+    prevStats.current = null;
+    appliedTier.current = 'unknown';
 
     (async () => {
       // Media is OPTIONAL. A denied/missing camera or mic must NOT block the
       // join — the meeting still works (view/listen only). We try once for both,
-      // then continue with whatever we got (possibly nothing).
+      // then continue with whatever we got (possibly nothing). Errors are mapped
+      // to a clear, actionable message per DOMException name.
       let stream: MediaStream | null = null;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
-          audio: true,
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 }, facingMode: 'user' },
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
         });
       } catch (err) {
         console.warn('getUserMedia unavailable, joining without local media', err);
-        if (active) {
-          setError('Joined without camera/microphone. Enable them from the controls if your browser allows.');
-        }
+        if (active) setError(mediaErrorMessage(err));
       }
       if (!active) { stream?.getTracks().forEach((t) => t.stop()); return; }
 
@@ -265,6 +360,9 @@ export function useMeetingPeer({
         localRef.current = stream;
         setLocalStream(stream);
         cameraTrackRef.current = stream.getVideoTracks()[0] || null;
+        // Hint the encoder that this is camera motion (helps rate control).
+        stream.getVideoTracks().forEach((t) => { try { (t as any).contentHint = 'motion'; } catch { /* ignore */ } });
+        stream.getAudioTracks().forEach((t) => { try { (t as any).contentHint = 'speech'; } catch { /* ignore */ } });
         // Apply the pre-join device choices (OFF by default).
         stream.getAudioTracks().forEach((t) => (t.enabled = initialMicRef.current));
         stream.getVideoTracks().forEach((t) => (t.enabled = initialCamRef.current));
@@ -280,7 +378,14 @@ export function useMeetingPeer({
       if (isHost) await clearSignals(token);
       if (!active) { stream?.getTracks().forEach((t) => t.stop()); return; }
 
-      const pc = new RTCPeerConnection({ iceServers });
+      const pc = new RTCPeerConnection({
+        iceServers,
+        // Pre-gather a small pool so the first offer already carries candidates,
+        // shaving a round-trip off setup on the polled relay.
+        iceCandidatePoolSize: 4,
+        bundlePolicy: 'max-bundle',
+        rtcpMuxPolicy: 'require',
+      });
       pcRef.current = pc;
 
       // No onnegotiationneeded handler on purpose: offers are driven explicitly
@@ -288,15 +393,33 @@ export function useMeetingPeer({
       // into an empty room and cause glare).
       pc.onicecandidate = (e) => { if (e.candidate) send('ice', e.candidate.toJSON()); };
       pc.ontrack = (e) => { const [s] = e.streams; if (s) setRemoteStream(s); };
+
       pc.onconnectionstatechange = () => {
         const st = pc.connectionState;
-        if (st === 'connected') { wasConnected.current = true; setStatus('connected'); }
-        else if (st === 'failed') setStatus('failed');
-        else if (st === 'disconnected') setStatus(wasConnected.current ? 'reconnecting' : 'connecting');
+        if (st === 'connected') {
+          wasConnected.current = true;
+          if (disconnectTimer.current) { clearTimeout(disconnectTimer.current); disconnectTimer.current = null; }
+          setStatus('connected');
+          logSelectedCandidate(pc);
+        } else if (st === 'failed') {
+          setStatus('failed');
+          // Recover immediately: fresh candidates / relay path, media intact.
+          if (isHost) makeOffer(true);
+        } else if (st === 'disconnected') {
+          setStatus(wasConnected.current ? 'reconnecting' : 'connecting');
+          // A transient blip often self-heals; give it a grace window, then the
+          // host forces an ICE restart rather than waiting for 'failed' (which
+          // some browsers never reach, e.g. iOS Safari on network switch).
+          if (!disconnectTimer.current) {
+            disconnectTimer.current = setTimeout(() => {
+              disconnectTimer.current = null;
+              const cur = pcRef.current;
+              if (cur && cur.connectionState !== 'connected' && isHost) makeOffer(true);
+            }, DISCONNECT_GRACE_MS);
+          }
+        }
       };
       pc.oniceconnectionstatechange = () => {
-        // Recover a failed connection: the host re-offers with an ICE restart
-        // (fresh candidates/relay path) without tearing down the media tracks.
         if (pc.iceConnectionState === 'failed' && isHost) makeOffer(true);
       };
 
@@ -332,13 +455,36 @@ export function useMeetingPeer({
           if (cur.signalingState === 'stable' && sawRemote.current) await makeOffer();
         }
       }, HEARTBEAT_MS);
+
+      statsTimer.current = setInterval(() => { void sampleQuality(); }, STATS_MS);
     })();
+
+    // Network came back (Wi-Fi↔mobile, sleep/wake, router reconnect): force a
+    // fresh ICE gather so the call re-homes onto the new path automatically.
+    const onOnline = () => {
+      const cur = pcRef.current;
+      if (!cur) return;
+      if (cur.connectionState !== 'connected') {
+        setStatus(wasConnected.current ? 'reconnecting' : 'connecting');
+        send('join', { role });
+        if (isHost) makeOffer(true);
+      }
+    };
+    const onOffline = () => {
+      if (wasConnected.current) setStatus('reconnecting');
+    };
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
 
     return () => {
       active = false;
       disposed.current = true;
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
       if (pollTimer.current) clearTimeout(pollTimer.current);
       if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
+      if (statsTimer.current) clearInterval(statsTimer.current);
+      if (disconnectTimer.current) clearTimeout(disconnectTimer.current);
       send('bye').catch(() => {});
       pcRef.current?.close();
       pcRef.current = null;
@@ -356,11 +502,12 @@ export function useMeetingPeer({
   const acquireKind = useCallback(async (kind: 'audio' | 'video') => {
     try {
       const constraints: MediaStreamConstraints = kind === 'video'
-        ? { video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } }
-        : { audio: true };
+        ? { video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 }, facingMode: 'user' } }
+        : { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } };
       const s = await navigator.mediaDevices.getUserMedia(constraints);
       const track = kind === 'video' ? s.getVideoTracks()[0] : s.getAudioTracks()[0];
       if (!track) return false;
+      try { (track as any).contentHint = kind === 'video' ? 'motion' : 'speech'; } catch { /* ignore */ }
       const pc = pcRef.current;
       let local = localRef.current;
       if (!local) { local = new MediaStream(); localRef.current = local; }
@@ -376,14 +523,19 @@ export function useMeetingPeer({
           if (!kindSender) { pc.addTrack(track, local); if (isHost) makeOffer(); }
           else { try { await kindSender.replaceTrack(track); } catch { /* ignore */ } }
         }
+        // Re-apply the current bitrate tier to the (new) video sender.
+        if (kind === 'video' && appliedTier.current !== 'unknown') {
+          void applyVideoTier(appliedTier.current as Exclude<PeerQuality, 'unknown'>);
+        }
       }
+      setError('');
       return true;
     } catch (err) {
       console.warn('acquireKind failed', kind, err);
-      setError(kind === 'video' ? 'Camera unavailable or blocked.' : 'Microphone unavailable or blocked.');
+      setError(mediaErrorMessage(err, kind));
       return false;
     }
-  }, [isHost, makeOffer]);
+  }, [isHost, makeOffer, applyVideoTier]);
 
   const toggleMic = useCallback(() => {
     const s = localRef.current;
@@ -414,6 +566,7 @@ export function useMeetingPeer({
     }
     const screenTrack = display.getVideoTracks()[0];
     if (!screenTrack) { display.getTracks().forEach((t) => t.stop()); return; }
+    try { (screenTrack as any).contentHint = 'detail'; } catch { /* ignore */ }
     screenTrackRef.current = screenTrack;
     const sender = pc.getSenders().find((sn) => sn.track?.kind === 'video')
       || pc.getSenders().find((sn) => !sn.track); // empty video sender (cam-off join)
@@ -446,17 +599,56 @@ export function useMeetingPeer({
   }, [send]);
 
   const toggleScreenShare = useCallback(() => {
-    if (sharingScreen) void stopScreenShare();
+    if (sharingRef.current) void stopScreenShare();
     else void startScreenShare();
-  }, [sharingScreen, startScreenShare, stopScreenShare]);
+  }, [startScreenShare, stopScreenShare]);
 
   const sendApp = useCallback((data: any) => send('ai', data), [send]);
   const sendChat = useCallback((data: { name: string; text: string; at: number }) => send('chat', data), [send]);
 
   return {
     localStream, remoteStream, screenStream,
-    status, micOn, camOn, sharingScreen,
+    status, quality, micOn, camOn, sharingScreen,
     toggleMic, toggleCam, toggleScreenShare,
     error, sendApp, sendChat, peerId: role,
   };
+}
+
+// Map a getUserMedia DOMException to a clear, actionable message.
+function mediaErrorMessage(err: unknown, kind?: 'audio' | 'video'): string {
+  const name = (err as any)?.name || '';
+  const dev = kind === 'audio' ? 'microphone' : kind === 'video' ? 'camera' : 'camera/microphone';
+  switch (name) {
+    case 'NotAllowedError':
+    case 'SecurityError':
+      return `${cap(dev)} permission is blocked. Allow it from the padlock in the address bar, then retry.`;
+    case 'NotFoundError':
+    case 'OverconstrainedError':
+      return `No ${dev} was detected on this device. You can still join to view and listen.`;
+    case 'NotReadableError':
+    case 'AbortError':
+      return `Your ${dev} is in use by another app (close Zoom/Teams/Camera and retry).`;
+    default:
+      return `Joined without ${dev}. Enable it from the controls if your browser allows.`;
+  }
+}
+function cap(s: string) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// One-line diagnostic of which candidate pair (host / srflx / relay) won — the
+// single most useful signal for "works on one network but not another".
+function logSelectedCandidate(pc: RTCPeerConnection) {
+  pc.getStats().then((stats) => {
+    let pairId = '';
+    const local: Record<string, any> = {};
+    stats.forEach((r: any) => {
+      if (r.type === 'transport' && r.selectedCandidatePairId) pairId = r.selectedCandidatePairId;
+      if (r.type === 'local-candidate') local[r.id] = r;
+    });
+    stats.forEach((r: any) => {
+      if (r.type === 'candidate-pair' && (r.id === pairId || (r.nominated && r.state === 'succeeded'))) {
+        const lc = local[r.localCandidateId];
+        console.info('[meeting] connected via', lc?.candidateType || '?', 'candidate', lc?.protocol || '');
+      }
+    });
+  }).catch(() => {});
 }

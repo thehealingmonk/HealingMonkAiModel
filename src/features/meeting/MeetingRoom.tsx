@@ -10,7 +10,7 @@ import {
   getMeetingRoom, updateMeeting, endMeeting,
   MeetingRoomInfo, OnlineMeeting, Patient,
 } from '@/services/api';
-import { useMeetingPeer, PeerStatus, ChatMessage } from '@/features/meeting/useMeetingPeer';
+import { useMeetingPeer, PeerStatus, PeerQuality, ChatMessage } from '@/features/meeting/useMeetingPeer';
 import { useMeetingLobby } from '@/features/meeting/useMeetingLobby';
 import MeetingPreJoin from '@/features/meeting/MeetingPreJoin';
 import { CLINICAL_ASSESSMENTS, AssessmentCapture } from '@/lib/clinicalKnowledge';
@@ -27,8 +27,18 @@ function StreamVideo({
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     const v = ref.current;
-    if (v && v.srcObject !== stream) v.srcObject = stream;
-  }, [stream]);
+    if (!v || v.srcObject === stream) return;
+    v.srcObject = stream;
+    // iOS Safari (and some mobile Chrome) won't autoplay a freshly-attached
+    // MediaStream reliably. Force play(); if a non-muted stream is blocked,
+    // retry muted so at least video shows (the user gesture that joined the
+    // meeting normally satisfies autoplay, but network re-attach can race).
+    if (stream) {
+      v.play().catch(() => {
+        if (!muted) { v.muted = true; v.play().catch(() => {}); }
+      });
+    }
+  }, [stream, muted]);
   return (
     <video
       ref={ref}
@@ -46,17 +56,27 @@ const STATUS_LABEL: Record<PeerStatus, string> = {
   connecting: 'Connecting…',
   waiting: 'Waiting for the other participant…',
   connected: 'Connected',
-  reconnecting: 'Reconnecting…',
-  failed: 'Connection problem',
+  reconnecting: 'Reconnecting… restoring your connection',
+  failed: 'Your network may be blocking peer-to-peer traffic. Trying a relay connection…',
 };
 
-// Connection-quality pill shown in the header.
-function connQuality(s: PeerStatus): { label: string; tone: string; ok: boolean } {
+// Connection-quality pill shown in the header. When the call is live it reflects
+// the REAL measured quality (getStats RTT + packet loss) rather than a timer;
+// otherwise it mirrors the lifecycle state.
+function connQuality(s: PeerStatus, q: PeerQuality): { label: string; tone: string; ok: boolean } {
+  if (s === 'connected') {
+    switch (q) {
+      case 'excellent': return { label: 'Excellent', tone: 'text-emerald-400', ok: true };
+      case 'good': return { label: 'Good', tone: 'text-emerald-400', ok: true };
+      case 'fair': return { label: 'Fair', tone: 'text-amber-400', ok: true };
+      case 'poor': return { label: 'Poor connection', tone: 'text-red-400', ok: true };
+      default: return { label: 'Connected', tone: 'text-emerald-400', ok: true };
+    }
+  }
   switch (s) {
-    case 'connected': return { label: 'Excellent', tone: 'text-emerald-400', ok: true };
     case 'waiting': return { label: 'Waiting', tone: 'text-amber-400', ok: false };
     case 'reconnecting': return { label: 'Reconnecting', tone: 'text-amber-400', ok: false };
-    case 'failed': return { label: 'Poor', tone: 'text-red-400', ok: false };
+    case 'failed': return { label: 'Connection failed', tone: 'text-red-400', ok: false };
     default: return { label: 'Connecting', tone: 'text-amber-400', ok: false };
   }
 }
@@ -376,7 +396,7 @@ export default function MeetingRoom() {
   const mainTile = tiles.find((t) => t.key === mainKey) ?? tiles[0];
   const stripTiles = tiles.filter((t) => t.key !== mainTile.key);
 
-  const q = connQuality(peer.status);
+  const q = connQuality(peer.status, peer.quality);
 
   return (
     <div ref={rootRef} className="fixed inset-0 bg-slate-950 text-slate-100 flex flex-col">

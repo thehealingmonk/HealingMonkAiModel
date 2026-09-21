@@ -22,6 +22,9 @@ export interface JoinRequest {
 const KNOCK_MS = 2000;
 const POLL_MS = 1000;
 const REQUEST_TTL = 6000; // no re-knock within this window ⇒ they left
+const ADMIT_REPEATS = 3;  // resend the admit a few times so a lost packet never strands the patient
+const ADMIT_REPEAT_MS = 800;
+const ADMIT_REMEMBER_MS = 60_000; // auto re-admit re-knocks from this reqId for this long
 
 export function useMeetingLobby({
   token, role, patientName, enabled,
@@ -34,13 +37,29 @@ export function useMeetingLobby({
   const cursor = useRef<string | null>(null);
   const admittedRef = useRef(false);
   const disposed = useRef(false);
+  // reqIds the host has admitted → timestamp. Used to (a) resend admit and
+  // (b) auto re-admit if the same patient re-knocks (e.g. the first admit was
+  // dropped), so acceptance is reliable over the lossy polled relay.
+  const admittedIds = useRef<Map<string, number>>(new Map());
 
-  const admit = useCallback((id: string) => {
-    sendSignal({ token, from: 'staff', to: null, kind: 'admit', data: { reqId: id } });
-    setRequests((r) => r.filter((x) => x.reqId !== id));
+  // Send an admit for a reqId now, then a couple more times, so acceptance
+  // survives a dropped POST on the signaling relay.
+  const sendAdmit = useCallback((id: string) => {
+    for (let i = 0; i < ADMIT_REPEATS; i++) {
+      const fire = () => { if (!disposed.current) sendSignal({ token, from: 'staff', to: null, kind: 'admit', data: { reqId: id } }); };
+      if (i === 0) fire();
+      else setTimeout(fire, i * ADMIT_REPEAT_MS);
+    }
   }, [token]);
 
+  const admit = useCallback((id: string) => {
+    admittedIds.current.set(id, Date.now());
+    sendAdmit(id);
+    setRequests((r) => r.filter((x) => x.reqId !== id));
+  }, [sendAdmit]);
+
   const deny = useCallback((id: string) => {
+    admittedIds.current.delete(id);
     sendSignal({ token, from: 'staff', to: null, kind: 'deny', data: { reqId: id } });
     setRequests((r) => r.filter((x) => x.reqId !== id));
   }, [token]);
@@ -66,6 +85,14 @@ export function useMeetingLobby({
           const rid = String(s.data.reqId);
           const nm = String(s.data.name || 'Patient');
           const now = Date.now();
+          // Already admitted this patient but they're still knocking (their first
+          // admit was lost, or they briefly dropped) — silently re-admit instead
+          // of re-surfacing the prompt, so the host never has to click twice.
+          const admittedAt = admittedIds.current.get(rid);
+          if (admittedAt !== undefined) {
+            if (now - admittedAt < ADMIT_REMEMBER_MS) { sendAdmit(rid); continue; }
+            admittedIds.current.delete(rid); // stale — treat as a fresh request
+          }
           setRequests((prev) => {
             const fresh = prev.filter((x) => now - x.at < REQUEST_TTL);
             const existing = fresh.find((x) => x.reqId === rid);
