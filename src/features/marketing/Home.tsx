@@ -9,6 +9,7 @@ import {
   Zap,
   Activity,
   CheckCircle2,
+  HardHat,
 } from 'lucide-react';
 import { CLINICAL_ASSESSMENTS } from '@/lib/clinicalKnowledge';
 import BodyVRMHero from '@/components/common/BodyVRMHero';
@@ -58,6 +59,19 @@ export default function Home() {
                 See how the AI works
               </Link>
             </div>
+
+            {/* NEW — ErgoAI workplace ergonomic assessment (test entry point).
+                Separate, free-to-try flow; the existing scan flow above is
+                unchanged. */}
+            <Link
+              to="/ergo"
+              className="group mt-4 inline-flex items-center gap-2 rounded-full border border-emerald-300 bg-emerald-50 px-5 py-2.5 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
+            >
+              <HardHat className="h-4 w-4" />
+              Try ErgoAI — workplace ergonomic assessment
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            </Link>
+
             <span className="mt-4 block text-sm text-slate-500">
               Plans from ₹499 · Runs privately in your browser
             </span>

@@ -27,6 +27,9 @@ const PatientIntake = lazy(() => import('@/features/assessment/PatientIntake'));
 const PositionSelect = lazy(() => import('@/features/assessment/PositionSelect'));
 const ClinicalCapture = lazy(() => import('@/features/assessment/ClinicalCapture'));
 const ClinicalReport = lazy(() => import('@/features/assessment/ClinicalReport'));
+// ErgoAI — the standalone workplace ergonomic-risk flow (setup → capture →
+// details → report). Self-contained; pulls in MediaPipe only when reached.
+const ErgoApp = lazy(() => import('@/features/ergo/ErgoApp'));
 
 function RouteFallback() {
   return (
@@ -279,6 +282,10 @@ export default function PublicApp() {
               )
             }
           />
+
+          {/* ErgoAI — standalone workplace ergonomic assessment. Its own
+              chrome-less flow (no MarketingLayout), reachable directly at /ergo. */}
+          <Route path="ergo" element={<ErgoApp />} />
 
           {/* Each generated report lives at its own permanent, name-based,
               NO-AUTH URL. `/r/:slug` is the short shareable form used by both
