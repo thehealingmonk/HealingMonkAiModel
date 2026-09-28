@@ -10,6 +10,9 @@ import {
   ErgoMethod,
   ErgoManualInputs,
   RiskBand,
+  ErgoObjectType,
+  MeasurementMode,
+  FindingConfidence,
 } from './ergoTypes';
 
 export const ENVIRONMENTS: { id: ErgoEnvironment; label: string; hint: string }[] = [
@@ -95,6 +98,73 @@ export function bandRank(b: RiskBand): number {
 export function worseBand(a: RiskBand, b: RiskBand): RiskBand {
   return bandRank(a) >= bandRank(b) ? a : b;
 }
+
+// ===========================================================================
+//  Workplace layer catalog (object detection + measurement provenance). All
+//  additive — nothing above changed.
+// ===========================================================================
+
+/**
+ * Map the raw COCO labels the EfficientDet detector emits onto our workplace
+ * object vocabulary. Anything not listed is treated as `unknown` so we never
+ * claim an object we can't confidently identify (spec §3/§27).
+ */
+export const COCO_TO_ERGO: Record<string, { type: ErgoObjectType; label: string }> = {
+  person: { type: 'person', label: 'Person' },
+  chair: { type: 'chair', label: 'Chair' },
+  couch: { type: 'chair', label: 'Seat' },
+  bench: { type: 'chair', label: 'Bench' },
+  'dining table': { type: 'desk', label: 'Desk' },
+  desk: { type: 'desk', label: 'Desk' },
+  tv: { type: 'monitor', label: 'Monitor' },
+  laptop: { type: 'laptop', label: 'Laptop' },
+  keyboard: { type: 'keyboard', label: 'Keyboard' },
+  mouse: { type: 'mouse', label: 'Mouse' },
+  'cell phone': { type: 'phone', label: 'Phone' },
+};
+
+/** Human-readable name for an object type (used in inspection UI). */
+export const OBJECT_LABEL: Record<ErgoObjectType, string> = {
+  person: 'Person',
+  chair: 'Chair',
+  desk: 'Desk',
+  monitor: 'Monitor',
+  laptop: 'Laptop',
+  keyboard: 'Keyboard',
+  mouse: 'Mouse',
+  footrest: 'Footrest',
+  phone: 'Phone',
+  unknown: 'Object',
+};
+
+/** Detector score → coarse confidence label for the scan overlay. */
+export function scoreConfidence(score: number): FindingConfidence {
+  if (score >= 0.6) return 'high';
+  if (score >= 0.4) return 'medium';
+  if (score > 0) return 'low';
+  return 'unable';
+}
+
+export const CONFIDENCE_LABEL: Record<FindingConfidence, string> = {
+  high: 'High confidence',
+  medium: 'Medium confidence',
+  low: 'Low confidence',
+  unable: 'Unable to determine',
+};
+
+export const CONFIDENCE_COLOR: Record<FindingConfidence, string> = {
+  high: '#22c55e',
+  medium: '#eab308',
+  low: '#f97316',
+  unable: '#94a3b8',
+};
+
+export const MEASUREMENT_MODE_LABEL: Record<MeasurementMode, string> = {
+  'user-measured': 'User measured',
+  calibrated: 'Calibrated estimate',
+  estimated: 'Estimated',
+  unknown: 'Unknown',
+};
 
 /** Neutral defaults so a report can be produced from posture alone. */
 export const defaultManualInputs: ErgoManualInputs = {
