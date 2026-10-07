@@ -32,17 +32,41 @@ export function setToken(token: string | null) {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
+/** Fired when the server rejects the stored token (expired / revoked / disabled). */
+export const SESSION_EXPIRED_EVENT = 'hm:session-expired';
+
+// Generous ceiling (document uploads can be several MB on slow mobile links) so
+// a stalled connection surfaces as an error instead of an infinite spinner.
+const REQUEST_TIMEOUT_MS = 60_000;
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-  });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      signal: ctrl.signal,
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers || {}),
+      },
+    });
+  } catch (err) {
+    if ((err as Error)?.name === 'AbortError') throw new Error('The server took too long to respond. Please try again.');
+    throw new Error('Network error — check your connection and try again.');
+  } finally {
+    clearTimeout(timer);
+  }
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && token && !path.startsWith('/auth/')) {
+    // The session is no longer valid: drop it and let the app send the user
+    // back to sign in, instead of leaving a dashboard full of failing requests.
+    setToken(null);
+    window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+  }
   if (!res.ok) throw new Error((data as { error?: string }).error || `Request failed (${res.status})`);
   return data as T;
 }

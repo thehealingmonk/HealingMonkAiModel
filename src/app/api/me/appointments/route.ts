@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/server/db';
 import { Appointment } from '@/lib/server/models/Appointment';
-import { Patient } from '@/lib/server/models/Patient';
 import { requireAuth } from '@/middleware/auth';
+import { myPatientIds } from '@/lib/server/patientLink';
 
 export const dynamic = 'force-dynamic';
-
-async function myPatientIds(user: any) {
-  if (!user.email) return [];
-  const patients = await Patient.find({ email: user.email.toLowerCase() }).select('_id');
-  return patients.map((p: any) => p._id);
-}
 
 // GET /api/me/appointments — the signed-in patient's upcoming appointments.
 export async function GET(req: NextRequest) {

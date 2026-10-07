@@ -1,9 +1,9 @@
 export interface PainArea {
   id: string;
   name: string;
-  nameHi: string; // Hindi translation
+  nameHi?: string; // Hindi translation
   label: string;
-  labelHi: string; // Hindi translation
+  labelHi?: string; // Hindi translation
   x: number;
   y: number;
   radius: number;
@@ -14,11 +14,11 @@ export interface PainArea {
 export interface PosePosition {
   id: string;
   name: string;
-  nameHi: string; // Hindi translation
+  nameHi?: string; // Hindi translation (optional — not every position is translated yet)
   description: string;
-  descriptionHi: string; // Hindi translation
+  descriptionHi?: string; // Hindi translation
   voiceGuide: string;
-  voiceGuideHi: string; // Hindi voice guidance
+  voiceGuideHi?: string; // Hindi voice guidance
   duration: number; // seconds
   imageX: number;
   imageY: number;

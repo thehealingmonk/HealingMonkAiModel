@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/server/db';
-import { OnlineMeeting, MeetingStatus } from '@/lib/server/models/OnlineMeeting';
+import { OnlineMeeting, MeetingStatus, MEETING_STATUSES } from '@/lib/server/models/OnlineMeeting';
 import { requireAuth, requireRole } from '@/middleware/auth';
 
 export const dynamic = 'force-dynamic';
@@ -56,6 +56,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const body = (await req.json().catch(() => ({}))) || {};
 
     if (typeof body.status === 'string') {
+      // updateOne below bypasses schema validators, so validate the enum here.
+      if (!(MEETING_STATUSES as readonly string[]).includes(body.status)) {
+        return NextResponse.json({ error: 'Invalid meeting status' }, { status: 400 });
+      }
       const next = body.status as MeetingStatus;
       // Never resurrect a finished meeting via status; those are terminal.
       if (meeting.status !== 'ended') {

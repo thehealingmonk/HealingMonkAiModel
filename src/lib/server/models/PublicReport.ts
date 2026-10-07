@@ -12,6 +12,11 @@ const publicReportSchema = new mongoose.Schema(
   {
     reportId: { type: String, required: true, unique: true, index: true },
     data: { type: mongoose.Schema.Types.Mixed, required: true },
+    // SHA-256 of the secret edit key held by the device that created the report.
+    // Reading only needs the URL; overwriting needs this key (or a clinical
+    // staff login), so a shared link can't be used to tamper with the report.
+    // Null for reports created before keys existed — those are staff-editable only.
+    editKeyHash: { type: String, default: null, select: false },
   },
   { timestamps: true, minimize: false }
 );

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { connectDB } from '@/lib/server/db';
 import { Subscription } from '@/lib/server/models/Subscription';
 import { verifyPaymentSignature } from '@/lib/server/razorpay';
@@ -14,18 +15,42 @@ export async function POST(req: NextRequest) {
     const { subscriptionId, razorpayOrderId, razorpayPaymentId, razorpaySignature } =
       (await req.json().catch(() => ({}))) || {};
 
+    if (
+      !mongoose.isValidObjectId(subscriptionId) ||
+      typeof razorpayPaymentId !== 'string' ||
+      typeof razorpaySignature !== 'string'
+    ) {
+      return NextResponse.json({ error: 'Invalid subscription verification request' }, { status: 400 });
+    }
     const sub = await Subscription.findById(subscriptionId);
     if (!sub) return NextResponse.json({ error: 'Subscription not found' }, { status: 404 });
 
-    const ok = verifyPaymentSignature({
-      orderId: razorpayOrderId,
-      paymentId: razorpayPaymentId,
-      signature: razorpaySignature,
-    });
+    // Verify against the order created for THIS subscription (stored server-side),
+    // so a signature from a cheaper plan's order can't activate a pricier plan.
+    const ok =
+      Boolean(sub.razorpayOrderId) &&
+      (!razorpayOrderId || razorpayOrderId === sub.razorpayOrderId) &&
+      verifyPaymentSignature({
+        orderId: sub.razorpayOrderId,
+        paymentId: razorpayPaymentId,
+        signature: razorpaySignature,
+      });
     if (!ok) {
-      sub.status = 'failed';
-      await sub.save();
+      if (sub.status === 'created') {
+        sub.status = 'failed';
+        await sub.save();
+      }
       return NextResponse.json({ error: 'Payment signature verification failed' }, { status: 400 });
+    }
+
+    // Idempotent: re-verifying an already-active subscription returns its
+    // original expiry instead of extending it.
+    if (sub.status === 'active' && sub.expiresAt) {
+      return NextResponse.json({
+        subscription: sub.toJSONSafe(),
+        expiresAt: new Date(sub.expiresAt).toISOString(),
+        plan: sub.plan,
+      });
     }
 
     const plan = getPlan(sub.plan);

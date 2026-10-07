@@ -1,18 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/server/db';
 import { Report } from '@/lib/server/models/Report';
-import { Patient } from '@/lib/server/models/Patient';
 import { requireAuth } from '@/middleware/auth';
+import { myPatientIds } from '@/lib/server/patientLink';
 
 export const dynamic = 'force-dynamic';
-
-// A logged-in patient User is matched to their clinic Patient record(s) by email
-// (patients are registered by reception/doctor, so the link is the shared email).
-async function myPatientIds(user: any) {
-  if (!user.email) return [];
-  const patients = await Patient.find({ email: user.email.toLowerCase() }).select('_id');
-  return patients.map((p: any) => p._id);
-}
 
 // GET /api/me/reports — the signed-in patient's own assessment reports.
 export async function GET(req: NextRequest) {

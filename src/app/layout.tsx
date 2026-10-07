@@ -31,7 +31,8 @@ export const metadata: Metadata = {
   authors: [{ name: SITE_NAME }],
   creator: SITE_NAME,
   publisher: SITE_NAME,
-  alternates: { canonical: '/' },
+  // Canonical is set per route in app/[[...slug]]/page.tsx (never inherited:
+  // a site-wide '/' canonical told Google every page was a copy of the home page).
   manifest: '/manifest.webmanifest',
   appleWebApp: { capable: true, statusBarStyle: 'default', title: SITE_NAME },
   // Standard (non-Apple) PWA capability meta — pairs with the Apple one above so

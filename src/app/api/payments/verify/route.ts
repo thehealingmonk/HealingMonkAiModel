@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { connectDB } from '@/lib/server/db';
 import { Payment } from '@/lib/server/models/Payment';
 import { requireAuth } from '@/middleware/auth';
@@ -16,17 +17,33 @@ export async function POST(req: NextRequest) {
     await connectDB();
     const { paymentId, razorpayOrderId, razorpayPaymentId, razorpaySignature } =
       (await req.json().catch(() => ({}))) || {};
+    if (
+      !mongoose.isValidObjectId(paymentId) ||
+      typeof razorpayPaymentId !== 'string' ||
+      typeof razorpaySignature !== 'string'
+    ) {
+      return NextResponse.json({ error: 'Invalid payment verification request' }, { status: 400 });
+    }
     const payment = await Payment.findById(paymentId).populate('patient', 'name email');
     if (!payment) return NextResponse.json({ error: 'Payment not found' }, { status: 404 });
+    if (payment.status === 'paid') return NextResponse.json({ payment: payment.toJSONSafe() });
 
-    const ok = verifyPaymentSignature({
-      orderId: razorpayOrderId,
-      paymentId: razorpayPaymentId,
-      signature: razorpaySignature,
-    });
+    // The signature must be checked against THIS payment's own order id (stored
+    // server-side when the order was created), never the client-supplied one —
+    // otherwise a valid signature from a cheap order could mark a large bill paid.
+    const ok =
+      Boolean(payment.razorpayOrderId) &&
+      (!razorpayOrderId || razorpayOrderId === payment.razorpayOrderId) &&
+      verifyPaymentSignature({
+        orderId: payment.razorpayOrderId,
+        paymentId: razorpayPaymentId,
+        signature: razorpaySignature,
+      });
     if (!ok) {
-      payment.status = 'failed';
-      await payment.save();
+      if (payment.status === 'created') {
+        payment.status = 'failed';
+        await payment.save();
+      }
       return NextResponse.json({ error: 'Payment signature verification failed' }, { status: 400 });
     }
 

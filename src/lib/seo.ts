@@ -70,3 +70,26 @@ export const ROUTE_META: Record<string, { title: string; description: string }> 
       'HealingMonk combines physiotherapy expertise with on-device AI to make objective posture and movement assessment accessible to everyone.',
   },
 };
+
+// Every URL the client SPA can render. The server catch-all page uses this to
+// answer anything else with a real 404 (instead of booting the SPA, which used to
+// silently redirect unknown URLs to "/" — a soft-404 that search engines punish).
+const APP_PATH_PATTERNS: RegExp[] = [
+  /^\/$/,
+  /^\/(technology|assessments|how-it-works|about|pricing|login|ergo)$/,
+  /^\/assessment(\/(positions|capture|report))?$/,
+  /^\/assessment\/report\/[^/]+$/,
+  /^\/r\/[^/]+$/,
+  /^\/m\/[^/]+$/,
+  // Role dashboards own their whole URL space (their routers handle sub-paths).
+  /^\/(admin|doctor|reception|patient)(\/.*)?$/,
+];
+
+export function isAppPath(pathname: string): boolean {
+  return APP_PATH_PATTERNS.some((re) => re.test(pathname));
+}
+
+/** Only the public marketing pages are indexable; every other app screen is noindex. */
+export function isIndexablePath(pathname: string): boolean {
+  return Object.prototype.hasOwnProperty.call(ROUTE_META, pathname);
+}

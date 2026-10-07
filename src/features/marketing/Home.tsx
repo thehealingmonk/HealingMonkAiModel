@@ -91,7 +91,7 @@ export default function Home() {
         <Feature i={0} icon={<ScanLine className="h-5 w-5" />} title="AI-Powered Analysis" desc="33-point pose detection scores your alignment frame by frame." />
         <Feature i={1} icon={<Zap className="h-5 w-5" />} title="Instant Results" desc="Get posture, mobility, and stability scores in seconds." />
         <Feature i={2} icon={<Gauge className="h-5 w-5" />} title="Personalized Programs" desc="Targeted routines matched to your specific findings." />
-        <Feature i={3} icon={<ShieldCheck className="h-5 w-5" />} title="Private by Design" desc="Analysis runs on-device in your browser — nothing leaves you." />
+        <Feature i={3} icon={<ShieldCheck className="h-5 w-5" />} title="Private by Design" desc="Pose analysis runs on-device in your browser — your live video is never uploaded." />
       </section>
 
       {/* Clinic showcase — image on the left, description on the right */}
@@ -219,7 +219,7 @@ export default function Home() {
         <div className="relative mt-8 grid gap-6 sm:grid-cols-3">
           <Stat value="33" label="Body landmarks tracked" />
           <Stat value="~60ms" label="Per-frame latency" />
-          <Stat value="100%" label="On-device & private" />
+          <Stat value="100%" label="On-device pose analysis" />
         </div>
         <button
           onClick={subscribe}

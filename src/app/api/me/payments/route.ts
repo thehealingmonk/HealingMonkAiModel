@@ -1,17 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/server/db';
 import { Payment } from '@/lib/server/models/Payment';
-import { Patient } from '@/lib/server/models/Patient';
 import { requireAuth } from '@/middleware/auth';
+import { myPatientIds } from '@/lib/server/patientLink';
 
 export const dynamic = 'force-dynamic';
-
-// Match the signed-in patient User to their clinic Patient record(s) by email.
-async function myPatientIds(user: any) {
-  if (!user.email) return [];
-  const patients = await Patient.find({ email: user.email.toLowerCase() }).select('_id');
-  return patients.map((p: any) => p._id);
-}
 
 // GET /api/me/payments — the signed-in patient's own receipts + a paid total.
 export async function GET(req: NextRequest) {

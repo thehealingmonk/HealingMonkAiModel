@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { openCamera } from '@/lib/camera';
-import { initializePoseLandmarker, detectPose, Landmark } from '@/lib/poseDetection';
+import { initializePoseLandmarker, detectPose, Landmark, toIsotropic } from '@/lib/poseDetection';
 import { computePostureChain, PostureChain } from '@/lib/postureVisualizer';
 import { computeClinicalPlumbLine, drawClinicalPlumbLine, ClinicalPlumbLine } from '@/lib/plumbLine';
 import { computeGuidance, drawGuidanceOverlay, Guidance } from '@/lib/captureGuidance';
@@ -304,7 +304,9 @@ export default function ClinicalCapture({ assessments, onComplete, onBack, exter
           latestLandmarks.current = result.landmarks;
           setBodyDetected(true);
           const aspect = (video.videoWidth / video.videoHeight) || 16 / 9;
-          const measure = currentRef.current.measure(result.landmarks);
+          // Measure on aspect-corrected coordinates (true image angles); the
+          // overlay below keeps drawing the normalized landmarks.
+          const measure = currentRef.current.measure(toIsotropic(result.landmarks, aspect));
           setLive(measure);
           const chain = computePostureChain(result.landmarks, aspect);
           setLivePosture(chain);
@@ -471,10 +473,10 @@ export default function ClinicalCapture({ assessments, onComplete, onBack, exter
     const lm = latestLandmarks.current;
     const video = videoRef.current!;
 
-    const measure = lm
-      ? current.measure(lm)
-      : { value: null, severity: null, points: [], detail: 'N/A' };
     const aspect = (video.videoWidth / video.videoHeight) || 16 / 9;
+    const measure = lm
+      ? current.measure(toIsotropic(lm, aspect))
+      : { value: null, severity: null, points: [], detail: 'N/A' };
     const chain = lm ? computePostureChain(lm, aspect) : null;
     // Plumb line for this exact frame — the alignment verdict shown in the report.
     const plumb = latestPlumb.current ?? (lm ? computeClinicalPlumbLine(lm, current.view, aspect) : null);

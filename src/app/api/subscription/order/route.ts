@@ -3,6 +3,7 @@ import { connectDB } from '@/lib/server/db';
 import { Subscription } from '@/lib/server/models/Subscription';
 import { razorpayEnabled, createOrder } from '@/lib/server/razorpay';
 import { getPlan } from '@/lib/plans';
+import { rateLimit, clientIp } from '@/lib/server/rateLimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,9 @@ export const dynamic = 'force-dynamic';
 // The plan id is validated server-side and the price is taken from the server's
 // plan table — the client never dictates the amount.
 export async function POST(req: NextRequest) {
+  const limited = rateLimit(`sub-order:${clientIp(req)}`, 20, 60 * 60_000);
+  if (limited) return limited;
+
   try {
     if (!razorpayEnabled) {
       return NextResponse.json({ error: 'Online payments are not configured' }, { status: 503 });
@@ -27,7 +31,7 @@ export async function POST(req: NextRequest) {
       amount: paise,
       currency: 'INR',
       status: 'created',
-      email: (email || '').trim(),
+      email: typeof email === 'string' ? email.trim().slice(0, 254) : '',
     });
 
     const order = await createOrder({

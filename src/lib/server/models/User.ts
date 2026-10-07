@@ -15,6 +15,11 @@ const userSchema = new mongoose.Schema(
     passwordHash: { type: String, required: true },
     role: { type: String, enum: ROLES, required: true, default: 'patient' },
     active: { type: Boolean, default: true },
+    // Patient logins only: true once an admin provisions this login from a clinic
+    // patient record (POST /api/patients/[id]/account). Only linked accounts may
+    // see the clinic records that share their email — a self-signup email is
+    // unverified and must never unlock someone else's reports.
+    patientLinked: { type: Boolean, default: false },
     // Who created this account (admin who added a doctor/receptionist, etc.)
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },

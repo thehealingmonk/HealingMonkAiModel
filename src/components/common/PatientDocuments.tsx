@@ -129,9 +129,21 @@ export default function PatientDocuments({ patientId }: { patientId: string }) {
       if (isImage(document.mime)) {
         setPreview({ name: document.name, mime: document.mime, data: document.data });
       } else {
-        // PDFs / other: open in a new tab via a blob so the browser viewer handles it.
-        const w = window.open();
-        if (w) w.document.write(`<iframe src="${document.data}" style="border:0;width:100%;height:100%"></iframe>`);
+        // PDFs / other: decode to a Blob and open its object URL so the browser's
+        // own viewer handles it. Never write the stored string into HTML — that
+        // would turn a crafted data URL into script running on our origin.
+        const blob = await (await fetch(document.data)).blob();
+        const url = URL.createObjectURL(blob);
+        const w = window.open(url, '_blank');
+        if (!w) {
+          // Pop-up blocked — fall back to a regular link click in a new tab.
+          const a = window.document.createElement('a');
+          a.href = url;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.click();
+        }
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not open file');
@@ -198,7 +210,7 @@ export default function PatientDocuments({ patientId }: { patientId: string }) {
             ref={fileRef}
             type="file"
             multiple
-            accept="image/*,application/pdf"
+            accept="image/png,image/jpeg,image/gif,image/webp,image/bmp,image/heic,image/heif,application/pdf"
             onChange={onPick}
             className="hidden"
           />

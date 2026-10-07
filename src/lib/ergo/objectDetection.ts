@@ -24,9 +24,23 @@ let objectDetector: ObjectDetectorInstance | null = null;
 const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite';
 
-export async function initializeObjectDetector() {
-  if (objectDetector) return objectDetector;
+// In-flight load, shared by concurrent callers (React StrictMode double-mounts
+// the capture screen) so the WASM runtime + model are created exactly once.
+let objectDetectorLoading: Promise<ObjectDetectorInstance> | null = null;
 
+export function initializeObjectDetector(): Promise<ObjectDetectorInstance> {
+  if (objectDetector) return Promise.resolve(objectDetector);
+  if (!objectDetectorLoading) {
+    objectDetectorLoading = loadObjectDetector().catch((err) => {
+      // Let a later call retry (e.g. after the network comes back).
+      objectDetectorLoading = null;
+      throw err;
+    });
+  }
+  return objectDetectorLoading;
+}
+
+async function loadObjectDetector(): Promise<ObjectDetectorInstance> {
   const { ObjectDetector, FilesetResolver } = await import('@mediapipe/tasks-vision');
 
   // Same pinned WASM build as the pose landmarker (see poseDetection.ts) so both
@@ -52,7 +66,7 @@ export async function initializeObjectDetector() {
     objectDetector = await create('CPU');
   }
 
-  return objectDetector;
+  return objectDetector!;
 }
 
 // VIDEO mode needs strictly increasing timestamps. This is a SEPARATE counter

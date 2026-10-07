@@ -11,6 +11,7 @@ const MAX_FILE_CHARS = 5_000_000;
 // Files accepted in a single upload request.
 const MAX_FILES_PER_REQUEST = 10;
 const ALLOWED_CATEGORIES = ['report', 'xray', 'prescription', 'scan', 'other'];
+const DATA_URL_RE = /^data:(image\/(png|jpe?g|gif|webp|bmp|heic|heif)|application\/pdf);base64,[A-Za-z0-9+/]+={0,2}$/;
 
 // List a patient's documents (metadata only — no base64 payloads, so the list
 // stays light). The client fetches an individual file's data when previewing.
@@ -59,7 +60,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const toCreate: Record<string, unknown>[] = [];
     for (const doc of incoming) {
       const data = doc?.data;
-      if (typeof data !== 'string' || !/^data:(image\/|application\/pdf)/.test(data)) {
+      // Strict allow-list: raster images or PDF, base64 only. SVG (scriptable)
+      // and anything with markup/quotes after the prefix are rejected so a
+      // stored file can never become an XSS payload when previewed.
+      if (typeof data !== 'string' || !DATA_URL_RE.test(data)) {
         return NextResponse.json(
           { error: 'Each file must be an image or PDF data URL' },
           { status: 400 }
@@ -75,7 +79,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       toCreate.push({
         patient: patient._id,
         name: (typeof doc.name === 'string' ? doc.name : 'Document').slice(0, 200),
-        mime: typeof doc.mime === 'string' ? doc.mime.slice(0, 100) : '',
+        // Derive the MIME from the validated data URL rather than trusting the client.
+        mime: data.slice(5, data.indexOf(';')),
         size: Number.isFinite(doc.size) ? Number(doc.size) : 0,
         category,
         data,

@@ -32,7 +32,7 @@ function extractKeyPoints(landmarks: Landmark[]): KeyPoints | null {
 
   const getVisible = (idx: number): Landmark => {
     const l = landmarks[idx];
-    return l && l.visibility > 0.5 ? l : { x: 0, y: 0, z: 0, visibility: 0 };
+    return l && (l.visibility ?? 0) > 0.5 ? l : { x: 0, y: 0, z: 0, visibility: 0 };
   };
 
   return {
@@ -219,7 +219,7 @@ export function analyzePosture(landmarks: Landmark[]): {
   }
 
   const score = calculatePostureScore(issues);
-  const confidence = Math.min(100, landmarks.filter((l) => l.visibility > 0.5).length * 3.3);
+  const confidence = Math.min(100, landmarks.filter((l) => (l.visibility ?? 0) > 0.5).length * 3.3);
 
   return { issues, score, confidence };
 }
@@ -287,7 +287,7 @@ export function analyzeSquat(landmarks: Landmark[]): {
   }
 
   const score = calculatePostureScore(issues);
-  const confidence = Math.min(100, landmarks.filter((l) => l.visibility > 0.5).length * 3.3);
+  const confidence = Math.min(100, landmarks.filter((l) => (l.visibility ?? 0) > 0.5).length * 3.3);
 
   return { issues, score, confidence };
 }

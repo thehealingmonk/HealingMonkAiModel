@@ -34,9 +34,16 @@ export interface StoredReport {
   findingData: Record<string, DoctorFindingData>;
   /** Doctor's curated ideal-posture reference images for this patient's pain areas. */
   idealPostures?: IdealPostureSet[];
+  /** ISO time of the last edit — picks the fresher copy between server and local cache. */
+  updatedAt?: string;
 }
 
 const PREFIX = 'hm_report_';
+// Secret edit key for reports created on this device (see /api/public/reports).
+const KEY_PREFIX = 'hm_report_key_';
+// Doctor notes are typed live; batch edits so the multi-MB report (it carries
+// the pose images) is uploaded once per pause, not once per keystroke.
+const SAVE_DEBOUNCE_MS = 800;
 
 // In-memory cache of reports created/opened this session. This is the reliable
 // fallback when localStorage is full: guest reports carry several full-res
@@ -62,8 +69,52 @@ function slugify(name: string): string {
 // "ramesh-kumar-8f3k2plz9q". This is what the shareable report URL (`/r/:slug`)
 // uses — human-readable (name) yet unique per report. URL-safe (kebab only).
 function genId(name?: string): string {
-  const rand = Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
-  return `${slugify(name || 'patient')}-${rand}`;
+  // The URL is the read credential for a no-login report, so the suffix must be
+  // unguessable: 10 chars from a CSPRNG (~51 bits), not Math.random().
+  return `${slugify(name || 'patient')}-${randomToken(10)}`;
+}
+
+function randomToken(length: number): string {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  let out = '';
+  for (const b of bytes) out += alphabet[b % alphabet.length];
+  return out;
+}
+
+function getEditKey(id: string): string | null {
+  try {
+    return localStorage.getItem(KEY_PREFIX + id);
+  } catch {
+    return null;
+  }
+}
+
+function setEditKey(id: string, key: string): void {
+  try {
+    localStorage.setItem(KEY_PREFIX + id, key);
+  } catch {
+    /* storage unavailable — edits from this device just won't sync */
+  }
+}
+
+/**
+ * Can this browser save edits to the report? True on the device that created it
+ * (holds the edit key) or for a signed-in user (the server still decides —
+ * only admin/doctor logins are accepted).
+ */
+export function canEditStoredReport(id: string): boolean {
+  if (getEditKey(id)) return true;
+  try {
+    const token = localStorage.getItem('hm_token');
+    if (!token) return false;
+    // UI hint only (the server verifies the signature): read the role claim.
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return payload?.role === 'admin' || payload?.role === 'doctor';
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -78,12 +129,15 @@ export function createStoredReport(input: {
   idealPostures?: IdealPostureSet[];
 }): string {
   const id = genId(input.patient?.name);
+  setEditKey(id, randomToken(32));
+  const now = new Date().toISOString();
   const report: StoredReport = {
     id,
     patient: input.patient,
     captures: input.captures,
     extraShots: input.extraShots,
-    createdAt: new Date().toISOString(),
+    createdAt: now,
+    updatedAt: now,
     doctorNotes: '',
     doctorPoints: [],
     findingData: {},
@@ -93,36 +147,98 @@ export function createStoredReport(input: {
   persist(report);
   // Upload to the server so the URL opens on any device. Fire-and-forget: the
   // local cache already has it, so the report is usable immediately.
-  saveToServer(report);
+  saveToServer(report, true);
   return id;
 }
 
-/** Push a report to the server (best-effort — local cache is the fallback). */
-function saveToServer(report: StoredReport): void {
-  fetch(`${API_URL}/public/reports`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(report),
-  }).catch((err) => console.warn('Could not sync report to server:', err));
+// Per-report save queue: at most one upload in flight per report, and only the
+// LATEST state is sent after it finishes. Without this, rapid edits raced each
+// other and an older payload could land last, silently reverting an edit.
+const pending = new Map<string, StoredReport>();
+const timers = new Map<string, ReturnType<typeof setTimeout>>();
+const inFlight = new Set<string>();
+
+/** Queue a report upload (best-effort — the local cache is the fallback). */
+function saveToServer(report: StoredReport, immediate = false): void {
+  pending.set(report.id, report);
+  const t = timers.get(report.id);
+  if (t) clearTimeout(t);
+  if (immediate) {
+    timers.delete(report.id);
+    void flush(report.id);
+    return;
+  }
+  timers.set(
+    report.id,
+    setTimeout(() => {
+      timers.delete(report.id);
+      void flush(report.id);
+    }, SAVE_DEBOUNCE_MS)
+  );
+}
+
+async function flush(id: string): Promise<void> {
+  if (inFlight.has(id)) return; // the running upload re-checks `pending` when done
+  const report = pending.get(id);
+  if (!report) return;
+  pending.delete(id);
+  inFlight.add(id);
+  try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const key = getEditKey(id);
+    if (key) headers['x-report-key'] = key;
+    try {
+      const token = localStorage.getItem('hm_token');
+      if (token) headers.Authorization = `Bearer ${token}`;
+    } catch {
+      /* no storage — key-only */
+    }
+    const res = await fetch(`${API_URL}/public/reports`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(report),
+    });
+    if (!res.ok) console.warn('Could not sync report to server:', res.status);
+  } catch (err) {
+    console.warn('Could not sync report to server:', err);
+  } finally {
+    inFlight.delete(id);
+    if (pending.has(id)) void flush(id);
+  }
+}
+
+function timeOf(r: StoredReport | null): number {
+  if (!r) return 0;
+  const t = Date.parse(r.updatedAt || r.createdAt || '');
+  return Number.isFinite(t) ? t : 0;
 }
 
 /**
- * Load a report by id: instant from the local cache when present, otherwise
- * fetched from the server (and cached locally) so the URL works cross-device.
+ * Load a report by id. The server copy is the source of truth (so edits made on
+ * another device show up); the local cache is used when it is newer (an edit
+ * still uploading) or when the server is unreachable / doesn't have it yet.
  */
 export async function fetchStoredReport(id: string): Promise<StoredReport | null> {
   const local = getStoredReport(id);
-  if (local) return local;
+  let remote: StoredReport | null = null;
   try {
-    const res = await fetch(`${API_URL}/public/reports/${id}`);
-    if (!res.ok) return null;
-    const report = (await res.json()) as StoredReport;
-    memoryCache.set(report.id, report);
-    persist(report); // cache for next time / offline
-    return report;
+    const ctrl = new AbortController();
+    // Don't hang the report screen on a slow network if we can show a local copy.
+    const timer = setTimeout(() => ctrl.abort(), local ? 6000 : 20000);
+    const res = await fetch(`${API_URL}/public/reports/${encodeURIComponent(id)}`, {
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    if (res.ok) remote = (await res.json()) as StoredReport;
   } catch {
-    return null;
+    /* offline / timeout — fall back to the local copy */
   }
+  if (remote && timeOf(remote) >= timeOf(local)) {
+    memoryCache.set(remote.id, remote);
+    persist(remote); // cache for next time / offline
+    return remote;
+  }
+  return local;
 }
 
 function persist(report: StoredReport): void {
@@ -166,8 +282,12 @@ export function getStoredReport(id: string): StoredReport | null {
 export function updateStoredReport(id: string, patch: Partial<StoredReport>): void {
   const existing = getStoredReport(id);
   if (!existing) return;
-  const updated = { ...existing, ...patch };
+  const updated = { ...existing, ...patch, updatedAt: new Date().toISOString() };
   memoryCache.set(id, updated);
+  // A view-only browser keeps its edits in memory only: persisting them locally
+  // would make this device prefer its own (newer-stamped) copy over the real
+  // report forever. The server rejects them anyway.
+  if (!canEditStoredReport(id)) return;
   persist(updated);
   // Keep the server copy in sync so edits show on other devices too.
   saveToServer(updated);

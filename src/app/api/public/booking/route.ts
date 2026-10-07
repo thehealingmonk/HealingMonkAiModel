@@ -3,6 +3,9 @@ import { connectDB } from '@/lib/server/db';
 import { Patient } from '@/lib/server/models/Patient';
 import { Appointment } from '@/lib/server/models/Appointment';
 import { sendMail, appointmentBookedEmail } from '@/lib/server/mailer';
+import { rateLimit, clientIp } from '@/lib/server/rateLimit';
+
+const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
 export const dynamic = 'force-dynamic';
 
@@ -10,11 +13,23 @@ export const dynamic = 'force-dynamic';
 // reuses) a patient record and an optional pending appointment that reception
 // confirms from the desk. No auth — this is the lead-capture entry point.
 export async function POST(req: NextRequest) {
+  // Unauthenticated + sends email: cap per client to stop scripted spam.
+  const limited = rateLimit(`booking:${clientIp(req)}`, 5, 60 * 60_000);
+  if (limited) return limited;
+
   try {
     await connectDB();
-    const { name, mobile, email, complaint, painAreas, preferredAt } =
-      (await req.json().catch(() => ({}))) || {};
-    if (!name || !name.trim()) {
+    const body = (await req.json().catch(() => ({}))) || {};
+    // Coerce to bounded strings so objects/huge payloads never reach queries.
+    const name = str(body.name, 120);
+    const mobile = str(body.mobile, 20);
+    const email = str(body.email, 254);
+    const complaint = str(body.complaint, 2000);
+    const preferredAt = str(body.preferredAt, 40);
+    const painAreas: string[] = Array.isArray(body.painAreas)
+      ? body.painAreas.filter((a: unknown): a is string => typeof a === 'string').map((a: string) => a.slice(0, 60)).slice(0, 20)
+      : [];
+    if (!name) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
     if (!mobile && !email) {
@@ -29,11 +44,11 @@ export async function POST(req: NextRequest) {
     if (!patient && cleanEmail) patient = await Patient.findOne({ email: cleanEmail });
     if (!patient) {
       patient = new Patient({
-        name: name.trim(),
+        name,
         mobile: cleanMobile,
         email: cleanEmail,
         complaint: complaint || '',
-        painAreas: Array.isArray(painAreas) ? painAreas : [],
+        painAreas,
       });
       await patient.save();
     }

@@ -537,13 +537,13 @@ export function analyzePostureVisually(
 }
 
 function checkHeadPosition(landmarks: Landmark[]): 'correct' | 'incorrect' | 'unknown' {
-  if (landmarks[0].visibility < 0.5) return 'unknown';
+  if ((landmarks[0]?.visibility ?? 0) < 0.5) return 'unknown';
 
   const nose = landmarks[0];
   const leftShoulder = landmarks[11];
   const rightShoulder = landmarks[12];
 
-  if (leftShoulder.visibility < 0.5 || rightShoulder.visibility < 0.5) return 'unknown';
+  if ((leftShoulder.visibility ?? 0) < 0.5 || (rightShoulder.visibility ?? 0) < 0.5) return 'unknown';
 
   const shoulderMidX = (leftShoulder.x + rightShoulder.x) / 2;
   const deviation = Math.abs(nose.x - shoulderMidX);
@@ -556,7 +556,7 @@ function checkShoulderLevel(landmarks: Landmark[]): 'correct' | 'incorrect' | 'u
   const leftShoulder = landmarks[11];
   const rightShoulder = landmarks[12];
 
-  if (leftShoulder.visibility < 0.5 || rightShoulder.visibility < 0.5) return 'unknown';
+  if ((leftShoulder.visibility ?? 0) < 0.5 || (rightShoulder.visibility ?? 0) < 0.5) return 'unknown';
 
   const yDiff = Math.abs(leftShoulder.y - rightShoulder.y);
 
@@ -568,7 +568,7 @@ function checkHipLevel(landmarks: Landmark[]): 'correct' | 'incorrect' | 'unknow
   const leftHip = landmarks[23];
   const rightHip = landmarks[24];
 
-  if (leftHip.visibility < 0.5 || rightHip.visibility < 0.5) return 'unknown';
+  if ((leftHip.visibility ?? 0) < 0.5 || (rightHip.visibility ?? 0) < 0.5) return 'unknown';
 
   const yDiff = Math.abs(leftHip.y - rightHip.y);
 
@@ -581,7 +581,7 @@ function checkSpineAlignment(landmarks: Landmark[]): 'correct' | 'incorrect' | '
   const shoulder = landmarks[11];
   const hip = landmarks[23];
 
-  if (nose.visibility < 0.5 || shoulder.visibility < 0.5 || hip.visibility < 0.5) {
+  if ((nose.visibility ?? 0) < 0.5 || (shoulder.visibility ?? 0) < 0.5 || (hip.visibility ?? 0) < 0.5) {
     return 'unknown';
   }
 
@@ -604,7 +604,7 @@ function checkKneeAlignment(landmarks: Landmark[], side: 'left' | 'right'): 'cor
   const ankle = landmarks[ankleIdx];
   const hip = landmarks[hipIdx];
 
-  if (knee.visibility < 0.5 || ankle.visibility < 0.5 || hip.visibility < 0.5) {
+  if ((knee.visibility ?? 0) < 0.5 || (ankle.visibility ?? 0) < 0.5 || (hip.visibility ?? 0) < 0.5) {
     return 'unknown';
   }
 
@@ -621,7 +621,7 @@ function checkAnkleAlignment(landmarks: Landmark[], side: 'left' | 'right'): 'co
   const ankle = landmarks[ankleIdx];
   const heel = landmarks[heelIdx];
 
-  if (ankle.visibility < 0.5 || heel.visibility < 0.5) {
+  if ((ankle.visibility ?? 0) < 0.5 || (heel.visibility ?? 0) < 0.5) {
     return 'unknown';
   }
 
@@ -669,7 +669,7 @@ export function drawPostureVisualization(
     const startLandmark = landmarks[start];
     const endLandmark = landmarks[end];
 
-    if (startLandmark?.visibility > 0.5 && endLandmark?.visibility > 0.5) {
+    if ((startLandmark?.visibility ?? 0) > 0.5 && (endLandmark?.visibility ?? 0) > 0.5) {
       const startPoint = analysis.points.find((p) => p.landmarkIndex === start);
       const endPoint = analysis.points.find((p) => p.landmarkIndex === end);
 
@@ -695,7 +695,7 @@ export function drawPostureVisualization(
   // Draw landmarks with color coding
   for (const point of analysis.points) {
     const landmark = landmarks[point.landmarkIndex];
-    if (!landmark || landmark.visibility < 0.5) continue;
+    if (!landmark || (landmark.visibility ?? 0) < 0.5) continue;
 
     const x = landmark.x * videoWidth;
     const y = landmark.y * videoHeight;

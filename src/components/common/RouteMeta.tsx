@@ -48,9 +48,10 @@ export default function RouteMeta() {
     upsertMeta('name', 'twitter:title', title);
     upsertMeta('name', 'twitter:description', description);
 
-    // Canonical: point indexable pages at their own URL; non-indexable pages at
-    // the site root so link equity isn't split across private URLs.
-    upsertCanonical(indexable ? absoluteUrl(pathname) : absoluteUrl('/'));
+    // Canonical: indexable pages point at their own URL. Private (noindex) pages
+    // carry no canonical — pointing them at "/" sent conflicting signals.
+    if (indexable) upsertCanonical(absoluteUrl(pathname));
+    else document.head.querySelector('link[rel="canonical"]')?.remove();
   }, [pathname]);
 
   return null;

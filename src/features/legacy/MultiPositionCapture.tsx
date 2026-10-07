@@ -125,7 +125,7 @@ export default function MultiPositionCapture({ selectedAreas, onComplete, onSkip
     setPhase('guidance');
     setIsSpeaking(true);
 
-    const voiceText = language === 'hi' ? position.voiceGuideHi : position.voiceGuide;
+    const voiceText = (language === 'hi' && position.voiceGuideHi) || position.voiceGuide;
     await speak({
       text: voiceText,
       lang: language,

@@ -47,8 +47,10 @@ export default function ErgoApp() {
   const [calibration, setCalibration] = useState<ErgoCalibration>(emptyCalibration);
   const [manual, setManual] = useState<ErgoManualInputs>(defaultManualInputs);
   const [result, setResult] = useState<ErgoResult | null>(null);
+  const [genError, setGenError] = useState('');
 
   const restart = () => {
+    setGenError('');
     setCaptures({ side: null, front: null });
     setWorkstation(null);
     setObjectInputs(defaultObjectInputs);
@@ -61,27 +63,36 @@ export default function ErgoApp() {
   // Build the merged result: the existing posture engine PLUS the new workplace
   // relationship findings (only when a workstation frame was captured).
   const generate = (m: ErgoManualInputs) => {
-    const base = assessErgonomics(
-      environment,
-      task,
-      captures.side?.angles ?? null,
-      captures.front?.angles ?? null,
-      m
-    );
-    if (workstation) {
-      const findings = assessRelationships(
-        workstation.landmarks,
-        workstation.angles,
-        workstation.objects,
-        objectInputs,
-        calibration
+    setGenError('');
+    try {
+      const base = assessErgonomics(
+        environment,
+        task,
+        captures.side?.angles ?? null,
+        captures.front?.angles ?? null,
+        m
       );
-      base.objects = workstation.objects;
-      base.findings = findings;
-      base.measurementMode = dominantMode(findings);
+      if (workstation) {
+        const findings = assessRelationships(
+          workstation.landmarks,
+          workstation.angles,
+          workstation.objects,
+          objectInputs,
+          calibration
+        );
+        base.objects = workstation.objects;
+        base.findings = findings;
+        base.measurementMode = dominantMode(findings);
+      }
+      setResult(base);
+      setStep('report');
+    } catch (err) {
+      // E.g. no usable pose in the captured frames — say so instead of a dead click.
+      console.error('ergo assessment failed', err);
+      setGenError(
+        'We could not analyse the captured posture. Please go back and recapture the side view with your whole upper body visible.'
+      );
     }
-    setResult(base);
-    setStep('report');
   };
 
   if (step === 'setup') {
@@ -142,6 +153,15 @@ export default function ErgoApp() {
 
   if (step === 'inputs') {
     return (
+      <>
+      {genError && (
+        <div role="alert" className="fixed inset-x-0 top-0 z-50 bg-red-600 px-4 py-3 text-center text-sm font-medium text-white">
+          {genError}{' '}
+          <button type="button" className="ml-2 underline" onClick={() => { setGenError(''); setStep('capture'); }}>
+            Recapture
+          </button>
+        </div>
+      )}
       <ErgoInputs
         task={task}
         initial={manual}
@@ -151,6 +171,7 @@ export default function ErgoApp() {
           generate(m);
         }}
       />
+      </>
     );
   }
 

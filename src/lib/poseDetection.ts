@@ -9,9 +9,23 @@ let poseLandmarker: PoseLandmarkerInstance | null = null;
 const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task';
 
-export async function initializePoseLandmarker() {
-  if (poseLandmarker) return poseLandmarker;
+// In-flight load, shared by concurrent callers (React StrictMode double-mounts
+// the capture screen) so the WASM runtime + model are created exactly once.
+let poseLandmarkerLoading: Promise<PoseLandmarkerInstance> | null = null;
 
+export function initializePoseLandmarker(): Promise<PoseLandmarkerInstance> {
+  if (poseLandmarker) return Promise.resolve(poseLandmarker);
+  if (!poseLandmarkerLoading) {
+    poseLandmarkerLoading = loadPoseLandmarker().catch((err) => {
+      // Let a later call retry (e.g. after the network comes back).
+      poseLandmarkerLoading = null;
+      throw err;
+    });
+  }
+  return poseLandmarkerLoading;
+}
+
+async function loadPoseLandmarker(): Promise<PoseLandmarkerInstance> {
   // Load the multi-MB MediaPipe runtime ON DEMAND (dynamic import) so it is
   // code-split into its own chunk. The marketing site and patient intake never
   // download it — it arrives only when the assessment actually needs the camera.
@@ -46,7 +60,7 @@ export async function initializePoseLandmarker() {
     poseLandmarker = await create('CPU');
   }
 
-  return poseLandmarker;
+  return poseLandmarker!;
 }
 
 const LANDMARK_NAMES = [
@@ -193,6 +207,30 @@ export function calculateAngle(a: Landmark, b: Landmark, c: Landmark): number {
 
   const cosAngle = dotProduct / (magnitudeBA * magnitudeBC);
   return Math.acos(Math.max(-1, Math.min(1, cosAngle))) * (180 / Math.PI);
+}
+
+/**
+ * MediaPipe landmarks are normalized per axis: x is a fraction of the frame
+ * WIDTH, y a fraction of its HEIGHT. On a non-square frame one unit of x and one
+ * unit of y are different pixel lengths, so 2D angles computed directly on them
+ * are skewed (a true 20° lean reads ≈12° on a 16:9 landscape camera and ≈33° on
+ * a 9:16 portrait phone). Scaling x by the frame aspect (width / height) gives
+ * isotropic coordinates in which angles match the real image — so the same
+ * posture scores the same on any device or orientation.
+ *
+ * Use the result for MEASUREMENT only; keep drawing/overlay code on the original
+ * normalized landmarks.
+ */
+export function toIsotropic(landmarks: Landmark[], aspectRatio: number): Landmark[] {
+  const k = Number.isFinite(aspectRatio) && aspectRatio > 0 ? aspectRatio : 1;
+  if (k === 1) return landmarks;
+  return landmarks.map((l) => (l ? { ...l, x: l.x * k } : l));
+}
+
+/** Width / height of a playing video (1 when unknown, i.e. no correction). */
+export function frameAspect(video: HTMLVideoElement | null | undefined): number {
+  if (!video || !video.videoWidth || !video.videoHeight) return 1;
+  return video.videoWidth / video.videoHeight;
 }
 
 export function calculateAngle2D(a: Landmark, b: Landmark, c: Landmark): number {

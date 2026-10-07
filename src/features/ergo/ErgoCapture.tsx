@@ -3,7 +3,7 @@ import {
   Camera, ChevronLeft, CheckCircle2, RotateCcw, SwitchCamera, ArrowRight,
 } from 'lucide-react';
 import { openCamera } from '@/lib/camera';
-import { initializePoseLandmarker, detectPose, Landmark } from '@/lib/poseDetection';
+import { initializePoseLandmarker, detectPose, Landmark, toIsotropic, frameAspect } from '@/lib/poseDetection';
 import { extractErgoAngles } from '@/lib/ergo/landmarksToAngles';
 import { ErgoCaptures, ErgoCapturedFrame } from './ergoTypes';
 
@@ -264,7 +264,8 @@ export default function ErgoCapture({ onComplete, onBack }: Props) {
     const view = currentRef.current.id;
     const frame: ErgoCapturedFrame = {
       view,
-      angles: extractErgoAngles(lm, view),
+      // Angles from aspect-corrected coordinates so they match the real image.
+      angles: extractErgoAngles(toIsotropic(lm, frameAspect(videoRef.current)), view),
       imageData: image,
       timestamp: Date.now(),
     };

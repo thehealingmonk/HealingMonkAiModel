@@ -50,7 +50,7 @@ const CAPABILITIES = [
   {
     icon: <ShieldCheck className="h-6 w-6" />,
     title: 'On-device & private',
-    desc: 'The model and all analysis run inside your browser. Video frames never leave your device — there is no upload and no server-side processing of your body.',
+    desc: 'The model and all analysis run inside your browser — your live video never leaves your device and is never processed on a server. Only the snapshots in a report you save are stored, so it can be reopened from its private link.',
   },
 ];
 

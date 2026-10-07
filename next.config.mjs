@@ -21,11 +21,11 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
-  // The migrated SPA (src/) was built with Vite, which never type-checked or
-  // linted at build time. Keep that behaviour so pre-existing type/lint noise in
-  // the pose/analysis modules doesn't block production builds.
+  // The project type-checks cleanly (`npm run typecheck`), so the production
+  // build enforces it — a type error now fails the build instead of shipping.
+  // ESLint is not configured for this project yet, so it stays skipped.
   eslint: { ignoreDuringBuilds: true },
-  typescript: { ignoreBuildErrors: true },
+  typescript: { ignoreBuildErrors: false },
   images: {
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [{ protocol: 'https', hostname: 'images.pexels.com' }],

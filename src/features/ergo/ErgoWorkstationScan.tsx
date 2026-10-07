@@ -3,7 +3,7 @@ import {
   Camera, ChevronLeft, CheckCircle2, SwitchCamera, ArrowRight, ScanSearch, SkipForward,
 } from 'lucide-react';
 import { openCamera } from '@/lib/camera';
-import { initializePoseLandmarker, detectPose, Landmark } from '@/lib/poseDetection';
+import { initializePoseLandmarker, detectPose, Landmark, toIsotropic, frameAspect } from '@/lib/poseDetection';
 import { initializeObjectDetector, detectObjects } from '@/lib/ergo/objectDetection';
 import { extractErgoAngles } from '@/lib/ergo/landmarksToAngles';
 import { scoreConfidence, CONFIDENCE_COLOR } from '@/lib/ergo/ergoKnowledge';
@@ -267,7 +267,9 @@ export default function ErgoWorkstationScan({ onComplete, onBack }: Props) {
     const capture: ErgoWorkstationCapture = {
       imageData: image,
       landmarks: lm,
-      angles: lm ? extractErgoAngles(lm, 'side') : null,
+      // Angles from aspect-corrected coordinates; `landmarks` stay normalized so
+      // they line up with the (normalized) detected object boxes.
+      angles: lm ? extractErgoAngles(toIsotropic(lm, frameAspect(videoRef.current)), 'side') : null,
       objects: latestObjects.current,
       timestamp: Date.now(),
     };

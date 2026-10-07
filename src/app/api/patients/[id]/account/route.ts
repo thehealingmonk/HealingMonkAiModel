@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/server/db';
 import { Patient } from '@/lib/server/models/Patient';
 import { User } from '@/lib/server/models/User';
-import { requireAuth, requireRole } from '@/middleware/auth';
+import { requireAuth, requireRole, invalidateUser } from '@/middleware/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,7 +73,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
     await account.setPassword(String(password));
     account.active = true;
+    // Staff-provisioned from the patient record → this login may see that
+    // patient's clinic data (see lib/server/patientLink).
+    account.patientLinked = true;
     await account.save();
+    invalidateUser(account._id.toString());
 
     return NextResponse.json({ email, created }, { status: created ? 201 : 200 });
   } catch (err) {

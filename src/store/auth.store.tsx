@@ -7,9 +7,9 @@ import {
   login as apiLogin,
   register as apiRegister,
   logout as apiLogout,
+  SESSION_EXPIRED_EVENT,
 } from '@/services/api';
 import { setPanelLock } from '@/lib/panelLock';
-// heelo
 interface AuthContextValue {
   user: AuthUser | null;
   permissions: string[];
@@ -52,6 +52,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // Any API call that comes back 401 clears the token (services/api); mirror
+  // that here so route guards redirect to /login right away.
+  useEffect(() => {
+    const onExpired = () => {
+      setUser(null);
+      setPermissions([]);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
   }, []);
 
   const login = async (email: string, password: string) => {

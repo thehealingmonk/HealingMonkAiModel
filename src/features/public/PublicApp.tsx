@@ -10,6 +10,7 @@ import {
   getStoredReport,
   updateStoredReport,
   fetchStoredReport,
+  canEditStoredReport,
 } from '@/services/report.service';
 import { isSubscribed } from '@/services/subscription.service';
 
@@ -74,9 +75,16 @@ function ReportRoute({ onRestart }: { onRestart: () => void }) {
   }, [id]);
 
   if (status === 'loading') return <RouteFallback />;
-  if (!id || !report) return <Navigate to="/assessment" replace />;
+  if (!id || !report) return <ReportMissing />;
 
   return (
+    <>
+    {!canEditStoredReport(id) && (
+      <div role="status" className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-center text-sm text-amber-900 print:hidden">
+        View-only copy — changes made here are not saved. Edits can be made on the device that created this
+        report, or by signed-in clinic staff.
+      </div>
+    )}
     <ClinicalReport
       patient={report.patient}
       captures={report.captures}
@@ -100,6 +108,36 @@ function ReportRoute({ onRestart }: { onRestart: () => void }) {
         />
       }
     />
+    </>
+  );
+}
+
+// Shown when a report link doesn't resolve (mistyped, deleted, or the server is
+// unreachable and this device has no cached copy) — instead of silently
+// bouncing the visitor into the paid assessment flow.
+function ReportMissing() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#f6faf8] px-4">
+      <div className="max-w-md text-center">
+        <h1 className="text-2xl font-bold text-slate-900">Report not found</h1>
+        <p className="mt-2 text-slate-600">
+          This report link may be mistyped or no longer available. Check the link you were sent, or try again
+          when you&apos;re back online.
+        </p>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
+          >
+            Try again
+          </button>
+          <a href="/" className="rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            Go to home
+          </a>
+        </div>
+      </div>
+    </main>
   );
 }
 
