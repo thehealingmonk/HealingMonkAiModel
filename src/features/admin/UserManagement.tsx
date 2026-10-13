@@ -31,6 +31,7 @@ import {
   getPatientAccount,
   setPatientAccount,
 } from '@/services/api';
+import ModalPortal from '@/components/common/ModalPortal';
 
 const ROLE_TABS: { label: string; value: Role | 'all' }[] = [
   { label: 'All', value: 'all' },
@@ -479,6 +480,7 @@ export default function UserManagement({ initialRole = 'all' }: Props) {
       )}
 
       {editing && (
+        <ModalPortal>
         <div
           className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-y-auto"
           onClick={() => !saving && setEditing(null)}
@@ -584,6 +586,7 @@ export default function UserManagement({ initialRole = 'all' }: Props) {
             </div>
           </form>
         </div>
+        </ModalPortal>
       )}
     </div>
   );
@@ -766,6 +769,7 @@ function PatientLoginModal({ patient, onClose }: { patient: Patient; onClose: ()
   };
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-y-auto" onClick={() => !saving && onClose()}>
       <div
         onClick={(e) => e.stopPropagation()}
@@ -855,5 +859,6 @@ function PatientLoginModal({ patient, onClose }: { patient: Patient; onClose: ()
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

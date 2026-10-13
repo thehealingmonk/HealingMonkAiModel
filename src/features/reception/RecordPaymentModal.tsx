@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { X, Search, Wallet, CreditCard, Smartphone, IndianRupee } from 'lucide-react';
 import { Patient, ManualPaymentMethod, listPatients, recordPayment } from '@/services/api';
+import ModalPortal from '@/components/common/ModalPortal';
 
 interface Props {
   onClose: () => void;
@@ -74,6 +75,7 @@ export default function RecordPaymentModal({ onClose, onRecorded, presetPatient 
   };
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 backdrop-blur-sm p-4 sm:py-10">
       <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl border border-slate-200 hm-page-enter">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
@@ -225,6 +227,7 @@ export default function RecordPaymentModal({ onClose, onRecorded, presetPatient 
         </form>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 

@@ -29,6 +29,7 @@ import {
   rescheduleAppointment,
   getPatient,
 } from '@/services/api';
+import ModalPortal from '@/components/common/ModalPortal';
 
 interface Props {
   onBook: () => void;
@@ -414,6 +415,7 @@ function RescheduleModal({
   const patientName = appointment.patient && typeof appointment.patient === 'object' ? appointment.patient.name : 'patient';
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 backdrop-blur-sm p-4 sm:py-10">
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-200 hm-page-enter my-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
@@ -457,6 +459,7 @@ function RescheduleModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 
@@ -469,6 +472,7 @@ function DocumentsModal({
   onClose: () => void;
 }) {
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 backdrop-blur-sm p-4 sm:py-10">
       <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl border border-slate-200 hm-page-enter">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
@@ -485,6 +489,7 @@ function DocumentsModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 

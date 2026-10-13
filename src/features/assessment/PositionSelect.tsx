@@ -11,6 +11,7 @@ import {
 import {
   CheckCircle2, ChevronLeft, AlertCircle, Activity, ArrowRight, LayoutGrid, Plus, Trash2, X, Upload, ImageIcon, Loader2, Star,
 } from 'lucide-react';
+import ModalPortal from '@/components/common/ModalPortal';
 
 interface Props {
   initial?: string[];
@@ -498,6 +499,7 @@ function AddPositionModal({
   };
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm sm:py-10">
       <div className="my-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
@@ -588,5 +590,6 @@ function AddPositionModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

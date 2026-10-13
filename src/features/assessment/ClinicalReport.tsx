@@ -18,6 +18,7 @@ import { FileText, Printer, RotateCcw, Activity, AlertTriangle, Stethoscope, Shi
 import { downloadReportPdf } from '@/lib/reportPdf';
 import type { DoctorFindingData } from '@/services/report.service';
 import { listIdealPostures, saveIdealPosture, IDEAL_POSTURE_CONDITIONS, type IdealPostureSet, type IdealPostureImage } from '@/services/api';
+import ModalPortal from '@/components/common/ModalPortal';
 
 interface Props {
   patient: PatientInfo;
@@ -1089,6 +1090,7 @@ function ReferenceDictionary({
   };
 
   return (
+    <ModalPortal>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 print:hidden"
       onClick={onClose}
@@ -1257,6 +1259,7 @@ function ReferenceDictionary({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 
@@ -1405,6 +1408,7 @@ function ZoomableImage({
         </span>
       </button>
       {zoom && (
+        <ModalPortal>
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm print:hidden"
           onClick={() => setZoom(false)}
@@ -1422,6 +1426,7 @@ function ZoomableImage({
             <X className="w-5 h-5" />
           </button>
         </div>
+        </ModalPortal>
       )}
     </>
   );

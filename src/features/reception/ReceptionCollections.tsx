@@ -11,6 +11,7 @@ import { BulkBar, SelectCheckbox } from '@/components/ui/BulkBar';
 import LiveBadge from '@/features/admin/LiveBadge';
 import TableSkeleton from '@/components/ui/TableSkeleton';
 import ExportButton from '@/components/ui/ExportButton';
+import ModalPortal from '@/components/common/ModalPortal';
 
 const STATUS_BADGE: Record<PaymentStatus, string> = {
   paid: 'bg-emerald-100 text-emerald-700',
@@ -270,6 +271,7 @@ function EditPaymentModal({
   };
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 backdrop-blur-sm p-4 sm:py-10">
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-200 hm-page-enter my-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
@@ -359,6 +361,7 @@ function EditPaymentModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 

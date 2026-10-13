@@ -19,6 +19,7 @@ import {
   isToday,
   isWithinDays,
 } from '@/components/ui/ListControls';
+import ModalPortal from '@/components/common/ModalPortal';
 
 export default function PatientsList() {
   const navigate = useNavigate();
@@ -288,6 +289,7 @@ export default function PatientsList() {
       )}
 
       {delPatient && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 backdrop-blur-sm p-4 sm:py-10">
           <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-200 p-6 hm-page-enter my-auto">
             <div className="flex items-center gap-2 mb-2">
@@ -319,6 +321,7 @@ export default function PatientsList() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );

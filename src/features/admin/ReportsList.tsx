@@ -18,6 +18,7 @@ import {
   isToday,
   isWithinDays,
 } from '@/components/ui/ListControls';
+import ModalPortal from '@/components/common/ModalPortal';
 
 // Open a report's public, no-auth visual URL (name-based /r/:slug) in a new tab.
 function openReport(shareId: string | null) {
@@ -67,6 +68,7 @@ function ReportDetailModal({ report, onClose }: { report: ReportListItem; onClos
     }
   };
   return (
+    <ModalPortal>
     <div
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-y-auto"
       onClick={onClose}
@@ -221,6 +223,7 @@ function ReportDetailModal({ report, onClose }: { report: ReportListItem; onClos
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 

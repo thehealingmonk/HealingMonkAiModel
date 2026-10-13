@@ -19,6 +19,7 @@ import {
   getPatientDocument,
   deletePatientDocument,
 } from '@/services/api';
+import ModalPortal from '@/components/common/ModalPortal';
 
 // Client-side guard so we fail fast before hitting the server limit (~3.7 MB).
 const MAX_FILE_BYTES = 3.7 * 1024 * 1024;
@@ -279,6 +280,7 @@ export default function PatientDocuments({ patientId }: { patientId: string }) {
 
       {/* Image lightbox */}
       {preview && (
+        <ModalPortal>
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm"
           onClick={() => setPreview(null)}
@@ -300,6 +302,7 @@ export default function PatientDocuments({ patientId }: { patientId: string }) {
             <X className="w-5 h-5" />
           </button>
         </div>
+        </ModalPortal>
       )}
     </div>
   );
