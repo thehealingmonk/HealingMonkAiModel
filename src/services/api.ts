@@ -614,6 +614,76 @@ export async function deletePayment(id: string): Promise<{ ok: boolean; id: stri
   return request(`/payments/${id}`, { method: 'DELETE' });
 }
 
+// ---- Monthly packages & attendance ----
+
+export type PackageState = 'active' | 'upcoming' | 'expired' | 'cancelled';
+
+export interface PatientPackage {
+  id: string;
+  patient: string;
+  name: string;
+  sessionsTotal: number; // 0 = unlimited visits within the period
+  startDay: string; // YYYY-MM-DD (IST), inclusive
+  endDay: string; // YYYY-MM-DD (IST), inclusive
+  amount: number; // paise
+  status: 'active' | 'cancelled';
+  notes: string;
+  payment: string | null;
+  createdAt?: string;
+  // Live usage, computed server-side.
+  state: PackageState;
+  attendedDays: string[];
+  sessionsUsed: number;
+  markedToday: boolean;
+  patientName?: string;
+  patientCode?: string;
+  patientMobile?: string;
+}
+
+/** Desk view (active + recently expired), or every package of one patient. */
+export async function listPackages(patientId?: string): Promise<{ packages: PatientPackage[]; today: string }> {
+  return request(`/packages${patientId ? `?patient=${patientId}` : ''}`);
+}
+
+// Reception/admin: enrol a patient (or renew). Records the fee as a paid bill
+// when an amount and desk method are given.
+export async function createPackage(payload: {
+  patientId: string;
+  name: string;
+  sessionsTotal: number;
+  months: number;
+  startDay: string;
+  amount?: number; // rupees
+  method?: ManualPaymentMethod | 'none';
+  notes?: string;
+}): Promise<{ package: PatientPackage }> {
+  return request('/packages', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updatePackage(
+  id: string,
+  patch: { name?: string; sessionsTotal?: number; endDay?: string; status?: 'active' | 'cancelled'; notes?: string }
+): Promise<{ package: PatientPackage }> {
+  return request(`/packages/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+}
+
+export async function deletePackage(id: string): Promise<{ ok: boolean; id: string }> {
+  return request(`/packages/${id}`, { method: 'DELETE' });
+}
+
+/** Mark present — today, or a missed past day within the package. */
+export async function markAttendance(id: string, day?: string): Promise<{ package: PatientPackage }> {
+  return request(`/packages/${id}/attendance`, { method: 'POST', body: JSON.stringify(day ? { day } : {}) });
+}
+
+export async function unmarkAttendance(id: string, day?: string): Promise<{ package: PatientPackage }> {
+  return request(`/packages/${id}/attendance${day ? `?day=${day}` : ''}`, { method: 'DELETE' });
+}
+
+export async function myPackages(): Promise<{ packages: PatientPackage[] }> {
+  return request('/me/packages');
+}
+
 // ---- Admin analytics ----
 
 export interface AdminStats {

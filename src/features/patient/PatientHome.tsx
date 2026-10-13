@@ -14,11 +14,16 @@ import {
   Report,
   Appointment,
   Payment,
+  PatientPackage,
   myReports,
   myAppointments,
   myPayments,
+  myPackages,
 } from '@/services/api';
 import { formatMoney } from '@/utils/formatter';
+import { istDay, formatDay } from '@/lib/packageDates';
+import { daysLeft, sessionsLeft, sessionsLabel } from '@/features/attendance/packageInfo';
+import AttendanceCalendar from '@/features/attendance/AttendanceCalendar';
 
 function when(iso?: string) {
   if (!iso) return '';
@@ -33,11 +38,12 @@ export default function PatientHome() {
   const [appts, setAppts] = useState<Appointment[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [totalPaid, setTotalPaid] = useState(0);
+  const [packages, setPackages] = useState<PatientPackage[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.allSettled([myReports(), myAppointments(), myPayments()]).then(([r, a, p]) => {
+    Promise.allSettled([myReports(), myAppointments(), myPayments(), myPackages()]).then(([r, a, p, k]) => {
       if (cancelled) return;
       if (r.status === 'fulfilled') setReports(r.value.reports);
       if (a.status === 'fulfilled') setAppts(a.value.appointments);
@@ -45,6 +51,7 @@ export default function PatientHome() {
         setPayments(p.value.payments);
         setTotalPaid(p.value.totalPaid);
       }
+      if (k.status === 'fulfilled') setPackages(k.value.packages);
       setLoading(false);
     });
     return () => {
@@ -58,6 +65,10 @@ export default function PatientHome() {
   );
   // Every booked appointment is a clinic session (past or upcoming).
   const totalSessions = appts.length;
+  // The package to show: the running one, else the most recent.
+  const today = istDay();
+  const pkg = packages.find((k) => k.state === 'active') || packages[0];
+  const pkgLeft = pkg ? sessionsLeft(pkg) : null;
 
   return (
     <DashboardShell consoleName="My Health" userLabel={user?.name} onLogout={logout} maxWidth="max-w-4xl">
@@ -108,6 +119,33 @@ export default function PatientHome() {
                   ? ` · Dr. ${(upcoming[upcoming.length - 1].doctor as { name: string }).name}`
                   : ''}
               </div>
+            )}
+
+            {/* Monthly package + attendance */}
+            {pkg && (
+              <section data-reveal>
+                <h3 className="font-semibold text-white mb-3">My monthly package</h3>
+                <div className="glass-dark rounded-2xl p-4 flex flex-col sm:flex-row gap-6">
+                  <div className="flex-1 space-y-1.5 text-sm">
+                    <p className="font-semibold text-white">{pkg.name}</p>
+                    <p className="text-slate-400">
+                      {formatDay(pkg.startDay)} – {formatDay(pkg.endDay)}
+                    </p>
+                    <p className="text-slate-300">
+                      Attended: {sessionsLabel(pkg)}
+                      {pkgLeft !== null && ` · ${pkgLeft} left`}
+                    </p>
+                    {pkg.state === 'active' ? (
+                      <p className="text-emerald-300">{daysLeft(pkg, today)} days remaining</p>
+                    ) : (
+                      <p className="text-amber-300 capitalize">
+                        {pkg.state === 'expired' ? 'Expired — please renew at the clinic desk' : pkg.state}
+                      </p>
+                    )}
+                  </div>
+                  <AttendanceCalendar pkg={pkg} dark />
+                </div>
+              </section>
             )}
 
             {/* All sessions (appointments) — past & upcoming */}

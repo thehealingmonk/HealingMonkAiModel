@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LayoutGrid, CalendarDays, Users, FileText, IndianRupee, UserCog, Video } from 'lucide-react';
+import { LayoutGrid, CalendarDays, Users, FileText, IndianRupee, UserCog, Video, CalendarCheck } from 'lucide-react';
 import { Routes, Route, Navigate, Outlet, NavLink, useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { useAuth } from '@/store/auth.store';
 import DashboardShell, { dashNavCls } from '@/components/layout/DashboardShell';
@@ -12,6 +12,7 @@ import ReportsList from '@/features/admin/ReportsList';
 import MeetingsScheduler from '@/features/admin/MeetingsScheduler';
 import AppointmentsList from '@/features/admin/AppointmentsList';
 import PaymentsList from '@/features/admin/PaymentsList';
+import AttendanceDesk from '@/features/attendance/AttendanceDesk';
 import ReceptionDashboard from '@/features/reception/ReceptionDashboard';
 import BookAppointment from '@/features/reception/BookAppointment';
 import PatientProfile from '@/features/doctor/PatientProfile';
@@ -27,6 +28,7 @@ import ClinicalCapture from '@/features/assessment/ClinicalCapture';
 //   /admin/reports      → all assessment reports
 //   /admin/appointments → all appointments
 //   /admin/payments     → all payments
+//   /admin/attendance   → monthly package attendance desk
 //   /admin/users        → user management (?role= to pre-filter)
 //   /admin/schedule     → clinic schedule (calendar) + /admin/book
 const NAV = [
@@ -36,6 +38,7 @@ const NAV = [
   { to: '/admin/appointments', icon: CalendarDays, label: 'Appointments' },
   { to: '/admin/meetings', icon: Video, label: 'Meetings' },
   { to: '/admin/payments', icon: IndianRupee, label: 'Payments' },
+  { to: '/admin/attendance', icon: CalendarCheck, label: 'Attendance' },
   { to: '/admin/users', icon: UserCog, label: 'Users' },
 ];
 
@@ -166,6 +169,7 @@ export default function AdminApp() {
         <Route path="meetings" element={<MeetingsScheduler />} />
         <Route path="appointments" element={<AppointmentsList />} />
         <Route path="payments" element={<PaymentsList />} />
+        <Route path="attendance" element={<AttendanceDesk profileBase="/admin/patient" />} />
         <Route path="users" element={<UsersRoute />} />
         <Route path="schedule" element={<ReceptionDashboard onBook={() => navigate('/admin/book')} />} />
         <Route

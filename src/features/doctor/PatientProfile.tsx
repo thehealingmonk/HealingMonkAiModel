@@ -19,6 +19,7 @@ import {
 import RecordPaymentModal from '@/features/reception/RecordPaymentModal';
 import PatientEditModal from '@/components/common/PatientEditModal';
 import PatientDocuments from '@/components/common/PatientDocuments';
+import PatientPackages from '@/features/attendance/PatientPackages';
 import MeetingCard from '@/features/meeting/MeetingCard';
 import {
   Patient,
@@ -368,6 +369,9 @@ export default function PatientProfile({ patient, onBack, onStartAssessment }: P
           </table>
         </div>
       )}
+
+      {/* Monthly package + attendance calendar. */}
+      <PatientPackages patient={current} />
 
       {/* Documents — X-rays, prescriptions, outside reports. Uploaded by
           reception/doctor/admin; multiple files per patient. */}

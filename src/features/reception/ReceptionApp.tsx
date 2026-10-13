@@ -1,4 +1,4 @@
-import { UserPlus, CalendarDays, IndianRupee, CalendarRange } from 'lucide-react';
+import { UserPlus, CalendarDays, IndianRupee, CalendarRange, CalendarCheck } from 'lucide-react';
 import { Routes, Route, Navigate, Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/store/auth.store';
 import DashboardShell, { dashNavCls } from '@/components/layout/DashboardShell';
@@ -8,12 +8,14 @@ import ReceptionCollections from '@/features/reception/ReceptionCollections';
 import ReceptionBilling from '@/features/reception/ReceptionBilling';
 import BookAppointment from '@/features/reception/BookAppointment';
 import PatientForm from '@/features/doctor/PatientForm';
+import AttendanceDesk from '@/features/attendance/AttendanceDesk';
 
 // Reception URL space:
 //   /reception             → today's schedule
 //   /reception/register    → register patient (+ assign doctor)
 //   /reception/book        → book appointment
 //   /reception/collections → all-time collections
+//   /reception/attendance  → monthly package attendance desk
 function Chrome() {
   const { user, logout } = useAuth();
   return (
@@ -29,6 +31,9 @@ function Chrome() {
           </NavLink>
           <NavLink to="/reception/calendar" className={dashNavCls}>
             <CalendarRange className="w-4 h-4" /> Calendar
+          </NavLink>
+          <NavLink to="/reception/attendance" className={dashNavCls}>
+            <CalendarCheck className="w-4 h-4" /> Attendance
           </NavLink>
           <NavLink to="/reception/register" className={dashNavCls}>
             <UserPlus className="w-4 h-4" /> Register patient
@@ -61,6 +66,7 @@ export default function ReceptionApp() {
             />
           }
         />
+        <Route path="attendance" element={<AttendanceDesk />} />
         <Route path="collections" element={<ReceptionCollections />} />
         <Route path="billing" element={<ReceptionBilling />} />
         <Route
