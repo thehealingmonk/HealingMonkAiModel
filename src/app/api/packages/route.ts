@@ -31,7 +31,12 @@ export async function GET(req: NextRequest) {
       filter.patient = patient;
     } else {
       filter.status = 'active';
-      filter.endDay = { $gte: addDays(istDay(), -RECENTLY_EXPIRED_DAYS) };
+      // Also keep packages touched recently even when their dates are old (an
+      // old client's history being back-filled) so the desk can still edit them.
+      filter.$or = [
+        { endDay: { $gte: addDays(istDay(), -RECENTLY_EXPIRED_DAYS) } },
+        { updatedAt: { $gte: new Date(Date.now() - RECENTLY_EXPIRED_DAYS * 86_400_000) } },
+      ];
     }
     const pkgs = await PatientPackage.find(filter)
       .sort({ startDay: -1 })

@@ -8,8 +8,8 @@ import { isDay } from '@/lib/packageDates';
 
 export const dynamic = 'force-dynamic';
 
-// Edit a package — fix the name / sessions, extend the end date, cancel or
-// re-activate it. Reception/admin.
+// Edit a package — fix the name / sessions / fee (rupees), move the start or
+// end date, cancel or re-activate it. Reception/admin.
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const { user, error } = await requireAuth(req);
   if (error) return error;
@@ -28,12 +28,29 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       pkg.name = name;
     }
     if (body.sessionsTotal !== undefined) pkg.sessionsTotal = Math.max(0, Math.round(Number(body.sessionsTotal) || 0));
-    if (body.endDay !== undefined) {
-      if (!isDay(body.endDay) || body.endDay < pkg.startDay) {
+    if (body.startDay !== undefined || body.endDay !== undefined) {
+      const startDay = body.startDay !== undefined ? body.startDay : pkg.startDay;
+      const endDay = body.endDay !== undefined ? body.endDay : pkg.endDay;
+      if (!isDay(startDay) || !isDay(endDay)) return NextResponse.json({ error: 'Invalid date' }, { status: 400 });
+      if (endDay < startDay) {
         return NextResponse.json({ error: 'End date must be on or after the start date' }, { status: 400 });
       }
-      pkg.endDay = body.endDay;
+      // Shrinking the period must not leave attendance marks outside it (they
+      // would still count as used sessions but be invisible on the calendar).
+      const outside = await Attendance.countDocuments({
+        package: pkg._id,
+        $or: [{ day: { $lt: startDay } }, { day: { $gt: endDay } }],
+      });
+      if (outside > 0) {
+        return NextResponse.json(
+          { error: `${outside} attendance mark${outside === 1 ? '' : 's'} fall outside the new dates — remove them first.` },
+          { status: 409 }
+        );
+      }
+      pkg.startDay = startDay;
+      pkg.endDay = endDay;
     }
+    if (body.amount !== undefined) pkg.amount = Math.max(0, Math.round(Number(body.amount || 0) * 100));
     if (body.status !== undefined) {
       if (!PACKAGE_STATUSES.includes(body.status)) return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
       pkg.status = body.status;

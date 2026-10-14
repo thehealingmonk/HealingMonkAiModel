@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Check, RefreshCw, CalendarCheck } from 'lucide-react';
+import { Plus, Check, RefreshCw, CalendarCheck, Pencil } from 'lucide-react';
 import { Patient, PatientPackage, listPackages, markAttendance, unmarkAttendance } from '@/services/api';
 import { useAuth } from '@/store/auth.store';
 import { istDay, formatDay } from '@/lib/packageDates';
@@ -25,7 +25,7 @@ export default function PatientPackages({ patient }: { patient: Patient }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
-  const [modal, setModal] = useState<{ renewFrom: PatientPackage | null } | null>(null);
+  const [modal, setModal] = useState<{ renewFrom?: PatientPackage | null; editPkg?: PatientPackage | null } | null>(null);
 
   const load = useCallback(() => {
     listPackages(patient.id)
@@ -42,7 +42,11 @@ export default function PatientPackages({ patient }: { patient: Patient }) {
     setBusy(`${pkg.id}:${day}`);
     setError('');
     try {
-      const r = present ? await markAttendance(pkg.id, day) : await unmarkAttendance(pkg.id, day);
+      // A day outside the package period (an old client's earlier visit)
+      // stretches the period to cover it, after confirming.
+      const outside = day < pkg.startDay || day > pkg.endDay;
+      if (present && outside && !window.confirm(`${formatDay(day)} is outside this package (${formatDay(pkg.startDay)} – ${formatDay(pkg.endDay)}). Extend the package to include it?`)) return;
+      const r = present ? await markAttendance(pkg.id, day, outside) : await unmarkAttendance(pkg.id, day);
       setPackages((list) => list.map((p) => (p.id === r.package.id ? r.package : p)));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update attendance');
@@ -117,6 +121,14 @@ export default function PatientPackages({ patient }: { patient: Patient }) {
                           </button>
                         )
                       ))}
+                    {canManage && (
+                      <button
+                        onClick={() => setModal({ editPkg: p })}
+                        className="inline-flex items-center gap-1 text-sm font-medium text-gray-700 border border-gray-200 hover:bg-gray-50 px-3 py-1.5 rounded-lg"
+                      >
+                        <Pencil className="w-4 h-4" /> Edit
+                      </button>
+                    )}
                     {canManage && i === 0 && p.state !== 'upcoming' && (
                       <button
                         onClick={() => setModal({ renewFrom: p })}
@@ -133,6 +145,7 @@ export default function PatientPackages({ patient }: { patient: Patient }) {
                       pkg={p}
                       busyDay={busy?.startsWith(`${p.id}:`) ? busy.slice(p.id.length + 1) : null}
                       onToggleDay={(day, present) => toggle(p, day, present)}
+                      allowOutside={canManage}
                     />
                   </div>
                 )}
@@ -146,6 +159,7 @@ export default function PatientPackages({ patient }: { patient: Patient }) {
         <PackageModal
           presetPatient={patient}
           renewFrom={modal.renewFrom}
+          editPkg={modal.editPkg}
           onClose={() => setModal(null)}
           onSaved={() => load()}
         />

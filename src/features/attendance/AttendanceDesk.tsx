@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ExternalLink,
   CalendarX,
+  Pencil,
 } from 'lucide-react';
 import {
   PatientPackage,
@@ -53,6 +54,7 @@ export default function AttendanceDesk({ profileBase }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [renewing, setRenewing] = useState<PatientPackage | null>(null);
+  const [editing, setEditing] = useState<PatientPackage | null>(null);
 
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -79,7 +81,11 @@ export default function AttendanceDesk({ profileBase }: Props) {
     setBusy(`${pkg.id}:${day}`);
     setError('');
     try {
-      const r = present ? await markAttendance(pkg.id, day) : await unmarkAttendance(pkg.id, day);
+      // A day outside the package period (an old client's earlier visit)
+      // stretches the period to cover it, after confirming.
+      const outside = day < pkg.startDay || day > pkg.endDay;
+      if (present && outside && !window.confirm(`${formatDay(day)} is outside this package (${formatDay(pkg.startDay)} – ${formatDay(pkg.endDay)}). Extend the package to include it?`)) return;
+      const r = present ? await markAttendance(pkg.id, day, outside) : await unmarkAttendance(pkg.id, day);
       replace(r.package);
     } catch (err) {
       setError(`${pkg.patientName}: ${err instanceof Error ? err.message : 'Could not update attendance'}`);
@@ -325,8 +331,11 @@ export default function AttendanceDesk({ profileBase }: Props) {
                         pkg={p}
                         busyDay={busy?.startsWith(`${p.id}:`) ? busy.slice(p.id.length + 1) : null}
                         onToggleDay={(day, present) => toggle(p, day, present)}
+                        allowOutside={canManage}
                       />
-                      <p className="text-[11px] text-slate-400 mt-2">Tap a past day to fix a missed or wrong mark.</p>
+                      <p className="text-[11px] text-slate-400 mt-2 max-w-xs">
+                        Tap a past day to fix a missed or wrong mark. Use the month picker to jump to older dates.
+                      </p>
                     </div>
                     <div className="pt-3 text-sm space-y-1.5 text-slate-600">
                       <p>
@@ -349,6 +358,9 @@ export default function AttendanceDesk({ profileBase }: Props) {
                         )}
                         {canManage && (
                           <>
+                            <button onClick={() => setEditing(p)} className={secondaryBtn}>
+                              <Pencil className="w-3.5 h-3.5" /> Edit
+                            </button>
                             <button onClick={() => setRenewing(p)} className={secondaryBtn}>
                               <RefreshCw className="w-3.5 h-3.5" /> Renew
                             </button>
@@ -370,12 +382,14 @@ export default function AttendanceDesk({ profileBase }: Props) {
         )}
       </div>
 
-      {(creating || renewing) && (
+      {(creating || renewing || editing) && (
         <PackageModal
           renewFrom={renewing}
+          editPkg={editing}
           onClose={() => {
             setCreating(false);
             setRenewing(null);
+            setEditing(null);
           }}
           onSaved={() => load()}
         />

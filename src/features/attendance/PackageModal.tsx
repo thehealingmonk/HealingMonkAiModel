@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { X, Search, Wallet, CreditCard, Smartphone, Clock, CalendarCheck, IndianRupee } from 'lucide-react';
-import { Patient, PatientPackage, ManualPaymentMethod, listPatients, createPackage } from '@/services/api';
+import { Patient, PatientPackage, ManualPaymentMethod, listPatients, createPackage, updatePackage } from '@/services/api';
 import { istDay, addDays, packageEndDay, formatDay } from '@/lib/packageDates';
 import ModalPortal from '@/components/common/ModalPortal';
 
@@ -11,6 +11,8 @@ interface Props {
   presetPatient?: Patient | null;
   /** Renewing: copies the plan and starts the day after it ends (or today if lapsed). */
   renewFrom?: PatientPackage | null;
+  /** Editing an existing package: change its plan, dates, fee or notes. */
+  editPkg?: PatientPackage | null;
 }
 
 interface Picked {
@@ -35,28 +37,31 @@ const METHODS: { value: ManualPaymentMethod | 'none'; label: string; icon: React
 
 // Enrol a patient in a monthly package (or renew one). The fee, if paid now,
 // is recorded as a normal desk payment so it also shows up in Collections.
-export default function PackageModal({ onClose, onSaved, presetPatient = null, renewFrom = null }: Props) {
+export default function PackageModal({ onClose, onSaved, presetPatient = null, renewFrom = null, editPkg = null }: Props) {
   const today = istDay();
+  const source = editPkg || renewFrom;
   const [query, setQuery] = useState('');
   const [patients, setPatients] = useState<Patient[]>([]);
   const [selected, setSelected] = useState<Picked | null>(
-    renewFrom
-      ? { id: renewFrom.patient, name: renewFrom.patientName || 'Patient', code: renewFrom.patientCode || '' }
+    source
+      ? { id: source.patient, name: source.patientName || presetPatient?.name || 'Patient', code: source.patientCode || presetPatient?.patientId || '' }
       : presetPatient
       ? { id: presetPatient.id, name: presetPatient.name, code: presetPatient.patientId || '' }
       : null
   );
-  const fixedPatient = !!(renewFrom || presetPatient);
+  const fixedPatient = !!(source || presetPatient);
 
-  const [name, setName] = useState(renewFrom?.name || PRESETS[0].name);
-  const [sessions, setSessions] = useState(String(renewFrom ? renewFrom.sessionsTotal : PRESETS[0].sessions));
+  const [name, setName] = useState(source?.name || PRESETS[0].name);
+  const [sessions, setSessions] = useState(String(source ? source.sessionsTotal : PRESETS[0].sessions));
   const [months, setMonths] = useState(1);
   const [startDay, setStartDay] = useState(
-    renewFrom && renewFrom.endDay >= today ? addDays(renewFrom.endDay, 1) : today
+    editPkg ? editPkg.startDay : renewFrom && renewFrom.endDay >= today ? addDays(renewFrom.endDay, 1) : today
   );
-  const [amount, setAmount] = useState(renewFrom?.amount ? String(renewFrom.amount / 100) : '');
+  // Edit mode sets the end date directly instead of a duration.
+  const [editEndDay, setEditEndDay] = useState(editPkg?.endDay || '');
+  const [amount, setAmount] = useState(source?.amount ? String(source.amount / 100) : '');
   const [method, setMethod] = useState<ManualPaymentMethod | 'none'>('cash');
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState(editPkg?.notes || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -74,7 +79,10 @@ export default function PackageModal({ onClose, onSaved, presetPatient = null, r
     };
   }, [query, selected]);
 
-  const endDay = useMemo(() => (startDay ? packageEndDay(startDay, months) : ''), [startDay, months]);
+  const endDay = useMemo(
+    () => (editPkg ? editEndDay : startDay ? packageEndDay(startDay, months) : ''),
+    [editPkg, editEndDay, startDay, months]
+  );
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,9 +90,19 @@ export default function PackageModal({ onClose, onSaved, presetPatient = null, r
     if (!selected) return setError('Please select the patient.');
     if (!name.trim()) return setError('Give the package a name.');
     if (!startDay) return setError('Pick a start date.');
+    if (editPkg && (!endDay || endDay < startDay)) return setError('End date must be on or after the start date.');
     setSaving(true);
     try {
-      const r = await createPackage({
+      const r = editPkg
+        ? await updatePackage(editPkg.id, {
+            name: name.trim(),
+            sessionsTotal: Number(sessions) || 0,
+            startDay,
+            endDay,
+            amount: Number(amount) || 0,
+            notes: notes.trim(),
+          })
+        : await createPackage({
         patientId: selected.id,
         name: name.trim(),
         sessionsTotal: Number(sessions) || 0,
@@ -109,7 +127,7 @@ export default function PackageModal({ onClose, onSaved, presetPatient = null, r
       <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl border border-slate-200 hm-page-enter">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <CalendarCheck className="w-5 h-5 text-emerald-600" /> {renewFrom ? 'Renew package' : 'New monthly package'}
+            <CalendarCheck className="w-5 h-5 text-emerald-600" /> {editPkg ? 'Edit package' : renewFrom ? 'Renew package' : 'New monthly package'}
           </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600" aria-label="Close">
             <X className="w-5 h-5" />
@@ -168,7 +186,7 @@ export default function PackageModal({ onClose, onSaved, presetPatient = null, r
           {/* Plan */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Package</label>
-            {!renewFrom && (
+            {!source && (
               <div className="flex flex-wrap gap-2 mb-2">
                 {PRESETS.map((p) => (
                   <button
@@ -191,10 +209,14 @@ export default function PackageModal({ onClose, onSaved, presetPatient = null, r
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <div className={editPkg ? 'col-span-2' : ''}>
               <label className="block text-sm font-medium text-slate-700 mb-2">Sessions (0 = unlimited)</label>
               <input type="number" min="0" inputMode="numeric" className={inputCls} value={sessions} onChange={(e) => setSessions(e.target.value)} />
+              {editPkg && editPkg.sessionsUsed > 0 && (
+                <p className="text-xs text-slate-500 mt-1.5">{editPkg.sessionsUsed} already attended</p>
+              )}
             </div>
+            {!editPkg && (
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Duration</label>
               <select className={inputCls} value={months} onChange={(e) => setMonths(Number(e.target.value))}>
@@ -205,13 +227,28 @@ export default function PackageModal({ onClose, onSaved, presetPatient = null, r
                 ))}
               </select>
             </div>
+            )}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Start date</label>
-            <input type="date" className={inputCls} value={startDay} onChange={(e) => setStartDay(e.target.value)} />
-            {endDay && <p className="text-xs text-slate-500 mt-1.5">Valid until {formatDay(endDay)}</p>}
-          </div>
+          {editPkg ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Start date</label>
+                <input type="date" className={inputCls} value={startDay} onChange={(e) => setStartDay(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">End date</label>
+                <input type="date" min={startDay} className={inputCls} value={editEndDay} onChange={(e) => setEditEndDay(e.target.value)} />
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Start date</label>
+              <input type="date" className={inputCls} value={startDay} onChange={(e) => setStartDay(e.target.value)} />
+              {endDay && <p className="text-xs text-slate-500 mt-1.5">Valid until {formatDay(endDay)}</p>}
+              <p className="text-xs text-slate-400 mt-1">Old client? Pick their original start date — past dates are allowed.</p>
+            </div>
+          )}
 
           {/* Fee */}
           <div>
@@ -228,6 +265,10 @@ export default function PackageModal({ onClose, onSaved, presetPatient = null, r
                 onChange={(e) => setAmount(e.target.value)}
               />
             </div>
+            {editPkg ? (
+              <p className="text-xs text-slate-400">Updates the package fee only — edit the bill itself in Collections if needed.</p>
+            ) : (
+            <>
             <div className="grid grid-cols-4 gap-2">
               {METHODS.map((m) => (
                 <button
@@ -246,6 +287,8 @@ export default function PackageModal({ onClose, onSaved, presetPatient = null, r
             <p className="text-xs text-slate-400 mt-1.5">
               {method === 'none' ? 'No payment recorded now — bill it later from Billing.' : 'Recorded as a paid bill in Collections.'}
             </p>
+            </>
+            )}
           </div>
 
           <div>
@@ -268,7 +311,7 @@ export default function PackageModal({ onClose, onSaved, presetPatient = null, r
               disabled={saving || !selected}
               className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-semibold py-2.5 rounded-lg transition-colors"
             >
-              {saving ? 'Saving…' : renewFrom ? 'Renew' : 'Start package'}
+              {saving ? 'Saving…' : editPkg ? 'Save changes' : renewFrom ? 'Renew' : 'Start package'}
             </button>
           </div>
         </form>

@@ -18,7 +18,8 @@ async function respond(pkg: any) {
 }
 
 // Mark the patient present — today by default, or a missed past `day` within
-// the package period. Idempotent. Any staff member at the clinic can mark.
+// the package period (`extend: true` widens the period to include it).
+// Idempotent. Any staff member at the clinic can mark.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const { user, error } = await requireAuth(req);
   if (error) return error;
@@ -37,10 +38,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (day > today) return NextResponse.json({ error: 'Cannot mark attendance for a future date' }, { status: 400 });
     if (pkg.status === 'cancelled') return NextResponse.json({ error: 'This package is cancelled' }, { status: 409 });
     if (day < pkg.startDay || day > pkg.endDay) {
-      return NextResponse.json(
-        { error: `Date is outside the package period (${pkg.startDay} to ${pkg.endDay}). Renew the package first.` },
-        { status: 409 }
-      );
+      // Back-filling an old client's visits: reception/admin may stretch the
+      // package period to cover the day instead of being blocked.
+      if (body.extend && ['admin', 'reception'].includes(user.role)) {
+        if (day < pkg.startDay) pkg.startDay = day;
+        if (day > pkg.endDay) pkg.endDay = day;
+        await pkg.save();
+      } else {
+        return NextResponse.json(
+          { error: `Date is outside the package period (${pkg.startDay} to ${pkg.endDay}). Edit or renew the package first.` },
+          { status: 409 }
+        );
+      }
     }
 
     const already = await Attendance.exists({ package: pkg._id, day });

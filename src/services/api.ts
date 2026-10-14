@@ -662,7 +662,15 @@ export async function createPackage(payload: {
 
 export async function updatePackage(
   id: string,
-  patch: { name?: string; sessionsTotal?: number; endDay?: string; status?: 'active' | 'cancelled'; notes?: string }
+  patch: {
+    name?: string;
+    sessionsTotal?: number;
+    startDay?: string;
+    endDay?: string;
+    amount?: number; // rupees
+    status?: 'active' | 'cancelled';
+    notes?: string;
+  }
 ): Promise<{ package: PatientPackage }> {
   return request(`/packages/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
 }
@@ -671,9 +679,12 @@ export async function deletePackage(id: string): Promise<{ ok: boolean; id: stri
   return request(`/packages/${id}`, { method: 'DELETE' });
 }
 
-/** Mark present — today, or a missed past day within the package. */
-export async function markAttendance(id: string, day?: string): Promise<{ package: PatientPackage }> {
-  return request(`/packages/${id}/attendance`, { method: 'POST', body: JSON.stringify(day ? { day } : {}) });
+/** Mark present — today, or a missed past day. `extend` widens the package period to include the day. */
+export async function markAttendance(id: string, day?: string, extend = false): Promise<{ package: PatientPackage }> {
+  return request(`/packages/${id}/attendance`, {
+    method: 'POST',
+    body: JSON.stringify({ ...(day ? { day } : {}), ...(extend ? { extend: true } : {}) }),
+  });
 }
 
 export async function unmarkAttendance(id: string, day?: string): Promise<{ package: PatientPackage }> {
