@@ -495,10 +495,20 @@ export interface Appointment {
 }
 
 export async function listAppointments(
-  opts: { date?: string; doctor?: string; patient?: string; status?: AppointmentStatus; scope?: 'all' } = {}
+  opts: {
+    date?: string;
+    from?: string;
+    to?: string;
+    doctor?: string;
+    patient?: string;
+    status?: AppointmentStatus;
+    scope?: 'all';
+  } = {}
 ): Promise<{ appointments: Appointment[] }> {
   const params = new URLSearchParams();
   if (opts.date) params.set('date', opts.date);
+  if (opts.from) params.set('from', opts.from);
+  if (opts.to) params.set('to', opts.to);
   if (opts.doctor) params.set('doctor', opts.doctor);
   if (opts.patient) params.set('patient', opts.patient);
   if (opts.status) params.set('status', opts.status);
@@ -513,6 +523,8 @@ export async function bookAppointment(payload: {
   scheduledAt: string;
   durationMin?: number;
   reason?: string;
+  /** Only for a past date: save the visit directly as completed / no-show. */
+  status?: AppointmentStatus;
 }): Promise<{ appointment: Appointment }> {
   return request('/appointments', { method: 'POST', body: JSON.stringify(payload) });
 }

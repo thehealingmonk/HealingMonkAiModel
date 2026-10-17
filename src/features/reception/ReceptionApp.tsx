@@ -1,5 +1,5 @@
 import { UserPlus, CalendarDays, IndianRupee, CalendarRange, CalendarCheck } from 'lucide-react';
-import { Routes, Route, Navigate, Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet, NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/store/auth.store';
 import DashboardShell, { dashNavCls } from '@/components/layout/DashboardShell';
 import ReceptionDashboard from '@/features/reception/ReceptionDashboard';
@@ -51,6 +51,9 @@ function Chrome() {
 
 export default function ReceptionApp() {
   const navigate = useNavigate();
+  // Booking opened from the calendar (?back=calendar) returns there afterwards.
+  const [search] = useSearchParams();
+  const bookReturn = search.get('back') === 'calendar' ? '/reception/calendar' : '/reception';
   return (
     <Routes>
       <Route element={<Chrome />}>
@@ -71,7 +74,7 @@ export default function ReceptionApp() {
         <Route path="billing" element={<ReceptionBilling />} />
         <Route
           path="book"
-          element={<BookAppointment onBack={() => navigate('/reception')} onBooked={() => navigate('/reception')} />}
+          element={<BookAppointment onBack={() => navigate(bookReturn)} onBooked={() => navigate(bookReturn)} />}
         />
       </Route>
       <Route path="*" element={<Navigate to="/reception" replace />} />

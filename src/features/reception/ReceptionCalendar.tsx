@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   CalendarDays,
   ChevronLeft,
@@ -8,6 +9,7 @@ import {
   Stethoscope,
   Phone,
   Users,
+  Plus,
 } from 'lucide-react';
 import TableSkeleton from '@/components/ui/TableSkeleton';
 import { Appointment, AppointmentStatus, listAppointments } from '@/services/api';
@@ -63,7 +65,10 @@ function timeOf(iso: string) {
 // Reception calendar: a month grid where every day shows how many patients had
 // appointments that date. Click a day to filter the list to just that date, so
 // reception can answer "how many / which patients came on <date>" at a glance.
+// Any past month can be opened (arrows or month picker) and "Add visit" enters
+// an old visit on the selected date.
 export default function ReceptionCalendar() {
+  const navigate = useNavigate();
   const [appts, setAppts] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -76,12 +81,18 @@ export default function ReceptionCalendar() {
   // The day selected for the detail list below the grid (YYYY-MM-DD).
   const [selected, setSelected] = useState<string>(() => istToday());
 
-  const load = async () => {
+  // Fetch just the visible month; counting/filtering is done client-side.
+  const load = async (monthStart = cursor) => {
     setLoading(true);
     setError('');
     try {
-      // Fetch the whole schedule once; all counting/filtering is done client-side.
-      const { appointments } = await listAppointments({ scope: 'all' });
+      const y = monthStart.getFullYear();
+      const m = monthStart.getMonth();
+      const { appointments } = await listAppointments({
+        scope: 'all',
+        from: ymd(y, m, 1),
+        to: ymd(y, m, new Date(y, m + 1, 0).getDate()),
+      });
       setAppts(appointments);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load appointments');
@@ -91,8 +102,9 @@ export default function ReceptionCalendar() {
   };
 
   useEffect(() => {
-    load();
-  }, []);
+    load(cursor);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cursor]);
 
   // day (YYYY-MM-DD) -> appointment count, computed once per data change.
   const countByDay = useMemo(() => {
@@ -140,6 +152,12 @@ export default function ReceptionCalendar() {
 
   const goPrev = () => setCursor(new Date(year, month - 1, 1));
   const goNext = () => setCursor(new Date(year, month + 1, 1));
+  const goMonth = (value: string) => {
+    if (!value) return;
+    const [y, m] = value.split('-').map(Number);
+    setCursor(new Date(y, m - 1, 1));
+    setSelected(ymd(y, m - 1, 1));
+  };
   const goThisMonth = () => {
     const now = new Date();
     setCursor(new Date(now.getFullYear(), now.getMonth(), 1));
@@ -154,7 +172,7 @@ export default function ReceptionCalendar() {
           <p className="text-slate-400 text-sm">See how many patients came on each date.</p>
         </div>
         <button
-          onClick={load}
+          onClick={() => load()}
           className="inline-flex items-center gap-1.5 text-sm text-slate-300 hover:text-white font-medium"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
@@ -176,7 +194,13 @@ export default function ReceptionCalendar() {
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <h3 className="text-lg font-semibold text-white min-w-[10rem] text-center">{monthLabel}</h3>
+        <input
+          type="month"
+          value={ymd(year, month, 1).slice(0, 7)}
+          onChange={(e) => goMonth(e.target.value)}
+          className="bg-transparent text-lg font-semibold text-white text-center rounded-md px-1 hover:bg-white/10 [color-scheme:dark]"
+          aria-label={`Jump to month (showing ${monthLabel})`}
+        />
         <button
           onClick={goNext}
           className="p-1.5 rounded-md text-slate-300 hover:bg-white/10 transition-colors"
@@ -254,6 +278,12 @@ export default function ReceptionCalendar() {
             <span className="ml-auto text-xs text-slate-400">
               {selectedAppts.length} patient{selectedAppts.length === 1 ? '' : 's'}
             </span>
+            <button
+              onClick={() => navigate(`/reception/book?date=${selected}&back=calendar`)}
+              className="inline-flex items-center gap-1 text-xs font-medium text-emerald-300 hover:text-emerald-200 border border-emerald-400/30 rounded-md px-2 py-1"
+            >
+              <Plus className="w-3.5 h-3.5" /> {selected < today ? 'Add old visit' : 'Add visit'}
+            </button>
           </div>
 
           {selectedAppts.length === 0 ? (

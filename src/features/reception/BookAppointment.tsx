@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Search, UserPlus, CalendarPlus } from 'lucide-react';
 import {
+  AppointmentStatus,
   AuthUser,
   Patient,
   listPatients,
@@ -14,9 +16,16 @@ interface Props {
   onBooked: () => void;
 }
 
+// Today in the clinic timezone (IST) as YYYY-MM-DD.
+function istToday(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+}
+
 // Reception booking flow: pick (or quick-add) a patient, choose a doctor and a
 // date/time, then create the appointment. The patient confirmation email is
-// sent by the API.
+// sent by the API. Past dates are allowed so old visits can be entered: those
+// are saved as completed (or no-show) and no email goes out.
+// ?date=YYYY-MM-DD preselects the date (used by the calendar's "Add visit").
 export default function BookAppointment({ onBack, onBooked }: Props) {
   const [doctors, setDoctors] = useState<AuthUser[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -29,9 +38,15 @@ export default function BookAppointment({ onBack, onBooked }: Props) {
 
   // Appointment fields.
   const [doctorId, setDoctorId] = useState('');
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [search] = useSearchParams();
+  const [date, setDate] = useState(() => {
+    const q = search.get('date');
+    return q && /^\d{4}-\d{2}-\d{2}$/.test(q) ? q : istToday();
+  });
   const [time, setTime] = useState('10:00');
   const [reason, setReason] = useState('');
+  const [pastStatus, setPastStatus] = useState<AppointmentStatus>('completed');
+  const isPast = date < istToday();
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -90,6 +105,7 @@ export default function BookAppointment({ onBack, onBooked }: Props) {
         doctorId: doctorId || null,
         scheduledAt: scheduledAt.toISOString(),
         reason: reason.trim(),
+        ...(isPast ? { status: pastStatus } : {}),
       });
       onBooked();
     } catch (err) {
@@ -230,6 +246,27 @@ export default function BookAppointment({ onBack, onBooked }: Props) {
             </div>
           </div>
 
+          {isPast && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-3">
+              <p className="text-sm text-amber-800 mb-2">
+                Past date — this will be saved as an old visit (no email is sent to the patient).
+              </p>
+              <div className="flex flex-wrap gap-4 text-sm text-gray-700">
+                {(['completed', 'no_show'] as AppointmentStatus[]).map((s) => (
+                  <label key={s} className="inline-flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="pastStatus"
+                      checked={pastStatus === s}
+                      onChange={() => setPastStatus(s)}
+                    />
+                    {s === 'completed' ? 'Patient came (completed)' : 'Did not come (no-show)'}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Reason */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Reason (optional)</label>
@@ -252,7 +289,7 @@ export default function BookAppointment({ onBack, onBooked }: Props) {
             disabled={saving}
             className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-semibold py-2.5 px-4 rounded-lg transition-colors"
           >
-            {saving ? 'Booking…' : 'Confirm booking'}
+            {saving ? 'Saving…' : isPast ? 'Save old visit' : 'Confirm booking'}
           </button>
         </form>
       </div>
