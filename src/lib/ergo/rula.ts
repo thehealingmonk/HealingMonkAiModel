@@ -103,7 +103,10 @@ function wristScore(a: ErgoAngles): number {
 function neckScore(a: ErgoAngles, m: ErgoManualInputs): number {
   const deg = a.neckFlexion ?? 0;
   let s: number;
-  if (deg <= 10) s = 1;
+  // RULA worksheet: neck in extension = 4. A −5° tolerance absorbs landmark noise
+  // around upright.
+  if (deg < -5) s = 4;
+  else if (deg <= 10) s = 1;
   else if (deg <= 20) s = 2;
   else s = 3;
   if (m.neckTwisted || a.neckTwist) s += 1;

@@ -200,6 +200,8 @@ export interface ErgoResult {
   findings?: ErgoFinding[];
   /** Dominant measurement provenance across the workplace findings. */
   measurementMode?: MeasurementMode;
+  /** Furniture ↔ body fit (this person and the average human), when measured. */
+  fit?: FitReport;
 }
 
 // ===========================================================================
@@ -285,6 +287,105 @@ export interface ErgoObjectInputs {
   monitorDistanceCm: number | null;
   /** Whether a footrest is present (user-confirmed). null = unknown. */
   footrestPresent: boolean | null;
+  /** Seat depth (front edge → backrest), cm. */
+  seatDepthCm?: number | null;
+  /** Seat width, cm. */
+  seatWidthCm?: number | null;
+  /** Floor → top edge of the screen, cm. */
+  monitorTopHeightCm?: number | null;
+  /**
+   * How each value was obtained. Typed with a tape = 'user-measured'; tapped on a
+   * calibrated photo = 'calibrated'. Missing key → 'user-measured' when a value exists.
+   */
+  sources?: Partial<Record<ObjectDimKey, MeasurementMode>>;
+}
+
+/** Keys of the furniture dimensions the fit engine understands. */
+export type ObjectDimKey =
+  | 'chairSeatHeightCm'
+  | 'seatDepthCm'
+  | 'seatWidthCm'
+  | 'deskHeightCm'
+  | 'monitorTopHeightCm'
+  | 'monitorDistanceCm';
+
+/** The person being assessed — stature drives every derived body dimension. */
+export interface ErgoPersonInputs {
+  /** Stature in cm; null → compare against the average human only. */
+  statureCm: number | null;
+  statureMode: MeasurementMode;
+  /** Shoulder (biacromial) breadth in cm, when scanned/entered. */
+  shoulderWidthCm: number | null;
+  shoulderMode: MeasurementMode;
+  /** Reference population for "average human" (see anthropometry.ts). */
+  population: import('./anthropometry').PopulationId;
+}
+
+/** Any object the user measured on a photo (height × width), incl. custom items. */
+export interface MeasuredItem {
+  id: string;
+  label: string;
+  heightCm: number | null;
+  widthCm: number | null;
+  /** ± uncertainty of the larger of the two values. */
+  errCm: number | null;
+  mode: MeasurementMode;
+}
+
+// ---- Furniture ↔ body fit ---------------------------------------------------
+
+export type FitVerdict =
+  | 'fits'
+  | 'too-low'
+  | 'too-high'
+  | 'too-shallow'
+  | 'too-deep'
+  | 'too-narrow'
+  | 'too-close'
+  | 'too-far'
+  | 'no-legroom';
+
+/** One dimension compared against the ideal range for one body. */
+export interface FitCheck {
+  key: ObjectDimKey | 'thighClearance';
+  object: ErgoObjectType;
+  label: string;
+  measuredCm: number;
+  minCm: number;
+  maxCm: number;
+  idealCm: number;
+  /** Signed distance outside the acceptable range (0 when it fits). */
+  deltaCm: number;
+  verdict: FitVerdict;
+  band: RiskBand;
+  /** The rule used, in plain words. */
+  criterion: string;
+  /** Published source of the rule. */
+  standard: string;
+  recommendation: string;
+  mode: MeasurementMode;
+}
+
+export interface BodyFitResult {
+  who: 'person' | 'average';
+  label: string;
+  statureCm: number;
+  statureMode: MeasurementMode;
+  dims: import('./anthropometry').BodyDims;
+  checks: FitCheck[];
+  /** Posture this body would adopt at this workstation, scored by RULA & REBA. */
+  predicted: { angles: ErgoAngles; rula: RulaResult; reba: RebaResult } | null;
+  /** true = suits this body; false = doesn't; null = nothing measured. */
+  suitable: boolean | null;
+  summary: string;
+}
+
+export interface FitReport {
+  person: BodyFitResult | null;
+  average: BodyFitResult;
+  shoulderWidthCm: number | null;
+  shoulderMode: MeasurementMode;
+  items: MeasuredItem[];
 }
 
 /** Confidence attached to an AI-generated finding (spec §19). */

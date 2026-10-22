@@ -6,6 +6,7 @@ import {
   OBJECT_LABEL, CONFIDENCE_LABEL, CONFIDENCE_COLOR, MEASUREMENT_MODE_LABEL, scoreConfidence,
 } from '@/lib/ergo/ergoKnowledge';
 import { ErgoCaptures, ErgoWorkstationCapture } from './ergoTypes';
+import ErgoFitCompare from './ErgoFitCompare';
 
 interface Props {
   result: ErgoResult;
@@ -222,6 +223,16 @@ export default function ErgoReport({ result, captures, workstation, onBack, onRe
             ))}
           </div>
         </section>
+
+        {/* ---- Body ↔ furniture fit (this person vs the average human) ---- */}
+        {result.fit && (
+          <section className="mt-6">
+            <h2 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+              <Ruler className="w-4 h-4 text-emerald-400" /> Body &amp; furniture fit
+            </h2>
+            <ErgoFitCompare report={result.fit} />
+          </section>
+        )}
 
         {/* ---- Workplace layer (only when a workstation frame was analysed) ---- */}
         {hasWorkplace && (

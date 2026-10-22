@@ -10,6 +10,12 @@ export interface ErgoCapturedFrame {
   angles: ErgoAngles;
   /** JPEG data URL with the skeleton overlay baked in (for the report). */
   imageData: string;
+  /** Clean JPEG (no overlay) for tap-to-measure. */
+  rawImageData?: string;
+  /** Raw normalised landmarks + frame size, for auto-placing measuring points. */
+  landmarks?: Landmark[] | null;
+  frameW?: number;
+  frameH?: number;
   timestamp: number;
 }
 
@@ -32,5 +38,10 @@ export interface ErgoWorkstationCapture {
   angles: ErgoAngles | null;
   /** Objects detected in the frame. */
   objects: DetectedObject[];
+  /** Clean JPEG (no overlay) for tap-to-measure. */
+  rawImageData?: string;
+  /** Captured frame size in pixels. */
+  frameW?: number;
+  frameH?: number;
   timestamp: number;
 }

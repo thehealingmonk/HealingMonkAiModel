@@ -134,7 +134,9 @@ export function assessRelationships(
   angles: ErgoAngles | null,
   objects: DetectedObject[],
   inputs: ErgoObjectInputs,
-  calibration: ErgoCalibration | null
+  calibration: ErgoCalibration | null,
+  /** Width in pixels of the frame the calibration was taken on. */
+  frameW = 1280
 ): ErgoFinding[] {
   const findings: ErgoFinding[] = [];
   const lm = landmarks ?? [];
@@ -155,7 +157,7 @@ export function assessRelationships(
     } else {
       const measurements: ErgoMeasurement[] = [];
       if (userSeat != null)
-        measurements.push({ key: 'seatHeight', label: 'Seat height', valueCm: userSeat, mode: 'user-measured' });
+        measurements.push({ key: 'seatHeight', label: 'Seat height', valueCm: userSeat, mode: inputs.sources?.chairSeatHeightCm ?? 'user-measured' });
 
       let observed: string;
       let relationship: string;
@@ -192,7 +194,7 @@ export function assessRelationships(
         relationship,
         band,
         confidence: combineConfidence(chair?.score ?? 0.5, knee != null ? 0.7 : 0.2, userSeat != null),
-        measurementMode: userSeat != null ? 'user-measured' : 'estimated',
+        measurementMode: userSeat != null ? inputs.sources?.chairSeatHeightCm ?? 'user-measured' : 'estimated',
         measurements,
         recommendation,
       });
@@ -208,7 +210,7 @@ export function assessRelationships(
     } else {
       const measurements: ErgoMeasurement[] = [];
       if (userDesk != null)
-        measurements.push({ key: 'deskHeight', label: 'Desk height', valueCm: userDesk, mode: 'user-measured' });
+        measurements.push({ key: 'deskHeight', label: 'Desk height', valueCm: userDesk, mode: inputs.sources?.deskHeightCm ?? 'user-measured' });
 
       let observed: string;
       let relationship: string;
@@ -250,7 +252,7 @@ export function assessRelationships(
         relationship,
         band,
         confidence: combineConfidence(desk?.score ?? 0.5, elbow ? vis(elbow) : 0.2, userDesk != null),
-        measurementMode: userDesk != null ? 'user-measured' : 'estimated',
+        measurementMode: userDesk != null ? inputs.sources?.deskHeightCm ?? 'user-measured' : 'estimated',
         measurements,
         recommendation,
       });
@@ -305,10 +307,10 @@ export function assessRelationships(
       let distValue: number | null = userDist;
       if (userDist == null && monitor && shoulder && calibration?.pixelsPerCm) {
         const dxPx = Math.abs(boxCenterX(monitor) - shoulder.x); // normalised — approximate
-        // Convert using calibration: pixelsPerCm was derived on the full-res frame,
-        // so scale the normalised delta by an assumed 1280px frame width for a
-        // rough centimetre figure. This stays an explicit "calibrated estimate".
-        const cm = pxToCm(dxPx * 1280, calibration);
+        // pixelsPerCm was derived on this frame, so scale the normalised delta by
+        // its real width. This stays an explicit "calibrated estimate" (the
+        // monitor and shoulder are not exactly in the same plane).
+        const cm = pxToCm(dxPx * frameW, calibration);
         distValue = cm != null ? Math.round(cm) : null;
       }
       if (distValue != null) {
@@ -329,7 +331,7 @@ export function assessRelationships(
         relationship,
         band,
         confidence: combineConfidence(monitor?.score ?? 0.5, eye ? vis(eye) : 0.2, userDist != null),
-        measurementMode: userDist != null ? 'user-measured' : calibration?.pixelsPerCm ? 'calibrated' : 'estimated',
+        measurementMode: userDist != null ? inputs.sources?.monitorDistanceCm ?? 'user-measured' : calibration?.pixelsPerCm ? 'calibrated' : 'estimated',
         measurements,
         recommendation,
       });

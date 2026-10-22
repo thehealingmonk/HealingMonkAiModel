@@ -102,7 +102,9 @@ function trunkScore(a: ErgoAngles, m: ErgoManualInputs): number {
 
 function neckScore(a: ErgoAngles, m: ErgoManualInputs): number {
   const deg = a.neckFlexion ?? 0;
-  let s = deg <= 20 ? 1 : 2;
+  // REBA worksheet: 0–20° flexion = 1; >20° flexion or ANY extension = 2
+  // (−5° tolerance for landmark noise around upright).
+  let s = deg > 20 || deg < -5 ? 2 : 1;
   if (m.neckTwisted || a.neckTwist || (a.neckSideBend ?? 0) > 10) s += 1;
   return clamp(s, 1, 3);
 }

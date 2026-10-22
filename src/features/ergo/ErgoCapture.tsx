@@ -252,6 +252,19 @@ export default function ErgoCapture({ onComplete, onBack }: Props) {
     return out.toDataURL('image/jpeg', 0.85);
   };
 
+  // The same frame without overlays — used by the tap-to-measure tool.
+  const rawSnapshot = (): string | undefined => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth) return undefined;
+    const out = document.createElement('canvas');
+    out.width = video.videoWidth;
+    out.height = video.videoHeight;
+    const octx = out.getContext('2d');
+    if (!octx) return undefined;
+    octx.drawImage(video, 0, 0, out.width, out.height);
+    return out.toDataURL('image/jpeg', 0.9);
+  };
+
   const flashShutter = () => {
     setFlash(true);
     setTimeout(() => setFlash(false), 180);
@@ -267,6 +280,10 @@ export default function ErgoCapture({ onComplete, onBack }: Props) {
       // Angles from aspect-corrected coordinates so they match the real image.
       angles: extractErgoAngles(toIsotropic(lm, frameAspect(videoRef.current)), view),
       imageData: image,
+      rawImageData: rawSnapshot(),
+      landmarks: lm,
+      frameW: videoRef.current?.videoWidth,
+      frameH: videoRef.current?.videoHeight,
       timestamp: Date.now(),
     };
     setCaptures((prev) => ({ ...prev, [view]: frame }));

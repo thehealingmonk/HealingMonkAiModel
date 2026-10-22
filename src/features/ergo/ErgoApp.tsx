@@ -13,8 +13,11 @@ import {
   ErgoResult,
   ErgoObjectInputs,
   ErgoCalibration,
+  ErgoPersonInputs,
+  MeasuredItem,
 } from '@/lib/ergo/ergoTypes';
-import { defaultManualInputs } from '@/lib/ergo/ergoKnowledge';
+import { defaultManualInputs, bandRank } from '@/lib/ergo/ergoKnowledge';
+import { buildFitReport, hasFitData } from '@/lib/ergo/furnitureFit';
 import { assessErgonomics } from '@/lib/ergo/ergoEngine';
 import { assessRelationships, dominantMode } from '@/lib/ergo/relationshipEngine';
 import { emptyCalibration } from '@/lib/ergo/calibration';
@@ -36,6 +39,14 @@ const defaultObjectInputs: ErgoObjectInputs = {
   footrestPresent: null,
 };
 
+const defaultPerson: ErgoPersonInputs = {
+  statureCm: null,
+  statureMode: 'unknown',
+  shoulderWidthCm: null,
+  shoulderMode: 'unknown',
+  population: 'in-adult',
+};
+
 export default function ErgoApp() {
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>('setup');
@@ -45,6 +56,8 @@ export default function ErgoApp() {
   const [workstation, setWorkstation] = useState<ErgoWorkstationCapture | null>(null);
   const [objectInputs, setObjectInputs] = useState<ErgoObjectInputs>(defaultObjectInputs);
   const [calibration, setCalibration] = useState<ErgoCalibration>(emptyCalibration);
+  const [person, setPerson] = useState<ErgoPersonInputs>(defaultPerson);
+  const [items, setItems] = useState<MeasuredItem[]>([]);
   const [manual, setManual] = useState<ErgoManualInputs>(defaultManualInputs);
   const [result, setResult] = useState<ErgoResult | null>(null);
   const [genError, setGenError] = useState('');
@@ -55,6 +68,8 @@ export default function ErgoApp() {
     setWorkstation(null);
     setObjectInputs(defaultObjectInputs);
     setCalibration(emptyCalibration);
+    setPerson(defaultPerson);
+    setItems([]);
     setManual(defaultManualInputs);
     setResult(null);
     setStep('setup');
@@ -78,11 +93,24 @@ export default function ErgoApp() {
           workstation.angles,
           workstation.objects,
           objectInputs,
-          calibration
+          calibration,
+          workstation.frameW
         );
         base.objects = workstation.objects;
         base.findings = findings;
         base.measurementMode = dominantMode(findings);
+      }
+      // Furniture ↔ body fit, for this person and for the average human.
+      if (hasFitData(objectInputs, person, items)) {
+        const fit = buildFitReport(person, objectInputs, items, m);
+        base.fit = fit;
+        const seen = new Set(base.recommendations.map((r) => r.text));
+        for (const c of fit.person?.checks ?? fit.average.checks) {
+          if (bandRank(c.band) < bandRank('medium') || seen.has(c.recommendation)) continue;
+          seen.add(c.recommendation);
+          base.recommendations.push({ priority: bandRank(c.band) >= bandRank('high') ? 1 : 2, text: c.recommendation });
+        }
+        base.recommendations.sort((a, b) => a.priority - b.priority);
       }
       setResult(base);
       setStep('report');
@@ -128,8 +156,9 @@ export default function ErgoApp() {
         onBack={() => setStep('capture')}
         onComplete={(cap) => {
           setWorkstation(cap);
-          // Skipped → jump past the measurement step straight to task details.
-          setStep(cap ? 'measure' : 'inputs');
+          // Even when skipped, the measure step can still measure the body
+          // photos or an uploaded photo (and is itself optional).
+          setStep('measure');
         }}
       />
     );
@@ -138,12 +167,17 @@ export default function ErgoApp() {
   if (step === 'measure') {
     return (
       <ErgoObjectMeasure
-        objects={workstation?.objects ?? []}
+        workstation={workstation}
+        captures={captures}
         initialInputs={objectInputs}
+        initialPerson={person}
+        initialItems={items}
         initialCalibration={calibration}
         onBack={() => setStep('workstation')}
-        onContinue={(inp, cal) => {
+        onContinue={(inp, per, its, cal) => {
           setObjectInputs(inp);
+          setPerson(per);
+          setItems(its);
           setCalibration(cal);
           setStep('inputs');
         }}
@@ -165,7 +199,7 @@ export default function ErgoApp() {
       <ErgoInputs
         task={task}
         initial={manual}
-        onBack={() => setStep(workstation ? 'measure' : 'workstation')}
+        onBack={() => setStep('measure')}
         onGenerate={(m) => {
           setManual(m);
           generate(m);
