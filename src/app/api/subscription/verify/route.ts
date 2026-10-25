@@ -4,12 +4,15 @@ import { connectDB } from '@/lib/server/db';
 import { Subscription } from '@/lib/server/models/Subscription';
 import { verifyPaymentSignature } from '@/lib/server/razorpay';
 import { getPlan } from '@/lib/plans';
+import { rateLimit, clientIp } from '@/lib/server/rateLimit';
 
 export const dynamic = 'force-dynamic';
 
 // Public (no auth): verify a completed Razorpay checkout for a subscription and
 // activate it. Returns the access expiry the client stores to unlock the flow.
 export async function POST(req: NextRequest) {
+  const limited = rateLimit(`sub-verify:${clientIp(req)}`, 30, 60 * 60_000);
+  if (limited) return limited;
   try {
     await connectDB();
     const { subscriptionId, razorpayOrderId, razorpayPaymentId, razorpaySignature } =

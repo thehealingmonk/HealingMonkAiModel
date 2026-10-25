@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { connectDB } from '@/lib/server/db';
+import { appBaseUrl } from '@/lib/seo';
 import { Report } from '@/lib/server/models/Report';
 import { Patient } from '@/lib/server/models/Patient';
 import { requireAuth, requireRole } from '@/middleware/auth';
@@ -48,7 +50,7 @@ export async function POST(req: NextRequest) {
       (await req.json().catch(() => ({}))) || {};
 
     if (!patientId) return NextResponse.json({ error: 'patientId is required' }, { status: 400 });
-    const patient = await Patient.findById(patientId);
+    const patient = mongoose.isValidObjectId(patientId) ? await Patient.findById(patientId) : null;
     if (!patient) return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
 
     const list = Array.isArray(findings) ? findings : [];
@@ -72,7 +74,7 @@ export async function POST(req: NextRequest) {
     // Email the patient that their report is ready (if they have an email),
     // including the public, no-login link to the full visual report.
     if (patient.email) {
-      const base = process.env.APP_BASE_URL || '';
+      const base = appBaseUrl();
       const mail = reportReadyEmail({
         patientName: patient.name,
         doctorName: report.doctor?.name,

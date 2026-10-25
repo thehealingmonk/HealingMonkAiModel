@@ -9,6 +9,7 @@ export const dynamic = 'force-dynamic';
 // Keeps the library light so reports that bake these in stay small.
 const MAX_IMAGE_CHARS = 1_000_000;
 const MAX_IMAGES_PER_CONDITION = 8;
+const RASTER_DATA_URL = /^data:image\/(png|jpe?g|gif|webp|bmp);base64,[A-Za-z0-9+/]+={0,2}$/;
 
 // List the ideal-posture library. Any authenticated staff member can read it
 // (doctors curate, but reception/patient views may render the reference too).
@@ -58,7 +59,7 @@ export async function PUT(req: NextRequest) {
     const clean: { label: string; imageData: string }[] = [];
     for (const img of images) {
       const data = img?.imageData;
-      if (typeof data !== 'string' || !data.startsWith('data:image/')) {
+      if (typeof data !== 'string' || !RASTER_DATA_URL.test(data)) {
         return NextResponse.json({ error: 'Each image needs a valid data URL' }, { status: 400 });
       }
       if (data.length > MAX_IMAGE_CHARS) {

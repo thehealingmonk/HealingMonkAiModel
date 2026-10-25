@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { connectDB } from '@/lib/server/db';
 import { Payment } from '@/lib/server/models/Payment';
 import { Patient } from '@/lib/server/models/Patient';
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
     // Default to cash; only accept the desk-collectable methods (never 'online',
     // which is reserved for the Razorpay gateway flow).
     const payMethod = MANUAL_METHODS.includes(method) ? method : 'cash';
-    const patient = await Patient.findById(patientId);
+    const patient = mongoose.isValidObjectId(patientId) ? await Patient.findById(patientId) : null;
     if (!patient) return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
 
     const payment = await Payment.create({

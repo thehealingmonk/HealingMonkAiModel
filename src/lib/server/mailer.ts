@@ -3,6 +3,7 @@
 // resolve instead of throwing, so booking/report flows never break on email.
 
 import nodemailer from 'nodemailer';
+import { appBaseUrl } from '@/lib/seo';
 
 const {
   SMTP_HOST,
@@ -10,7 +11,6 @@ const {
   SMTP_USER,
   SMTP_PASSWORD,
   EMAIL_FROM,
-  APP_BASE_URL,
 } = process.env;
 
 const enabled = Boolean(SMTP_HOST && SMTP_USER && SMTP_PASSWORD);
@@ -25,6 +25,52 @@ if (enabled) {
   });
 } else {
   console.warn('[mailer] SMTP not configured — emails will be skipped.');
+}
+
+// ── Escaping ─────────────────────────────────────────────────────
+// Every value interpolated into an email comes (directly or indirectly) from
+// user input — the public booking form lets anyone choose the name, complaint
+// AND the recipient address. Unescaped, that let a stranger send a branded
+// HealingMonk email containing arbitrary HTML/links to any inbox.
+
+/** Escape text for safe use in HTML element content and quoted attributes. */
+export function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** Only http(s) links may appear in an email; anything else becomes ''. */
+export function safeUrl(url: unknown): string {
+  const s = String(url ?? '').trim();
+  return /^https?:\/\/[^\s<>"']+$/i.test(s) ? escapeHtml(s) : '';
+}
+
+/** Readable payment-method label for receipts. */
+export function methodLabel(method: string): string {
+  switch (method) {
+    case 'online': return 'Online (Razorpay)';
+    case 'card': return 'Card';
+    case 'upi': return 'UPI';
+    default: return 'Cash';
+  }
+}
+
+/** Plain-text alternative: strip tags, then decode the entities we emit. */
+export function htmlToText(html: string): string {
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\s*\n\s*/g, '\n')
+    .trim();
 }
 
 /** Send an email. Never throws — returns { sent: boolean }. */
@@ -45,7 +91,7 @@ export async function sendMail({
       from: EMAIL_FROM || SMTP_USER,
       to,
       subject,
-      text: text || html.replace(/<[^>]+>/g, ' '),
+      text: text || htmlToText(html),
       html,
     });
     return { sent: true };
@@ -56,6 +102,7 @@ export async function sendMail({
 }
 
 // ── Shared HTML shell ────────────────────────────────────────────
+// `title` and `body` are trusted template HTML; callers escape their values.
 function layout(title: string, body: string) {
   return `
   <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#111827">
@@ -70,12 +117,16 @@ function layout(title: string, body: string) {
   </div>`;
 }
 
+// `label` is a fixed template string; `value` is escaped here.
 function row(label: string, value: string) {
   return `<tr>
     <td style="padding:4px 12px 4px 0;color:#6b7280;font-size:14px">${label}</td>
-    <td style="padding:4px 0;font-size:14px;font-weight:600">${value}</td>
+    <td style="padding:4px 0;font-size:14px;font-weight:600">${escapeHtml(value)}</td>
   </tr>`;
 }
+
+const BUTTON =
+  'display:inline-block;background:#16a34a;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px';
 
 // ── Templated emails ─────────────────────────────────────────────
 
@@ -90,17 +141,17 @@ export function welcomeStaffEmail({
   role: string;
   tempPassword?: string;
 }) {
-  const loginUrl = APP_BASE_URL || '';
+  const loginUrl = safeUrl(appBaseUrl());
   return {
     subject: `Your HealingMonk ${role} account is ready`,
     html: layout(
-      `Welcome, ${name}`,
-      `<p style="font-size:14px">An admin created a <strong>${role}</strong> account for you on HealingMonk.</p>
+      `Welcome, ${escapeHtml(name)}`,
+      `<p style="font-size:14px">An admin created a <strong>${escapeHtml(role)}</strong> account for you on HealingMonk.</p>
        <table style="margin:12px 0">
          ${row('Email', email)}
          ${tempPassword ? row('Temporary password', tempPassword) : ''}
        </table>
-       ${loginUrl ? `<a href="${loginUrl}" style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px">Sign in</a>` : ''}
+       ${loginUrl ? `<a href="${loginUrl}" style="${BUTTON}">Sign in</a>` : ''}
        <p style="font-size:13px;color:#6b7280;margin-top:12px">Please change your password after your first sign-in.</p>`
     ),
   };
@@ -121,7 +172,7 @@ export function appointmentBookedEmail({
     subject: `Appointment confirmed — ${when}`,
     html: layout(
       'Your appointment is confirmed',
-      `<p style="font-size:14px">Hi ${patientName}, your appointment has been booked.</p>
+      `<p style="font-size:14px">Hi ${escapeHtml(patientName)}, your appointment has been booked.</p>
        <table style="margin:12px 0">
          ${row('Date &amp; time', when)}
          ${doctorName ? row('Doctor', `Dr. ${doctorName}`) : ''}
@@ -145,7 +196,7 @@ export function appointmentRescheduledEmail({
     subject: `Appointment rescheduled — ${when}`,
     html: layout(
       'Your appointment was rescheduled',
-      `<p style="font-size:14px">Hi ${patientName}, your appointment has a new time.</p>
+      `<p style="font-size:14px">Hi ${escapeHtml(patientName)}, your appointment has a new time.</p>
        <table style="margin:12px 0">
          ${row('New date &amp; time', when)}
          ${doctorName ? row('Doctor', `Dr. ${doctorName}`) : ''}
@@ -168,19 +219,21 @@ export function reportReadyEmail({
   /** Public, no-login link to the full visual report (`/r/:slug`). */
   reportUrl?: string;
 }) {
+  const url = safeUrl(reportUrl);
+  const by = doctorName ? ` by Dr. ${escapeHtml(doctorName)}` : '';
   return {
     subject: 'Your HealingMonk assessment report is ready',
     html: layout(
       'Assessment report ready',
-      `<p style="font-size:14px">Hi ${patientName}, your movement assessment has been completed${doctorName ? ` by Dr. ${doctorName}` : ''}.</p>
+      `<p style="font-size:14px">Hi ${escapeHtml(patientName)}, your movement assessment has been completed${by}.</p>
        <table style="margin:12px 0">
          ${overallScore != null ? row('Overall score', `${overallScore}/100`) : ''}
          ${row('Areas flagged', String(flaggedCount ?? 0))}
        </table>
        ${
-         reportUrl
-           ? `<a href="${reportUrl}" style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px">View your full report</a>
-              <p style="font-size:12px;color:#6b7280;margin-top:10px;word-break:break-all">Or open this link: <a href="${reportUrl}" style="color:#16a34a">${reportUrl}</a></p>`
+         url
+           ? `<a href="${url}" style="${BUTTON}">View your full report</a>
+              <p style="font-size:12px;color:#6b7280;margin-top:10px;word-break:break-all">Or open this link: <a href="${url}" style="color:#16a34a">${url}</a></p>`
            : ''
        }
        <p style="font-size:13px;color:#6b7280;margin-top:12px">Your doctor will review the findings and prescribed exercises with you.</p>`
@@ -201,19 +254,19 @@ export function meetingInviteEmail({
   when?: string;
   link: string;
 }) {
+  const url = safeUrl(link);
+  const withDoctor = doctorName ? ` with Dr. ${escapeHtml(doctorName)}` : '';
   return {
     subject: when ? `Your online consultation — ${when}` : 'Your online consultation link',
     html: layout(
       'Your online consultation',
-      `<p style="font-size:14px">Hi ${patientName}, an online video consultation${
-        doctorName ? ` with Dr. ${doctorName}` : ''
-      } has been arranged for you.</p>
+      `<p style="font-size:14px">Hi ${escapeHtml(patientName)}, an online video consultation${withDoctor} has been arranged for you.</p>
        <table style="margin:12px 0">
          ${when ? row('Date &amp; time', when) : ''}
          ${doctorName ? row('Doctor', `Dr. ${doctorName}`) : ''}
        </table>
-       <a href="${link}" style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px">Join the meeting</a>
-       <p style="font-size:12px;color:#6b7280;margin-top:10px;word-break:break-all">Or open this link at your appointment time: <a href="${link}" style="color:#16a34a">${link}</a></p>
+       <a href="${url}" style="${BUTTON}">Join the meeting</a>
+       <p style="font-size:12px;color:#6b7280;margin-top:10px;word-break:break-all">Or open this link at your appointment time: <a href="${url}" style="color:#16a34a">${url}</a></p>
        <p style="font-size:13px;color:#6b7280;margin-top:12px">Please join from Google Chrome and allow camera &amp; microphone access when asked.</p>`
     ),
   };
@@ -229,7 +282,7 @@ export function paymentReceiptEmail({
   patientName: string;
   amount: number;
   currency?: string;
-  method: 'online' | 'cash';
+  method: string;
   reference?: string;
 }) {
   const amt = `${currency || 'INR'} ${(amount / 100).toFixed(2)}`;
@@ -237,10 +290,10 @@ export function paymentReceiptEmail({
     subject: `Payment received — ${amt}`,
     html: layout(
       'Payment receipt',
-      `<p style="font-size:14px">Hi ${patientName}, we have received your payment. Thank you.</p>
+      `<p style="font-size:14px">Hi ${escapeHtml(patientName)}, we have received your payment. Thank you.</p>
        <table style="margin:12px 0">
          ${row('Amount', amt)}
-         ${row('Method', method === 'online' ? 'Online (Razorpay)' : 'Cash')}
+         ${row('Method', methodLabel(method))}
          ${reference ? row('Reference', reference) : ''}
        </table>`
     ),

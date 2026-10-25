@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { connectDB } from '@/lib/server/db';
+
+const validIds = (p: { id: string; docId: string }) =>
+  mongoose.isValidObjectId(p.id) && mongoose.isValidObjectId(p.docId);
 import { PatientDocument } from '@/lib/server/models/PatientDocument';
 import { requireAuth, requireRole } from '@/middleware/auth';
 
@@ -16,6 +20,7 @@ export async function GET(
   const roleErr = requireRole(user, 'admin', 'doctor', 'reception');
   if (roleErr) return roleErr;
 
+  if (!validIds(params)) return NextResponse.json({ error: 'Document not found' }, { status: 404 });
   await connectDB();
   const doc = await PatientDocument.findOne({ _id: params.docId, patient: params.id });
   if (!doc) return NextResponse.json({ error: 'Document not found' }, { status: 404 });
@@ -32,6 +37,7 @@ export async function DELETE(
   const roleErr = requireRole(user, 'admin', 'doctor', 'reception');
   if (roleErr) return roleErr;
 
+  if (!validIds(params)) return NextResponse.json({ error: 'Document not found' }, { status: 404 });
   await connectDB();
   const doc = await PatientDocument.findOneAndDelete({ _id: params.docId, patient: params.id });
   if (!doc) return NextResponse.json({ error: 'Document not found' }, { status: 404 });

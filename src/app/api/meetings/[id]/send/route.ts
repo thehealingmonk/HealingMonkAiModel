@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { connectDB } from '@/lib/server/db';
+import { appBaseUrl } from '@/lib/seo';
 import { OnlineMeeting } from '@/lib/server/models/OnlineMeeting';
 import { requireAuth, requireRole } from '@/middleware/auth';
 import { sendMail, meetingInviteEmail } from '@/lib/server/mailer';
@@ -34,6 +36,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const roleErr = requireRole(user, 'admin', 'doctor');
   if (roleErr) return roleErr;
 
+  if (!mongoose.isValidObjectId(params.id)) {
+    return NextResponse.json({ error: 'Meeting not found' }, { status: 404 });
+  }
   try {
     await connectDB();
     const meeting = await OnlineMeeting.findById(params.id)
@@ -53,8 +58,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       );
     }
 
-    const base = process.env.APP_BASE_URL || '';
-    if (!base) return NextResponse.json({ error: 'APP_BASE_URL is not configured.' }, { status: 500 });
+    const base = appBaseUrl();
 
     const mail = meetingInviteEmail({
       patientName: meeting.patient?.name || 'there',

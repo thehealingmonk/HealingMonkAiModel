@@ -131,7 +131,14 @@ export async function updateUser(
   id: string,
   payload: { name?: string; email?: string; role?: Role; password?: string }
 ): Promise<{ user: AuthUser; permissions: string[] }> {
-  return request(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+  const res = await request<{ user: AuthUser; permissions: string[]; token?: string }>(`/users/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+  // Changing your OWN password revokes your old sessions server-side; the
+  // server hands back a fresh token so this tab stays signed in.
+  if (res.token) setToken(res.token);
+  return res;
 }
 
 // Admin permanently deletes a user account.
@@ -557,7 +564,7 @@ export async function bookPublic(payload: {
   complaint?: string;
   painAreas?: string[];
   preferredAt?: string;
-}): Promise<{ ok: boolean; patientId: string; appointmentId: string | null }> {
+}): Promise<{ ok: boolean; appointmentRequested: boolean }> {
   return request('/public/booking', { method: 'POST', body: JSON.stringify(payload) });
 }
 

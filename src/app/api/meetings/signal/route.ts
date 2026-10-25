@@ -15,6 +15,16 @@ export const dynamic = 'force-dynamic';
 // no clinical data — and staff controls (Start AI, report, end) are separately
 // gated behind JWT + membership on the /api/meetings/[id] routes.
 
+// Kinds the meeting client sends (features/meeting/signaling.ts).
+const SIGNAL_KINDS = new Set([
+  'offer', 'answer', 'sdp', 'ice', 'join', 'bye', 'presence', 'ai',
+  'chat', 'screen', 'knock', 'admit', 'deny', 'audio',
+]);
+// SDP offers are a few KB; 64 KB leaves ample headroom while stopping the relay
+// being used as free bulk storage.
+const MAX_SIGNAL_BYTES = 64 * 1024;
+const isStr = (v: unknown, max: number): v is string => typeof v === 'string' && v.length > 0 && v.length <= max;
+
 async function joinableMeeting(token: string) {
   await connectDB();
   const meeting = await OnlineMeeting.findOne({ roomToken: token });
@@ -30,16 +40,26 @@ export async function POST(req: NextRequest) {
   try {
     const body = (await req.json().catch(() => ({}))) || {};
     const { token, from, to, kind, data } = body;
-    if (!token || !from || !kind) {
+    // Strings only: an object token (e.g. {"$ne": ""}) must never reach a query.
+    if (!isStr(token, 200) || !isStr(from, 100) || !isStr(kind, 20)) {
       return NextResponse.json({ error: 'token, from and kind are required' }, { status: 400 });
+    }
+    if (!SIGNAL_KINDS.has(kind)) {
+      return NextResponse.json({ error: 'Unknown signal kind' }, { status: 400 });
+    }
+    if (to != null && !isStr(to, 100)) {
+      return NextResponse.json({ error: 'Invalid recipient' }, { status: 400 });
+    }
+    if (JSON.stringify(data ?? null).length > MAX_SIGNAL_BYTES) {
+      return NextResponse.json({ error: 'Signal too large' }, { status: 413 });
     }
     const meeting = await joinableMeeting(token);
     if (!meeting) return NextResponse.json({ error: 'Room not available' }, { status: 404 });
 
     await MeetingSignal.create({
       roomToken: token,
-      from: String(from),
-      to: to ? String(to) : null,
+      from,
+      to: to || null,
       kind,
       data: data ?? null,
     });
@@ -57,7 +77,9 @@ export async function DELETE(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token');
   if (!token) return NextResponse.json({ error: 'token is required' }, { status: 400 });
   try {
-    await connectDB();
+    // Only a real, still-open room may be cleared.
+    const meeting = await joinableMeeting(token);
+    if (!meeting) return NextResponse.json({ error: 'Room not available' }, { status: 404 });
     await MeetingSignal.deleteMany({ roomToken: token });
     return NextResponse.json({ ok: true });
   } catch (err) {

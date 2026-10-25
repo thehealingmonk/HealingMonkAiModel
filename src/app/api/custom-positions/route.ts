@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
 
 // Max characters for a single image data URL (~0.75 MB after base64 overhead).
 const MAX_IMAGE_CHARS = 1_000_000;
+const RASTER_DATA_URL = /^data:image\/(png|jpe?g|gif|webp|bmp);base64,[A-Za-z0-9+/]+={0,2}$/;
 
 // List custom reference positions. Any authenticated staff member can read them
 // (they render in the Select Positions dictionary). Optional ?category=Shoulder.
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
     if (!name || typeof name !== 'string') {
       return NextResponse.json({ error: 'name is required' }, { status: 400 });
     }
-    if (typeof imageData !== 'string' || !imageData.startsWith('data:image/')) {
+    if (typeof imageData !== 'string' || !RASTER_DATA_URL.test(imageData)) {
       return NextResponse.json({ error: 'A valid image is required' }, { status: 400 });
     }
     if (imageData.length > MAX_IMAGE_CHARS) {

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { connectDB } from '@/lib/server/db';
+import { appBaseUrl } from '@/lib/seo';
 import { Report } from '@/lib/server/models/Report';
 import { requireAuth, requireRole } from '@/middleware/auth';
 import { sendMail, reportReadyEmail } from '@/lib/server/mailer';
@@ -15,6 +17,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const roleErr = requireRole(user, 'doctor', 'admin');
   if (roleErr) return roleErr;
 
+  if (!mongoose.isValidObjectId(params.id)) {
+    return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+  }
   try {
     await connectDB();
     const report = await Report.findById(params.id)
@@ -24,6 +29,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const body = (await req.json().catch(() => ({}))) || {};
     const to = (typeof body.to === 'string' && body.to.trim()) || report.patient?.email || '';
+    if (to.length > 254 || !/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(to)) {
+      return NextResponse.json({ error: 'Please enter a single valid email address' }, { status: 400 });
+    }
     if (!to) {
       return NextResponse.json(
         { error: 'No email on file for this patient. Add one or pass a recipient.' },
@@ -31,7 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       );
     }
 
-    const base = process.env.APP_BASE_URL || '';
+    const base = appBaseUrl();
     const mail = reportReadyEmail({
       patientName: report.patient?.name || 'there',
       doctorName: report.doctor?.name,

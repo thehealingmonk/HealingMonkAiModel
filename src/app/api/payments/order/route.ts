@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/server/db';
 import { Payment } from '@/lib/server/models/Payment';
 import { Patient } from '@/lib/server/models/Patient';
+import mongoose from 'mongoose';
 import { requireAuth } from '@/middleware/auth';
+import { myPatientIds } from '@/lib/server/patientLink';
 import { razorpayEnabled, createOrder } from '@/lib/server/razorpay';
 
 export const dynamic = 'force-dynamic';
@@ -23,8 +25,18 @@ export async function POST(req: NextRequest) {
     if (!patientId || !paise || paise <= 0) {
       return NextResponse.json({ error: 'patientId and a positive amount are required' }, { status: 400 });
     }
-    const patient = await Patient.findById(patientId);
+    const patient = mongoose.isValidObjectId(patientId) ? await Patient.findById(patientId) : null;
     if (!patient) return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
+    // Staff may start a checkout for any patient; a patient login only for the
+    // clinic record(s) linked to it. Without this, any signed-in account (even a
+    // self-registered one) could attach payments to — and learn the name of —
+    // any patient id.
+    if (user.role === 'patient') {
+      const mine = await myPatientIds(user);
+      if (!mine.some((id: any) => id.toString() === patient._id.toString())) {
+        return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
+      }
+    }
 
     const payment = await Payment.create({
       patient: patient._id,
@@ -57,6 +69,6 @@ export async function POST(req: NextRequest) {
     );
   } catch (err: any) {
     console.error('create order error', err);
-    return NextResponse.json({ error: err.message || 'Could not create payment order' }, { status: 500 });
+    return NextResponse.json({ error: 'Could not create payment order' }, { status: 500 });
   }
 }

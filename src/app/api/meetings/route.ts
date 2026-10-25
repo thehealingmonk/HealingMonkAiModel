@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import { connectDB } from '@/lib/server/db';
+import { appBaseUrl } from '@/lib/seo';
 import { OnlineMeeting } from '@/lib/server/models/OnlineMeeting';
 import { Patient } from '@/lib/server/models/Patient';
 import { requireAuth, requireRole } from '@/middleware/auth';
@@ -30,6 +32,7 @@ async function createMeetingFor(
   patientId: string,
   opts: { scheduledAt?: string | null; sendEmail?: boolean }
 ): Promise<{ meeting?: any; error?: string }> {
+  if (!mongoose.isValidObjectId(patientId)) return { error: 'Patient not found' };
   const patient = await Patient.findById(patientId).populate('assignedDoctor', 'name');
   if (!patient) return { error: 'Patient not found' };
 
@@ -61,7 +64,7 @@ async function createMeetingFor(
   // Email the invite before responding so the UI can reflect "invite sent".
   const wantEmail = opts.sendEmail !== false;
   if (wantEmail && patient.email) {
-    const base = process.env.APP_BASE_URL || '';
+    const base = appBaseUrl();
     if (base) {
       const mail = meetingInviteEmail({
         patientName: patient.name,
@@ -97,7 +100,10 @@ export async function GET(req: NextRequest) {
   if (user.role === 'doctor') filter.assignedDoctor = user._id;
 
   const patientId = req.nextUrl.searchParams.get('patient');
-  if (patientId) filter.patient = patientId;
+  if (patientId) {
+    if (!mongoose.isValidObjectId(patientId)) return NextResponse.json({ meetings: [] });
+    filter.patient = patientId;
+  }
 
   const meetings = await OnlineMeeting.find(filter)
     .populate('patient', 'name patientId')

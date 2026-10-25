@@ -1,0 +1,44 @@
+{
+  "_about": "Version-controlled evaluation set for the HealingMonk posture-measurement engine (src/lib/clinicalKnowledge.ts). Every case is a SYNTHETIC skeleton built from a known ground-truth angle — no patient data. `aspect` is the camera frame width/height the landmarks are normalised to (16:9 laptop, 9:16 phone portrait); the engine must recover the same physical angle after toIsotropic(). `expect.value` is the ground truth in degrees (tolerance in `tolerance`); `expect.value: null` means the engine must REFUSE to measure (low landmark confidence) rather than invent a number.",
+  "tolerance": 1,
+  "cases": [
+    { "id": "SL-01", "assessment": "shoulder_level", "gen": "tilt", "pair": [11, 12], "deg": 1, "aspect": 1, "expect": { "value": 1, "severity": "normal" } },
+    { "id": "SL-02", "assessment": "shoulder_level", "gen": "tilt", "pair": [11, 12], "deg": 3, "aspect": 1, "expect": { "value": 3, "severity": "mild" } },
+    { "id": "SL-03", "assessment": "shoulder_level", "gen": "tilt", "pair": [11, 12], "deg": 6, "aspect": 1, "expect": { "value": 6, "severity": "moderate" } },
+    { "id": "SL-04", "assessment": "shoulder_level", "gen": "tilt", "pair": [11, 12], "deg": 10, "aspect": 1, "expect": { "value": 10, "severity": "severe" } },
+    { "id": "SL-05", "assessment": "shoulder_level", "gen": "tilt", "pair": [11, 12], "deg": 6, "aspect": 1.7778, "expect": { "value": 6, "severity": "moderate" } },
+    { "id": "SL-06", "assessment": "shoulder_level", "gen": "tilt", "pair": [11, 12], "deg": 6, "aspect": 0.5625, "expect": { "value": 6, "severity": "moderate" } },
+    { "id": "SL-07", "assessment": "shoulder_level", "gen": "tilt", "pair": [11, 12], "deg": 6, "aspect": 1, "hide": [12], "expect": { "value": null, "severity": null } },
+
+    { "id": "PL-01", "assessment": "pelvic_level", "gen": "tilt", "pair": [23, 24], "deg": 0, "aspect": 1, "expect": { "value": 0, "severity": "normal" } },
+    { "id": "PL-02", "assessment": "pelvic_level", "gen": "tilt", "pair": [23, 24], "deg": 4, "aspect": 1, "expect": { "value": 4, "severity": "mild" } },
+    { "id": "PL-03", "assessment": "pelvic_level", "gen": "tilt", "pair": [23, 24], "deg": 9, "aspect": 0.5625, "expect": { "value": 9, "severity": "severe" } },
+    { "id": "PL-04", "assessment": "pelvic_level", "gen": "tilt", "pair": [23, 24], "deg": 9, "aspect": 1, "hide": [23], "expect": { "value": null, "severity": null } },
+
+    { "id": "HT-01", "assessment": "head_tilt", "gen": "tilt", "pair": [7, 8], "deg": 2, "aspect": 1, "expect": { "value": 2, "severity": "normal" } },
+    { "id": "HT-02", "assessment": "head_tilt", "gen": "tilt", "pair": [7, 8], "deg": 5, "aspect": 1.7778, "expect": { "value": 5, "severity": "moderate" } },
+
+    { "id": "FH-01", "assessment": "forward_head", "gen": "cva", "deg": 55, "aspect": 1, "expect": { "value": 55, "severity": "normal" } },
+    { "id": "FH-02", "assessment": "forward_head", "gen": "cva", "deg": 47, "aspect": 1, "expect": { "value": 47, "severity": "mild" } },
+    { "id": "FH-03", "assessment": "forward_head", "gen": "cva", "deg": 42, "aspect": 1, "expect": { "value": 42, "severity": "moderate" } },
+    { "id": "FH-04", "assessment": "forward_head", "gen": "cva", "deg": 35, "aspect": 1, "expect": { "value": 35, "severity": "severe" } },
+    { "id": "FH-05", "assessment": "forward_head", "gen": "cva", "deg": 42, "aspect": 0.5625, "expect": { "value": 42, "severity": "moderate" } },
+    { "id": "FH-06", "assessment": "forward_head", "gen": "cva", "deg": 42, "aspect": 1, "hide": [7, 8], "expect": { "value": null, "severity": null } },
+
+    { "id": "KA-01", "assessment": "knee_alignment", "gen": "knee_dev", "deg": 2, "aspect": 1, "expect": { "value": 2, "severity": "normal" } },
+    { "id": "KA-02", "assessment": "knee_alignment", "gen": "knee_dev", "deg": 8, "aspect": 1, "expect": { "value": 8, "severity": "mild" } },
+    { "id": "KA-03", "assessment": "knee_alignment", "gen": "knee_dev", "deg": 15, "aspect": 1.7778, "expect": { "value": 15, "severity": "moderate" } },
+    { "id": "KA-04", "assessment": "knee_alignment", "gen": "knee_dev", "deg": 25, "aspect": 1, "expect": { "value": 25, "severity": "severe" } },
+
+    { "id": "SF-01", "assessment": "shoulder_flexion_rom", "gen": "joint", "joint": [24, 12, 16], "deg": 170, "aspect": 1, "expect": { "value": 170, "severity": "normal" } },
+    { "id": "SF-02", "assessment": "shoulder_flexion_rom", "gen": "joint", "joint": [24, 12, 16], "deg": 150, "aspect": 1, "expect": { "value": 150, "severity": "mild" } },
+    { "id": "SF-03", "assessment": "shoulder_flexion_rom", "gen": "joint", "joint": [24, 12, 16], "deg": 120, "aspect": 0.5625, "expect": { "value": 120, "severity": "moderate" } },
+    { "id": "SF-04", "assessment": "shoulder_flexion_rom", "gen": "joint", "joint": [24, 12, 16], "deg": 60, "aspect": 1, "expect": { "value": 60, "severity": "severe" } },
+    { "id": "SF-05", "assessment": "shoulder_flexion_rom", "gen": "joint", "joint": [24, 12, 16], "deg": 120, "aspect": 1, "hide": [15, 16], "expect": { "value": null, "severity": null } },
+
+    { "id": "SQ-01", "assessment": "squat_depth", "gen": "joint", "joint": [24, 26, 28], "deg": 70, "aspect": 1, "expect": { "value": 110, "severity": "normal" } },
+    { "id": "SQ-02", "assessment": "squat_depth", "gen": "joint", "joint": [24, 26, 28], "deg": 100, "aspect": 1, "expect": { "value": 80, "severity": "mild" } },
+    { "id": "SQ-03", "assessment": "squat_depth", "gen": "joint", "joint": [24, 26, 28], "deg": 130, "aspect": 1.7778, "expect": { "value": 50, "severity": "moderate" } },
+    { "id": "SQ-04", "assessment": "squat_depth", "gen": "joint", "joint": [24, 26, 28], "deg": 160, "aspect": 1, "expect": { "value": 20, "severity": "severe" } }
+  ]
+}

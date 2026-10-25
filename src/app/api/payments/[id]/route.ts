@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { connectDB } from '@/lib/server/db';
 import { Payment, PAYMENT_STATUSES } from '@/lib/server/models/Payment';
 import { requireAuth, requireRole } from '@/middleware/auth';
@@ -16,6 +17,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const roleErr = requireRole(user, 'admin', 'reception');
   if (roleErr) return roleErr;
 
+  if (!mongoose.isValidObjectId(params.id)) {
+    return NextResponse.json({ error: 'Payment not found' }, { status: 404 });
+  }
   try {
     await connectDB();
     const payment = await Payment.findById(params.id);
@@ -60,6 +64,9 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const roleErr = requireRole(user, 'admin', 'reception');
   if (roleErr) return roleErr;
 
+  if (!mongoose.isValidObjectId(params.id)) {
+    return NextResponse.json({ error: 'Payment not found' }, { status: 404 });
+  }
   await connectDB();
   const payment = await Payment.findByIdAndDelete(params.id);
   if (!payment) return NextResponse.json({ error: 'Payment not found' }, { status: 404 });

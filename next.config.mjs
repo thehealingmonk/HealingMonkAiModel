@@ -36,7 +36,17 @@ const nextConfig = {
     serverComponentsExternalPackages: ['mongoose', 'bcryptjs'],
   },
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    // Private screens and every API response: never indexed (robots.txt only
+    // stops crawling; a linked URL can still be indexed without this header).
+    const noindex = { key: 'X-Robots-Tag', value: 'noindex, nofollow' };
+    const privatePaths = ['/admin/:path*', '/doctor/:path*', '/reception/:path*', '/patient/:path*',
+      '/login', '/assessment/:path*', '/r/:path*', '/m/:path*'];
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      // API data is per-user / health data: no shared or browser caching.
+      { source: '/api/:path*', headers: [noindex, { key: 'Cache-Control', value: 'private, no-store' }] },
+      ...privatePaths.map((source) => ({ source, headers: [noindex] })),
+    ];
   },
 };
 

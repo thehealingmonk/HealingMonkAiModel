@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/server/db';
 import { Patient } from '@/lib/server/models/Patient';
 import { User } from '@/lib/server/models/User';
-import { requireAuth, requireRole, invalidateUser } from '@/middleware/auth';
+import mongoose from 'mongoose';
+import { requireAuth, requireRole, invalidateUser, revokeSessions } from '@/middleware/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const roleErr = requireRole(user, 'admin', 'doctor', 'reception');
   if (roleErr) return roleErr;
 
+  if (!mongoose.isValidObjectId(params.id)) {
+    return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
+  }
   await connectDB();
   const patient = await Patient.findById(params.id);
   if (!patient) return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
@@ -44,11 +48,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   try {
     await connectDB();
     const { password } = (await req.json().catch(() => ({}))) || {};
-    if (!password || String(password).length < 6) {
+    if (typeof password !== 'string' || password.length < 6 || password.length > 200) {
       return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
     }
 
-    const patient = await Patient.findById(params.id);
+    const patient = mongoose.isValidObjectId(params.id) ? await Patient.findById(params.id) : null;
     if (!patient) return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
 
     const email = (patient.email || '').toLowerCase().trim();
@@ -71,7 +75,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (!account) {
       account = new User({ name: patient.name, email, role: 'patient', createdBy: user._id });
     }
-    await account.setPassword(String(password));
+    await account.setPassword(password);
+    // A password reset logs the patient out everywhere (e.g. a lost phone).
+    if (!created) revokeSessions(account);
     account.active = true;
     // Staff-provisioned from the patient record → this login may see that
     // patient's clinic data (see lib/server/patientLink).

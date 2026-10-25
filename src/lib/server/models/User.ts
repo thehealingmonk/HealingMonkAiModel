@@ -20,6 +20,11 @@ const userSchema = new mongoose.Schema(
     // see the clinic records that share their email — a self-signup email is
     // unverified and must never unlock someone else's reports.
     patientLinked: { type: Boolean, default: false },
+    // Session generation. Every JWT carries the value current when it was
+    // issued; bumping it (password reset, role change, deactivation) revokes all
+    // previously issued tokens for this account. Missing = 0, so tokens issued
+    // before this field existed stay valid until the first bump.
+    tokenVersion: { type: Number, default: 0 },
     // Who created this account (admin who added a doctor/receptionist, etc.)
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },

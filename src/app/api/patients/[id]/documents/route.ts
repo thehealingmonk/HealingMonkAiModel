@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { connectDB } from '@/lib/server/db';
 import { Patient } from '@/lib/server/models/Patient';
 import { PatientDocument } from '@/lib/server/models/PatientDocument';
@@ -21,6 +22,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const roleErr = requireRole(user, 'admin', 'doctor', 'reception');
   if (roleErr) return roleErr;
 
+  if (!mongoose.isValidObjectId(params.id)) return NextResponse.json({ documents: [] });
   await connectDB();
   const docs = await PatientDocument.find({ patient: params.id }).sort({ createdAt: -1 });
   return NextResponse.json({ documents: docs.map((d: any) => d.toJSONSafe(false)) });
@@ -34,6 +36,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const roleErr = requireRole(user, 'admin', 'doctor', 'reception');
   if (roleErr) return roleErr;
 
+  if (!mongoose.isValidObjectId(params.id)) {
+    return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
+  }
   try {
     await connectDB();
     const patient = await Patient.findById(params.id);

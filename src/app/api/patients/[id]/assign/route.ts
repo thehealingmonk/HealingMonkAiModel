@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { connectDB } from '@/lib/server/db';
 import { Patient } from '@/lib/server/models/Patient';
 import { User } from '@/lib/server/models/User';
@@ -13,13 +14,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const roleErr = requireRole(user, 'admin', 'doctor', 'reception');
   if (roleErr) return roleErr;
 
+  if (!mongoose.isValidObjectId(params.id)) {
+    return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
+  }
   await connectDB();
   const { doctorId } = (await req.json().catch(() => ({}))) || {};
   const patient = await Patient.findById(params.id);
   if (!patient) return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
 
   if (doctorId) {
-    const doctor = await User.findById(doctorId);
+    const doctor = mongoose.isValidObjectId(doctorId) ? await User.findById(doctorId) : null;
     if (!doctor || doctor.role !== 'doctor') {
       return NextResponse.json({ error: 'doctorId must reference a doctor account' }, { status: 400 });
     }

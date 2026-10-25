@@ -6,7 +6,7 @@ import { roleHasPermission, Role } from '@/lib/server/permissions';
 
 export function signToken(user: any): string {
   return jwt.sign(
-    { sub: user._id.toString(), role: user.role },
+    { sub: user._id.toString(), role: user.role, tv: user.tokenVersion ?? 0 },
     process.env.JWT_SECRET as string,
     // Long-lived so a signed-in user stays logged in until they explicitly log
     // out (the token lives in the browser's localStorage across sessions).
@@ -57,14 +57,38 @@ async function loadUser(userId: string): Promise<any | null> {
   return promise;
 }
 
+/**
+ * True when a verified token was issued for the account's CURRENT session
+ * generation. A token minted before the last password reset / role change /
+ * deactivation carries an older `tv` and is refused.
+ */
+export function tokenIsCurrent(payload: { tv?: unknown } | null | undefined, user: any): boolean {
+  if (!payload || !user) return false;
+  const tv = typeof payload.tv === 'number' ? payload.tv : 0;
+  return tv === (typeof user.tokenVersion === 'number' ? user.tokenVersion : 0);
+}
+
+/**
+ * Revoke every token issued so far for this user (call BEFORE save()). The
+ * caller must still `invalidateUser(id)` after saving to drop the cache.
+ */
+export function revokeSessions(target: any) {
+  target.tokenVersion = (typeof target.tokenVersion === 'number' ? target.tokenVersion : 0) + 1;
+}
+
 // Verify the Bearer token and return the live, active user document (or null).
 export async function getUser(req: NextRequest): Promise<any | null> {
   const header = req.headers.get('authorization') || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return null;
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET as string) as { sub: string };
-    return await loadUser(payload.sub);
+    // Pin the algorithm so a token can never pick its own verification scheme.
+    const payload = jwt.verify(token, process.env.JWT_SECRET as string, {
+      algorithms: ['HS256'],
+    }) as { sub: string; tv?: number };
+    if (typeof payload.sub !== 'string' || !/^[a-f0-9]{24}$/i.test(payload.sub)) return null;
+    const user = await loadUser(payload.sub);
+    return tokenIsCurrent(payload, user) ? user : null;
   } catch {
     return null;
   }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { connectDB } from '@/lib/server/db';
 import { OnlineMeeting, MeetingStatus, MEETING_STATUSES } from '@/lib/server/models/OnlineMeeting';
 import { requireAuth, requireRole } from '@/middleware/auth';
@@ -23,6 +24,9 @@ async function loadOwned(req: NextRequest, id: string) {
   const roleErr = requireRole(auth.user, 'admin', 'doctor');
   if (roleErr) return { error: roleErr } as const;
 
+  if (!mongoose.isValidObjectId(id)) {
+    return { error: NextResponse.json({ error: 'Meeting not found' }, { status: 404 }) } as const;
+  }
   await connectDB();
   const meeting = await OnlineMeeting.findById(id)
     .populate('patient', 'name patientId age gender mobile email height weight painAreas complaint')
@@ -69,7 +73,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       }
     }
     if (Array.isArray(body.selectedPositions)) meeting.selectedPositions = body.selectedPositions;
-    if (typeof body.reportId === 'string') meeting.report = body.reportId;
+    if (typeof body.reportId === 'string' && mongoose.isValidObjectId(body.reportId)) meeting.report = body.reportId;
     if (typeof body.shareId === 'string') meeting.shareId = body.shareId;
     // Reschedule: accept an ISO date, or null/'' to clear the planned time.
     if ('scheduledAt' in body) {

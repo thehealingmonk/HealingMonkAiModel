@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { connectDB } from '@/lib/server/db';
 import { Appointment, APPOINTMENT_STATUSES } from '@/lib/server/models/Appointment';
 import { requireAuth, requireRole } from '@/middleware/auth';
@@ -12,6 +13,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const roleErr = requireRole(user, 'admin', 'doctor', 'reception');
   if (roleErr) return roleErr;
 
+  if (!mongoose.isValidObjectId(params.id)) {
+    return NextResponse.json({ error: 'Appointment not found' }, { status: 404 });
+  }
   await connectDB();
   const { status } = (await req.json().catch(() => ({}))) || {};
   if (!APPOINTMENT_STATUSES.includes(status)) {

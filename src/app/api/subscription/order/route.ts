@@ -55,6 +55,6 @@ export async function POST(req: NextRequest) {
     );
   } catch (err: any) {
     console.error('create subscription order error', err);
-    return NextResponse.json({ error: err.message || 'Could not create subscription order' }, { status: 500 });
+    return NextResponse.json({ error: 'Could not create subscription order' }, { status: 500 });
   }
 }

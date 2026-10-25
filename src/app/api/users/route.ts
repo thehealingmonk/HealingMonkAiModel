@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   await connectDB();
   const role = req.nextUrl.searchParams.get('role');
   const filter: Record<string, unknown> = {};
-  if (role) filter.role = role;
+  if (role && (ROLES as string[]).includes(role)) filter.role = role;
   const users = await User.find(filter).sort({ createdAt: -1 });
   return NextResponse.json({ users: users.map((u: any) => u.toSafeJSON()) });
 }
@@ -32,7 +32,10 @@ export async function POST(req: NextRequest) {
   try {
     await connectDB();
     const { name, email, password, role } = (await req.json().catch(() => ({}))) || {};
-    if (!name || !email || !password || !role) {
+    if (
+      typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string' ||
+      !name.trim() || !email.trim() || !password || !role
+    ) {
       return NextResponse.json(
         { error: 'name, email, password and role are required' },
         { status: 400 }
@@ -41,19 +44,23 @@ export async function POST(req: NextRequest) {
     if (!ROLES.includes(role)) {
       return NextResponse.json({ error: `role must be one of: ${ROLES.join(', ')}` }, { status: 400 });
     }
-    if (password.length < 6) {
+    if (password.length < 6 || password.length > 200) {
       return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
     }
-    const exists = await User.findOne({ email: email.toLowerCase() });
+    const normalized = email.toLowerCase().trim();
+    if (normalized.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+      return NextResponse.json({ error: 'Please enter a valid email address' }, { status: 400 });
+    }
+    const exists = await User.findOne({ email: normalized });
     if (exists) return NextResponse.json({ error: 'Email already registered' }, { status: 409 });
 
-    const created = new User({ name, email, role, createdBy: user._id });
+    const created = new User({ name: name.trim().slice(0, 120), email: normalized, role, createdBy: user._id });
     await created.setPassword(password);
     await created.save();
 
     // Notify the new staff member (non-blocking — never fails the request).
-    const mail = welcomeStaffEmail({ name, email, role, tempPassword: password });
-    sendMail({ to: email, ...mail });
+    const mail = welcomeStaffEmail({ name: created.name, email: normalized, role, tempPassword: password });
+    sendMail({ to: normalized, ...mail });
 
     return NextResponse.json(
       { user: created.toSafeJSON(), permissions: permissionsForRole(created.role) },

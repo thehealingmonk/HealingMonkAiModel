@@ -5,6 +5,7 @@ import { Payment } from '@/lib/server/models/Payment';
 import { requireAuth } from '@/middleware/auth';
 import { sendMail, paymentReceiptEmail } from '@/lib/server/mailer';
 import { verifyPaymentSignature } from '@/lib/server/razorpay';
+import { myPatientIds } from '@/lib/server/patientLink';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +27,15 @@ export async function POST(req: NextRequest) {
     }
     const payment = await Payment.findById(paymentId).populate('patient', 'name email');
     if (!payment) return NextResponse.json({ error: 'Payment not found' }, { status: 404 });
+    // Same ownership rule as order creation: a patient can only verify (or, with
+    // a bad signature, mark failed) a checkout for their own record.
+    if (user.role === 'patient') {
+      const mine = await myPatientIds(user);
+      const pid = payment.patient?._id ?? payment.patient;
+      if (!mine.some((id: any) => id.toString() === String(pid))) {
+        return NextResponse.json({ error: 'Payment not found' }, { status: 404 });
+      }
+    }
     if (payment.status === 'paid') return NextResponse.json({ payment: payment.toJSONSafe() });
 
     // The signature must be checked against THIS payment's own order id (stored

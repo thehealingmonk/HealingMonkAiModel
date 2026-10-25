@@ -9,11 +9,30 @@ function normalizeOrigin(url: string): string {
   return url.replace(/\/+$/, '');
 }
 
+/**
+ * The live production origin. Used whenever a production build has no
+ * NEXT_PUBLIC_SITE_URL, so a missing deployment variable can never again
+ * publish http://localhost:3000 as the canonical/sitemap origin. It is the same
+ * on the server and in the browser bundle (APP_BASE_URL is server-only, so it
+ * cannot be part of this chain without the two disagreeing).
+ */
+export const PRODUCTION_ORIGIN = 'https://ai.thehealingmonk.in';
+
 export const SITE_URL = normalizeOrigin(
   process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.APP_BASE_URL ||
-    'http://localhost:3000',
+    (process.env.NODE_ENV === 'production'
+      ? PRODUCTION_ORIGIN
+      : process.env.APP_BASE_URL || 'http://localhost:3000'),
 );
+
+/**
+ * Base URL for links inside emails (report, meeting, sign-in). Server-only:
+ * prefers APP_BASE_URL, else the canonical site origin — never empty, so a
+ * missing variable no longer silently drops links or fails invites.
+ */
+export function appBaseUrl(): string {
+  return normalizeOrigin(process.env.APP_BASE_URL || SITE_URL);
+}
 
 export const SITE_NAME = 'HealingMonk';
 

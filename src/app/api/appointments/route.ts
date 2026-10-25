@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { connectDB } from '@/lib/server/db';
 import { Appointment, APPOINTMENT_STATUSES } from '@/lib/server/models/Appointment';
 import { Patient } from '@/lib/server/models/Patient';
@@ -32,9 +33,13 @@ export async function GET(req: NextRequest) {
   if (user.role === 'doctor' && sp.get('scope') !== 'all') {
     filter.doctor = user._id;
   } else if (sp.get('doctor')) {
+    if (!mongoose.isValidObjectId(sp.get('doctor'))) return NextResponse.json({ appointments: [] });
     filter.doctor = sp.get('doctor');
   }
-  if (sp.get('patient')) filter.patient = sp.get('patient');
+  if (sp.get('patient')) {
+    if (!mongoose.isValidObjectId(sp.get('patient'))) return NextResponse.json({ appointments: [] });
+    filter.patient = sp.get('patient');
+  }
   const status = sp.get('status');
   if (status && APPOINTMENT_STATUSES.includes(status)) {
     filter.status = status;
@@ -109,7 +114,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Only a past appointment can be saved as completed or no-show' }, { status: 400 });
     }
 
-    const patient = await Patient.findById(patientId);
+    const patient = mongoose.isValidObjectId(patientId) ? await Patient.findById(patientId) : null;
     if (!patient) return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
 
     // Doctors booking for themselves; otherwise use provided doctor or the
@@ -117,7 +122,7 @@ export async function POST(req: NextRequest) {
     let doctor = doctorId || patient.assignedDoctor || null;
     if (user.role === 'doctor') doctor = user._id;
     if (doctor) {
-      const doc = await User.findById(doctor);
+      const doc = mongoose.isValidObjectId(doctor) ? await User.findById(doctor) : null;
       if (!doc || doc.role !== 'doctor') {
         return NextResponse.json({ error: 'doctorId must reference a doctor account' }, { status: 400 });
       }

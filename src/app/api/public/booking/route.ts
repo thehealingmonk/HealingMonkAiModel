@@ -55,7 +55,8 @@ export async function POST(req: NextRequest) {
 
     let appointment: any = null;
     const when = preferredAt ? new Date(preferredAt) : null;
-    if (when && !Number.isNaN(when.getTime())) {
+    // Requests for a time in the past (beyond small clock skew) are ignored.
+    if (when && !Number.isNaN(when.getTime()) && when.getTime() > Date.now() - 60 * 60_000) {
       appointment = new Appointment({
         patient: patient._id,
         scheduledAt: when,
@@ -77,14 +78,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json(
-      {
-        ok: true,
-        patientId: patient._id.toString(),
-        appointmentId: appointment?._id?.toString() || null,
-      },
-      { status: 201 }
-    );
+    // Same response whether the patient was new or matched by mobile/email, and
+    // no internal ids: an anonymous caller must not be able to probe whether a
+    // phone number belongs to a clinic patient.
+    return NextResponse.json({ ok: true, appointmentRequested: Boolean(appointment) }, { status: 201 });
   } catch (err) {
     console.error('public booking error', err);
     return NextResponse.json(

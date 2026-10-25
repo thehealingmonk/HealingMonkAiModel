@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { connectDB } from '@/lib/server/db';
 import { Patient } from '@/lib/server/models/Patient';
 import { requireAuth, requireRole } from '@/middleware/auth';
@@ -12,6 +13,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const roleErr = requireRole(user, 'admin', 'doctor', 'reception');
   if (roleErr) return roleErr;
 
+  if (!mongoose.isValidObjectId(params.id)) {
+    return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
+  }
   await connectDB();
   const patient = await Patient.findById(params.id).populate('assignedDoctor', 'name');
   if (!patient) return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
@@ -27,6 +31,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const roleErr = requireRole(user, 'admin', 'doctor', 'reception');
   if (roleErr) return roleErr;
 
+  if (!mongoose.isValidObjectId(params.id)) {
+    return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
+  }
   try {
     await connectDB();
     const patient = await Patient.findById(params.id);
@@ -67,6 +74,9 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const roleErr = requireRole(user, 'admin', 'doctor', 'reception');
   if (roleErr) return roleErr;
 
+  if (!mongoose.isValidObjectId(params.id)) {
+    return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
+  }
   await connectDB();
   const patient = await Patient.findByIdAndDelete(params.id);
   if (!patient) return NextResponse.json({ error: 'Patient not found' }, { status: 404 });

@@ -16,7 +16,12 @@ export async function GET(req: NextRequest) {
   await connectDB();
   const filter: Record<string, unknown> = {};
   const patient = req.nextUrl.searchParams.get('patient');
-  if (patient) filter.patient = patient;
+  if (patient) {
+    if (!mongoose.isValidObjectId(patient)) {
+      return NextResponse.json({ payments: [], summary: { totalPaid: 0, paidCount: 0, cashPaid: 0, onlinePaid: 0, byMethod: {} } });
+    }
+    filter.patient = patient;
+  }
   // Populate the patient (with their currently-assigned doctor) and the staff
   // member who collected the payment, so reception/admin can see, per payment,
   // who paid, which doctor they're assigned to, and who took the money.
