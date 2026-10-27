@@ -6,11 +6,11 @@ import { requireAuth, requireRole, invalidateUser, revokeSessions } from '@/midd
 
 export const dynamic = 'force-dynamic';
 
-// Enable / disable an account. Admin-only.
+// Enable / disable an account. Admin and reception (reception cannot touch admins).
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const { user, error } = await requireAuth(req);
   if (error) return error;
-  const roleErr = requireRole(user, 'admin');
+  const roleErr = requireRole(user, 'admin', 'reception');
   if (roleErr) return roleErr;
 
   if (!mongoose.isValidObjectId(params.id)) {
@@ -22,6 +22,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!target) return NextResponse.json({ error: 'User not found' }, { status: 404 });
   if (target._id.equals(user._id)) {
     return NextResponse.json({ error: 'You cannot change your own status' }, { status: 400 });
+  }
+  if (user.role !== 'admin' && target.role === 'admin') {
+    return NextResponse.json({ error: 'Only an admin can change admin accounts' }, { status: 403 });
   }
   const next = Boolean(active);
   // Disabling revokes existing tokens, so re-enabling later does NOT silently

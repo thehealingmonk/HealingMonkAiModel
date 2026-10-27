@@ -7,26 +7,32 @@ import { sendMail, welcomeStaffEmail } from '@/lib/server/mailer';
 
 export const dynamic = 'force-dynamic';
 
-// List all users, optionally filtered by ?role=doctor. Admin-only.
+// List all users, optionally filtered by ?role=doctor. Admin and reception.
+// Reception never sees admin accounts.
 export async function GET(req: NextRequest) {
   const { user, error } = await requireAuth(req);
   if (error) return error;
-  const roleErr = requireRole(user, 'admin');
+  const roleErr = requireRole(user, 'admin', 'reception');
   if (roleErr) return roleErr;
 
   await connectDB();
   const role = req.nextUrl.searchParams.get('role');
   const filter: Record<string, unknown> = {};
   if (role && (ROLES as string[]).includes(role)) filter.role = role;
+  if (user.role === 'reception') {
+    if (role === 'admin') return NextResponse.json({ users: [] });
+    if (!filter.role) filter.role = { $ne: 'admin' };
+  }
   const users = await User.find(filter).sort({ createdAt: -1 });
   return NextResponse.json({ users: users.map((u: any) => u.toSafeJSON()) });
 }
 
 // Admin creates a staff/user account (doctor, reception, or another admin).
+// Reception can create every role except admin.
 export async function POST(req: NextRequest) {
   const { user, error } = await requireAuth(req);
   if (error) return error;
-  const roleErr = requireRole(user, 'admin');
+  const roleErr = requireRole(user, 'admin', 'reception');
   if (roleErr) return roleErr;
 
   try {
@@ -43,6 +49,9 @@ export async function POST(req: NextRequest) {
     }
     if (!ROLES.includes(role)) {
       return NextResponse.json({ error: `role must be one of: ${ROLES.join(', ')}` }, { status: 400 });
+    }
+    if (role === 'admin' && user.role !== 'admin') {
+      return NextResponse.json({ error: 'Only an admin can create admin accounts' }, { status: 403 });
     }
     if (password.length < 6 || password.length > 200) {
       return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });

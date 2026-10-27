@@ -8,6 +8,8 @@ import { BulkBar, SelectCheckbox } from '@/components/ui/BulkBar';
 import LiveBadge from '@/features/admin/LiveBadge';
 import TableSkeleton from '@/components/ui/TableSkeleton';
 import ExportButton from '@/components/ui/ExportButton';
+import { SearchBox } from '@/components/ui/ListControls';
+import { paymentMatches } from '@/utils/paymentSearch';
 
 const STATUS_BADGE: Record<PaymentStatus, string> = {
   paid: 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/20',
@@ -18,7 +20,9 @@ const STATUS_BADGE: Record<PaymentStatus, string> = {
 
 export default function PaymentsList() {
   const { data, loading, refreshing, error: loadError, lastUpdated, refresh } = useLiveData(() => listPayments());
-  const payments = data?.payments ?? [];
+  const allPayments = data?.payments ?? [];
+  const [q, setQ] = useState('');
+  const payments = allPayments.filter((p) => paymentMatches(p, q));
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -27,7 +31,7 @@ export default function PaymentsList() {
 
   const sel = useRowSelection(payments.map((p) => p.id));
 
-  const totalPaid = payments
+  const totalPaid = allPayments
     .filter((p) => p.status === 'paid')
     .reduce((sum, p) => sum + p.amount, 0);
 
@@ -92,13 +96,24 @@ export default function PaymentsList() {
 
       {error && <div className="bg-rose-400/10 border border-rose-400/30 text-rose-200 px-3 py-2 rounded-lg text-sm mb-4">{error}</div>}
 
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <SearchBox value={q} onChange={setQ} placeholder="Search patient, ID, plan, amount…" />
+        {q && (
+          <span className="text-xs text-slate-400">
+            {payments.length} of {allPayments.length} payments
+          </span>
+        )}
+      </div>
+
       <BulkBar count={sel.count} onClear={sel.clear} onDelete={bulkDelete} deleting={bulkDeleting} variant="dark" />
 
       <div className="glass-dark rounded-2xl overflow-x-auto" data-reveal>
         {loading ? (
           <TableSkeleton rows={6} cols={7} />
         ) : payments.length === 0 ? (
-          <div className="p-10 text-center text-slate-400">No payments recorded yet.</div>
+          <div className="p-10 text-center text-slate-400">
+            {q ? `No payments match “${q}”.` : 'No payments recorded yet.'}
+          </div>
         ) : (
           <table className="w-full min-w-[720px] text-sm">
             <thead className="bg-white/5 text-slate-400 text-left">

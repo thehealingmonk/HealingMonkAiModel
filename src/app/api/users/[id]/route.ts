@@ -8,11 +8,12 @@ import { ROLES, permissionsForRole } from '@/lib/server/permissions';
 export const dynamic = 'force-dynamic';
 
 // Admin edits a staff/patient account: any of name, email, role, or a password
-// reset. Only the fields present in the body are touched. Admin-only.
+// reset. Only the fields present in the body are touched. Admin and reception
+// (reception cannot touch admin accounts or grant the admin role).
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const { user, error } = await requireAuth(req);
   if (error) return error;
-  const roleErr = requireRole(user, 'admin');
+  const roleErr = requireRole(user, 'admin', 'reception');
   if (roleErr) return roleErr;
 
   if (!mongoose.isValidObjectId(params.id)) {
@@ -22,6 +23,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const target = await User.findById(params.id);
   if (!target) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
+  if (user.role !== 'admin' && target.role === 'admin') {
+    return NextResponse.json({ error: 'Only an admin can edit admin accounts' }, { status: 403 });
+  }
+
   const { name, email, role, password } = (await req.json().catch(() => ({}))) || {};
   const isSelf = target._id.equals(user._id);
   // Sessions issued under the old role / password must stop working.
@@ -30,6 +35,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (role !== undefined) {
     if (!ROLES.includes(role)) {
       return NextResponse.json({ error: `role must be one of: ${ROLES.join(', ')}` }, { status: 400 });
+    }
+    if (role === 'admin' && user.role !== 'admin') {
+      return NextResponse.json({ error: 'Only an admin can grant the admin role' }, { status: 403 });
     }
     // Don't let the last admin demote themselves out of the console by accident.
     if (isSelf && role !== 'admin') {
@@ -76,12 +84,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   });
 }
 
-// Admin permanently deletes a user account. Admin-only. You cannot delete
+// Admin/reception permanently deletes a user account (reception cannot delete
+// admins). You cannot delete
 // yourself (prevents locking yourself out of the console).
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const { user, error } = await requireAuth(req);
   if (error) return error;
-  const roleErr = requireRole(user, 'admin');
+  const roleErr = requireRole(user, 'admin', 'reception');
   if (roleErr) return roleErr;
 
   if (!mongoose.isValidObjectId(params.id)) {
@@ -92,6 +101,9 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   if (!target) return NextResponse.json({ error: 'User not found' }, { status: 404 });
   if (target._id.equals(user._id)) {
     return NextResponse.json({ error: 'You cannot delete your own account' }, { status: 400 });
+  }
+  if (user.role !== 'admin' && target.role === 'admin') {
+    return NextResponse.json({ error: 'Only an admin can delete admin accounts' }, { status: 403 });
   }
 
   await target.deleteOne();

@@ -54,11 +54,18 @@ const fieldInput =
 interface Props {
   /** Pre-select a role tab (e.g. when navigating from a module card). */
   initialRole?: Role | 'all';
+  /** Route prefix for a patient's profile; null hides the "Open" button. */
+  patientBase?: string | null;
 }
 
-export default function UserManagement({ initialRole = 'all' }: Props) {
+export default function UserManagement({ initialRole = 'all', patientBase = '/admin/patient' }: Props) {
   const { user: me } = useAuth();
-  const [filter, setFilter] = useState<Role | 'all'>(initialRole);
+  // Reception gets the same page, minus anything to do with admin accounts
+  // (the API enforces this too).
+  const isAdmin = me?.role === 'admin';
+  const roleTabs = isAdmin ? ROLE_TABS : ROLE_TABS.filter((t) => t.value !== 'admin');
+  const [filter, setFilter] = useState<Role | 'all'>(!isAdmin && initialRole === 'admin' ? 'all' : initialRole);
+  const [q, setQ] = useState('');
   const [users, setUsers] = useState<AuthUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -176,8 +183,13 @@ export default function UserManagement({ initialRole = 'all' }: Props) {
     }
   };
 
+  const term = q.trim().toLowerCase();
+  const shown = term
+    ? users.filter((u) => [u.name, u.email, u.role].some((v) => (v || '').toLowerCase().includes(term)))
+    : users;
+
   // ---- Multi-select (excludes your own account, which can't be deleted) ----
-  const selectableIds = users.filter((u) => u.id !== me?.id).map((u) => u.id);
+  const selectableIds = shown.filter((u) => u.id !== me?.id).map((u) => u.id);
   const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));
   const someSelected = selectableIds.some((id) => selectedIds.has(id));
 
@@ -262,7 +274,7 @@ export default function UserManagement({ initialRole = 'all' }: Props) {
                 <option value="doctor">Doctor</option>
                 <option value="reception">Reception</option>
                 <option value="patient">Patient</option>
-                <option value="admin">Admin</option>
+                {isAdmin && <option value="admin">Admin</option>}
               </select>
             </div>
             <div>
@@ -322,7 +334,7 @@ export default function UserManagement({ initialRole = 'all' }: Props) {
       )}
 
       <div className="flex gap-2 mb-4 flex-wrap">
-        {ROLE_TABS.map((tab) => (
+        {roleTabs.map((tab) => (
           <button
             key={tab.value}
             onClick={() => setFilter(tab.value)}
@@ -344,9 +356,18 @@ export default function UserManagement({ initialRole = 'all' }: Props) {
       )}
 
       {filter === 'patient' ? (
-        <PatientAccountsPanel />
+        <PatientAccountsPanel patientBase={patientBase} />
       ) : (
       <>
+      <div className="relative mb-4">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search users by name, email or role…"
+          className="w-full pl-9 pr-3 py-2 rounded-lg border border-white/15 bg-white/5 text-white placeholder-slate-500 text-sm focus:ring-2 focus:ring-emerald-400/60 focus:border-transparent"
+        />
+      </div>
       {/* Bulk action bar — appears once one or more users are selected. */}
       {someSelected && (
         <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5">
@@ -374,7 +395,7 @@ export default function UserManagement({ initialRole = 'all' }: Props) {
       <div className="glass-dark rounded-xl overflow-x-auto">
         {loading ? (
           <div className="p-10 text-center text-slate-400">Loading users…</div>
-        ) : users.length === 0 ? (
+        ) : shown.length === 0 ? (
           <div className="p-10 text-center text-slate-400">No users found.</div>
         ) : (
           <table className="w-full min-w-[640px] text-sm">
@@ -400,7 +421,7 @@ export default function UserManagement({ initialRole = 'all' }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
-              {users.map((u) => {
+              {shown.map((u) => {
                 const isSelf = me?.id === u.id;
                 return (
                   <tr key={u.id} className={selectedIds.has(u.id) ? 'bg-emerald-500/10' : 'hover:bg-white/5'}>
@@ -528,7 +549,7 @@ export default function UserManagement({ initialRole = 'all' }: Props) {
                   <option value="doctor">Doctor</option>
                   <option value="reception">Reception</option>
                   <option value="patient">Patient</option>
-                  <option value="admin">Admin</option>
+                  {(isAdmin || editing.role === 'admin') && <option value="admin">Admin</option>}
                 </select>
               </div>
               <div>
@@ -595,7 +616,7 @@ export default function UserManagement({ initialRole = 'all' }: Props) {
 // Patients tab: the actual registered patients (from the clinic records, not just
 // those who already have a login). Admin can open a patient's full data, or set /
 // reset the login so the patient can sign in to their own panel and see it all.
-function PatientAccountsPanel() {
+function PatientAccountsPanel({ patientBase }: { patientBase: string | null }) {
   const navigate = useNavigate();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
@@ -694,13 +715,15 @@ function PatientAccountsPanel() {
                       >
                         <KeyRound className="w-3.5 h-3.5" /> Set login
                       </button>
+                      {patientBase && (
                       <button
-                        onClick={() => navigate(`/admin/patient/${p.id}`)}
+                        onClick={() => navigate(`${patientBase}/${p.id}`)}
                         className="inline-flex items-center gap-1 text-sm font-medium text-sky-400 hover:text-sky-300"
                         title="Open full patient data"
                       >
                         <ExternalLink className="w-3.5 h-3.5" /> Open
                       </button>
+                      )}
                     </div>
                   </td>
                 </tr>

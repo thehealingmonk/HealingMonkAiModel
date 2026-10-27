@@ -125,7 +125,7 @@ export default function ReceptionBilling() {
                   <input
                     autoFocus
                     className={`${inputCls} pl-9`}
-                    placeholder="Search by name…"
+                    placeholder="Search by name, phone or patient ID…"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                   />

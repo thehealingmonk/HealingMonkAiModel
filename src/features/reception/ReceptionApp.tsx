@@ -1,4 +1,4 @@
-import { UserPlus, CalendarDays, IndianRupee, CalendarRange, CalendarCheck } from 'lucide-react';
+import { UserPlus, CalendarDays, IndianRupee, CalendarRange, CalendarCheck, UserCog } from 'lucide-react';
 import { Routes, Route, Navigate, Outlet, NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/store/auth.store';
 import DashboardShell, { dashNavCls } from '@/components/layout/DashboardShell';
@@ -9,6 +9,7 @@ import ReceptionBilling from '@/features/reception/ReceptionBilling';
 import BookAppointment from '@/features/reception/BookAppointment';
 import PatientForm from '@/features/doctor/PatientForm';
 import AttendanceDesk from '@/features/attendance/AttendanceDesk';
+import UserManagement from '@/features/admin/UserManagement';
 
 // Reception URL space:
 //   /reception             → today's schedule
@@ -16,6 +17,7 @@ import AttendanceDesk from '@/features/attendance/AttendanceDesk';
 //   /reception/book        → book appointment
 //   /reception/collections → all-time collections
 //   /reception/attendance  → monthly package attendance desk
+//   /reception/users       → user management (same as admin, minus admin accounts)
 function Chrome() {
   const { user, logout } = useAuth();
   return (
@@ -40,6 +42,9 @@ function Chrome() {
           </NavLink>
           <NavLink to="/reception/collections" className={dashNavCls}>
             <IndianRupee className="w-4 h-4" /> Billing
+          </NavLink>
+          <NavLink to="/reception/users" className={dashNavCls}>
+            <UserCog className="w-4 h-4" /> Users
           </NavLink>
         </>
       }
@@ -72,6 +77,7 @@ export default function ReceptionApp() {
         <Route path="attendance" element={<AttendanceDesk />} />
         <Route path="collections" element={<ReceptionCollections />} />
         <Route path="billing" element={<ReceptionBilling />} />
+        <Route path="users" element={<UserManagement patientBase={null} />} />
         <Route
           path="book"
           element={<BookAppointment onBack={() => navigate(bookReturn)} onBooked={() => navigate(bookReturn)} />}

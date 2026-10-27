@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { IndianRupee, Wallet, CreditCard, Receipt, Plus, Pencil, Trash2, X, Loader2 } from 'lucide-react';
+import { IndianRupee, Wallet, CreditCard, Receipt, Plus, Pencil, Trash2, X, Loader2, Search } from 'lucide-react';
 import {
   Payment, PaymentStatus, ManualPaymentMethod, listPayments, updatePayment, deletePayment,
 } from '@/services/api';
@@ -12,6 +12,7 @@ import LiveBadge from '@/features/admin/LiveBadge';
 import TableSkeleton from '@/components/ui/TableSkeleton';
 import ExportButton from '@/components/ui/ExportButton';
 import ModalPortal from '@/components/common/ModalPortal';
+import { paymentMatches } from '@/utils/paymentSearch';
 
 const STATUS_BADGE: Record<PaymentStatus, string> = {
   paid: 'bg-emerald-100 text-emerald-700',
@@ -27,8 +28,10 @@ const STATUS_BADGE: Record<PaymentStatus, string> = {
 export default function ReceptionCollections() {
   const { data, loading, refreshing, error: loadError, lastUpdated, refresh } = useLiveData(() => listPayments());
   const navigate = useNavigate();
-  const payments = data?.payments ?? [];
+  const allPayments = data?.payments ?? [];
   const summary = data?.summary;
+  const [q, setQ] = useState('');
+  const payments = allPayments.filter((p) => paymentMatches(p, q));
 
   const [editing, setEditing] = useState<Payment | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -39,8 +42,8 @@ export default function ReceptionCollections() {
   const sel = useRowSelection(payments.map((p) => p.id));
 
   // Fall back to summing the visible rows if the server summary is missing.
-  const totalPaid = summary?.totalPaid ?? payments.filter((p) => p.status === 'paid').reduce((s, p) => s + p.amount, 0);
-  const paidCount = summary?.paidCount ?? payments.filter((p) => p.status === 'paid').length;
+  const totalPaid = summary?.totalPaid ?? allPayments.filter((p) => p.status === 'paid').reduce((s, p) => s + p.amount, 0);
+  const paidCount = summary?.paidCount ?? allPayments.filter((p) => p.status === 'paid').length;
   const cashPaid = summary?.cashPaid ?? 0;
   const onlinePaid = summary?.onlinePaid ?? 0;
 
@@ -117,6 +120,32 @@ export default function ReceptionCollections() {
         <StatCard icon={<CreditCard className="w-5 h-5" />} label="Online" value={formatMoney(onlinePaid)} tone="sky" />
       </div>
 
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <div className="relative flex-1 min-w-[14rem]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search by patient, ID, doctor, service, amount, method…"
+            className="w-full pl-9 pr-9 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+          />
+          {q && (
+            <button
+              onClick={() => setQ('')}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-700"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        {q && (
+          <span className="text-xs text-slate-400">
+            {payments.length} of {allPayments.length} payments
+          </span>
+        )}
+      </div>
+
       <BulkBar
         count={sel.count}
         onClear={sel.clear}
@@ -129,6 +158,8 @@ export default function ReceptionCollections() {
       <div className="bg-white border border-slate-200 rounded-2xl overflow-x-auto shadow-sm" data-reveal>
         {loading ? (
           <TableSkeleton rows={6} cols={7} />
+        ) : allPayments.length > 0 && payments.length === 0 ? (
+          <div className="p-10 text-center text-slate-400">No payments match “{q}”.</div>
         ) : payments.length === 0 ? (
           <div className="p-10 text-center">
             <p className="text-slate-400">No payments recorded yet.</p>
