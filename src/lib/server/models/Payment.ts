@@ -14,6 +14,9 @@ const paymentSchema = new mongoose.Schema(
     status: { type: String, enum: PAYMENT_STATUSES, default: 'created', index: true },
     plan: { type: String, default: '' }, // optional subscription/plan label
     notes: { type: String, default: '' },
+    // The monthly package this payment is towards (the full fee, or one
+    // instalment when the client pays in parts). Null for one-off bills.
+    package: { type: mongoose.Schema.Types.ObjectId, ref: 'PatientPackage', default: null, index: true },
     // Razorpay identifiers (online only).
     razorpayOrderId: { type: String, default: null, index: true },
     razorpayPaymentId: { type: String, default: null },
@@ -37,6 +40,7 @@ paymentSchema.methods.toJSONSafe = function toJSONSafe(this: any) {
     status: this.status,
     plan: this.plan || '',
     notes: this.notes || '',
+    package: this.package ? (this.package._id || this.package).toString() : null,
     razorpayOrderId: this.razorpayOrderId,
     razorpayPaymentId: this.razorpayPaymentId,
     createdAt: this.createdAt,

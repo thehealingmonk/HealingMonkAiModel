@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { IndianRupee, Wallet, CreditCard, Receipt, Plus, Pencil, Trash2, X, Loader2, Search } from 'lucide-react';
+import { IndianRupee, Wallet, CreditCard, Receipt, Plus, Pencil, Trash2, X, Loader2, Search, Hourglass } from 'lucide-react';
 import {
-  Payment, PaymentStatus, ManualPaymentMethod, listPayments, updatePayment, deletePayment,
+  Payment, PaymentStatus, ManualPaymentMethod, PendingDue, listPayments, listDues, updatePayment, deletePayment,
 } from '@/services/api';
+import { formatDay } from '@/lib/packageDates';
 import { formatDate, formatMoney } from '@/utils/formatter';
 import { useLiveData } from '@/hooks/useLiveData';
 import { useRowSelection } from '@/hooks/useRowSelection';
@@ -26,10 +27,25 @@ const STATUS_BADGE: Record<PaymentStatus, string> = {
 // deleted to fix mistakes, individually or in bulk. Totals come from the server
 // aggregation (whole collection), so they stay accurate beyond the 300-row list.
 export default function ReceptionCollections() {
-  const { data, loading, refreshing, error: loadError, lastUpdated, refresh } = useLiveData(() => listPayments());
+  // Payments and pending package dues load together so editing/deleting a bill
+  // refreshes the balances too.
+  const { data, loading, refreshing, error: loadError, lastUpdated, refresh } = useLiveData(() =>
+    Promise.all([listPayments(), listDues().catch(() => null)]).then(([pay, dues]) => ({ ...pay, dues }))
+  );
   const navigate = useNavigate();
   const allPayments = data?.payments ?? [];
   const summary = data?.summary;
+  const dues = data?.dues?.dues ?? [];
+  const totalDue = data?.dues?.totalDue ?? 0;
+  const [showDues, setShowDues] = useState(false);
+
+  const collect = (d: PendingDue) =>
+    navigate('/reception/billing', {
+      state: {
+        patient: { id: d.patient, name: d.patientName || 'Patient', patientId: d.patientCode, mobile: d.patientMobile },
+        packageId: d.id,
+      },
+    });
   const [q, setQ] = useState('');
   const payments = allPayments.filter((p) => paymentMatches(p, q));
 
@@ -113,12 +129,87 @@ export default function ReceptionCollections() {
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm mb-4">{error}</div>}
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" data-reveal>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6" data-reveal>
         <StatCard icon={<IndianRupee className="w-5 h-5" />} label="Total collected" value={formatMoney(totalPaid)} tone="emerald" />
         <StatCard icon={<Receipt className="w-5 h-5" />} label="Payments" value={String(paidCount)} tone="slate" />
         <StatCard icon={<Wallet className="w-5 h-5" />} label="Cash" value={formatMoney(cashPaid)} tone="amber" />
         <StatCard icon={<CreditCard className="w-5 h-5" />} label="Online" value={formatMoney(onlinePaid)} tone="sky" />
+        <button type="button" onClick={() => setShowDues((s) => !s)} className="text-left col-span-2 md:col-span-1">
+          <StatCard
+            icon={<Hourglass className="w-5 h-5" />}
+            label={`Pending · ${dues.length} package${dues.length === 1 ? '' : 's'}`}
+            value={formatMoney(totalDue)}
+            tone="rose"
+          />
+        </button>
       </div>
+
+      {/* Pending package fees — unpaid or partly paid — with one-tap collect. */}
+      {showDues && (
+        <div className="bg-white border border-rose-200 rounded-2xl shadow-sm mb-6 overflow-x-auto" data-reveal>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-rose-100">
+            <h3 className="font-semibold text-slate-900">Pending payments</h3>
+            <button onClick={() => setShowDues(false)} className="text-slate-400 hover:text-slate-600" aria-label="Close">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          {dues.length === 0 ? (
+            <p className="p-6 text-center text-sm text-slate-400">No pending payments — every package is fully paid.</p>
+          ) : (
+            <table className="w-full min-w-[640px] text-sm">
+              <thead className="bg-slate-50 text-slate-500 text-left">
+                <tr>
+                  <th className="px-4 py-2.5 font-medium">Patient</th>
+                  <th className="px-4 py-2.5 font-medium">Package</th>
+                  <th className="px-4 py-2.5 font-medium">Fee</th>
+                  <th className="px-4 py-2.5 font-medium">Paid</th>
+                  <th className="px-4 py-2.5 font-medium">Due</th>
+                  <th className="px-4 py-2.5 font-medium text-right"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {dues.map((d) => (
+                  <tr key={d.id} className="hover:bg-rose-50/40">
+                    <td className="px-4 py-2.5">
+                      <p className="font-medium text-slate-900">{d.patientName || '—'}</p>
+                      <p className="text-xs text-slate-400">
+                        {d.patientCode}
+                        {d.patientMobile ? ` · ${d.patientMobile}` : ''}
+                      </p>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <p className="text-slate-700">{d.name}</p>
+                      <p className="text-xs text-slate-400">
+                        {formatDay(d.startDay)} – {formatDay(d.endDay)}
+                      </p>
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{formatMoney(d.amount)}</td>
+                    <td className="px-4 py-2.5 whitespace-nowrap">
+                      {formatMoney(d.amountPaid)}
+                      <span
+                        className={`ml-2 inline-block px-1.5 py-0.5 rounded-full text-[11px] font-medium capitalize ${
+                          d.paymentStatus === 'partial' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-700'
+                        }`}
+                      >
+                        {d.paymentStatus}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 font-semibold text-rose-700 whitespace-nowrap">{formatMoney(d.amountDue)}</td>
+                    <td className="px-4 py-2.5 text-right">
+                      <button
+                        onClick={() => collect(d)}
+                        className="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg"
+                      >
+                        <IndianRupee className="w-3.5 h-3.5" /> Collect
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <div className="relative flex-1 min-w-[14rem]">
@@ -401,6 +492,7 @@ const TONES: Record<string, string> = {
   slate: 'bg-slate-100 text-slate-700',
   amber: 'bg-amber-50 text-amber-700',
   sky: 'bg-sky-50 text-sky-700',
+  rose: 'bg-rose-50 text-rose-700',
 };
 
 function StatCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: string }) {

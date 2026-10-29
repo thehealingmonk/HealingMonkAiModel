@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Check, RefreshCw, CalendarCheck, Pencil } from 'lucide-react';
+import { Plus, Check, RefreshCw, CalendarCheck, Pencil, IndianRupee } from 'lucide-react';
 import { Patient, PatientPackage, listPackages, markAttendance, unmarkAttendance } from '@/services/api';
 import { useAuth } from '@/store/auth.store';
 import { istDay, formatDay } from '@/lib/packageDates';
 import { sessionsLeft, isExhausted, sessionsLabel, daysLeft } from '@/features/attendance/packageInfo';
 import AttendanceCalendar from '@/features/attendance/AttendanceCalendar';
 import PackageModal from '@/features/attendance/PackageModal';
+import RecordPaymentModal from '@/features/reception/RecordPaymentModal';
+import PaymentBadge from '@/features/attendance/PaymentBadge';
 
 const STATE_BADGE: Record<PatientPackage['state'], string> = {
   active: 'bg-green-100 text-green-700',
@@ -17,7 +19,7 @@ const STATE_BADGE: Record<PatientPackage['state'], string> = {
 // Patient profile section: the patient's monthly packages, each with its
 // attendance calendar. Staff can mark today / fix past days; reception and
 // admin can also start or renew a package from here.
-export default function PatientPackages({ patient }: { patient: Patient }) {
+export default function PatientPackages({ patient, onPaymentRecorded }: { patient: Patient; onPaymentRecorded?: () => void }) {
   const { hasRole } = useAuth();
   const canManage = hasRole('admin', 'reception');
   const today = istDay();
@@ -26,6 +28,8 @@ export default function PatientPackages({ patient }: { patient: Patient }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [modal, setModal] = useState<{ renewFrom?: PatientPackage | null; editPkg?: PatientPackage | null } | null>(null);
+  // Package whose pending balance is being collected.
+  const [collecting, setCollecting] = useState<PatientPackage | null>(null);
 
   const load = useCallback(() => {
     listPackages(patient.id)
@@ -98,8 +102,17 @@ export default function PatientPackages({ patient }: { patient: Patient }) {
                       {left !== null && ` · ${left} left`}
                       {p.state === 'active' && ` · ${daysLeft(p, today)} days left`}
                     </p>
+                    <PaymentBadge pkg={p} className="mt-1.5" />
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {canManage && p.amountDue > 0 && p.state !== 'cancelled' && (
+                      <button
+                        onClick={() => setCollecting(p)}
+                        className="inline-flex items-center gap-1 text-sm font-semibold text-amber-800 bg-amber-50 border border-amber-200 hover:bg-amber-100 px-3 py-1.5 rounded-lg"
+                      >
+                        <IndianRupee className="w-4 h-4" /> Collect
+                      </button>
+                    )}
                     {p.state === 'active' &&
                       (p.markedToday ? (
                         <button
@@ -161,7 +174,22 @@ export default function PatientPackages({ patient }: { patient: Patient }) {
           renewFrom={modal.renewFrom}
           editPkg={modal.editPkg}
           onClose={() => setModal(null)}
-          onSaved={() => load()}
+          onSaved={() => {
+            load();
+            onPaymentRecorded?.();
+          }}
+        />
+      )}
+
+      {collecting && (
+        <RecordPaymentModal
+          presetPatient={patient}
+          presetPackageId={collecting.id}
+          onClose={() => setCollecting(null)}
+          onRecorded={() => {
+            load();
+            onPaymentRecorded?.();
+          }}
         />
       )}
     </>

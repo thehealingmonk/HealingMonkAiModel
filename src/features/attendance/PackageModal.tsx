@@ -3,6 +3,7 @@ import { X, Search, Wallet, CreditCard, Smartphone, Clock, CalendarCheck, Indian
 import { Patient, PatientPackage, ManualPaymentMethod, listPatients, createPackage, updatePackage } from '@/services/api';
 import { istDay, addDays, packageEndDay, formatDay } from '@/lib/packageDates';
 import ModalPortal from '@/components/common/ModalPortal';
+import { formatMoney } from '@/utils/formatter';
 
 interface Props {
   onClose: () => void;
@@ -60,7 +61,12 @@ export default function PackageModal({ onClose, onSaved, presetPatient = null, r
   // Edit mode sets the end date directly instead of a duration.
   const [editEndDay, setEditEndDay] = useState(editPkg?.endDay || '');
   const [amount, setAmount] = useState(source?.amount ? String(source.amount / 100) : '');
+  // Paid now: blank = the full fee; less than the fee = part payment (rest due).
+  const [paidNow, setPaidNow] = useState('');
   const [method, setMethod] = useState<ManualPaymentMethod | 'none'>('cash');
+  const fee = Number(amount) || 0;
+  const paid = method === 'none' ? 0 : paidNow === '' ? fee : Number(paidNow) || 0;
+  const balance = Math.max(0, fee - paid);
   const [notes, setNotes] = useState(editPkg?.notes || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -91,6 +97,7 @@ export default function PackageModal({ onClose, onSaved, presetPatient = null, r
     if (!name.trim()) return setError('Give the package a name.');
     if (!startDay) return setError('Pick a start date.');
     if (editPkg && (!endDay || endDay < startDay)) return setError('End date must be on or after the start date.');
+    if (!editPkg && paid > fee) return setError('Amount paid cannot be more than the package fee.');
     setSaving(true);
     try {
       const r = editPkg
@@ -108,7 +115,8 @@ export default function PackageModal({ onClose, onSaved, presetPatient = null, r
         sessionsTotal: Number(sessions) || 0,
         months,
         startDay,
-        amount: Number(amount) || 0,
+        amount: fee,
+        paidAmount: paid,
         method,
         notes: notes.trim(),
       });
@@ -266,7 +274,17 @@ export default function PackageModal({ onClose, onSaved, presetPatient = null, r
               />
             </div>
             {editPkg ? (
-              <p className="text-xs text-slate-400">Updates the package fee only — edit the bill itself in Collections if needed.</p>
+              <>
+                <p className="text-xs text-slate-600">
+                  Paid so far {formatMoney(editPkg.amountPaid)} ·{' '}
+                  <span className={editPkg.amountDue > 0 ? 'text-amber-700 font-medium' : 'text-emerald-700'}>
+                    {editPkg.amountDue > 0 ? `${formatMoney(editPkg.amountDue)} due` : 'fully paid'}
+                  </span>
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Updates the package fee only — use “Collect” on the package to take a pending payment, or edit bills in Collections.
+                </p>
+              </>
             ) : (
             <>
             <div className="grid grid-cols-4 gap-2">
@@ -284,8 +302,32 @@ export default function PackageModal({ onClose, onSaved, presetPatient = null, r
                 </button>
               ))}
             </div>
+            {method !== 'none' && fee > 0 && (
+              <div className="mt-3">
+                <label className="block text-sm font-medium text-slate-700 mb-2">Amount paid now (₹)</label>
+                <div className="relative">
+                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="number"
+                    min="0"
+                    max={fee}
+                    inputMode="numeric"
+                    className={`${inputCls} pl-9`}
+                    placeholder={`${fee} (full fee)`}
+                    value={paidNow}
+                    onChange={(e) => setPaidNow(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
             <p className="text-xs text-slate-400 mt-1.5">
-              {method === 'none' ? 'No payment recorded now — bill it later from Billing.' : 'Recorded as a paid bill in Collections.'}
+              {method === 'none' || paid === 0
+                ? fee > 0
+                  ? `No payment recorded now — ${formatMoney(fee * 100)} stays pending on the package.`
+                  : 'No payment recorded now.'
+                : balance > 0
+                ? `Part payment: ${formatMoney(paid * 100)} recorded in Collections, ${formatMoney(balance * 100)} stays pending.`
+                : 'Recorded as a paid bill in Collections.'}
             </p>
             </>
             )}

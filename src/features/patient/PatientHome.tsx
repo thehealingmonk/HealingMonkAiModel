@@ -135,6 +135,11 @@ export default function PatientHome() {
                       Attended: {sessionsLabel(pkg)}
                       {pkgLeft !== null && ` · ${pkgLeft} left`}
                     </p>
+                    {pkg.amountDue > 0 && (
+                      <p className="text-amber-300">
+                        Fee {formatMoney(pkg.amount)} · paid {formatMoney(pkg.amountPaid)} · {formatMoney(pkg.amountDue)} pending
+                      </p>
+                    )}
                     {pkg.state === 'active' ? (
                       <p className="text-emerald-300">{daysLeft(pkg, today)} days remaining</p>
                     ) : (

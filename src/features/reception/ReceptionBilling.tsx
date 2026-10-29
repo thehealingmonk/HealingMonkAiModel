@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft, Search, Wallet, CreditCard, Smartphone, IndianRupee, CheckCircle2 } from 'lucide-react';
 import { Patient, ManualPaymentMethod, listPatients, recordPayment } from '@/services/api';
 import { formatMoney } from '@/utils/formatter';
+import { useDuePackages, PackageDuePicker, DueHint, exceedsDue } from '@/features/reception/PackageDuePicker';
 
 const METHODS: { value: ManualPaymentMethod; label: string; icon: React.ReactNode }[] = [
   { value: 'cash', label: 'Cash', icon: <Wallet className="w-4 h-4" /> },
@@ -16,13 +17,16 @@ const METHODS: { value: ManualPaymentMethod; label: string; icon: React.ReactNod
 export default function ReceptionBilling() {
   const navigate = useNavigate();
   const location = useLocation();
-  const preset = (location.state as { patient?: Patient } | null)?.patient ?? null;
+  const navState = location.state as { patient?: Patient; packageId?: string } | null;
+  const preset = navState?.patient ?? null;
 
   const [query, setQuery] = useState('');
   const [patients, setPatients] = useState<Patient[]>([]);
   const [selected, setSelected] = useState<Patient | null>(preset);
 
   const [amount, setAmount] = useState('');
+  // Packages with a pending balance; the payment can go towards one of them.
+  const { duePackages, packageId, duePkg, pick } = useDuePackages(selected?.id ?? null, navState?.packageId ?? null, setAmount);
   const [method, setMethod] = useState<ManualPaymentMethod>('cash');
   const [service, setService] = useState('');
   const [notes, setNotes] = useState('');
@@ -53,11 +57,13 @@ export default function ReceptionBilling() {
     setError('');
     if (!selected) return setError('Please select the patient this bill is for.');
     if (!amountValid) return setError('Enter a valid amount greater than 0.');
+    if (exceedsDue(duePkg, amount)) return setError(`Only ${formatMoney(duePkg!.amountDue)} is due on this package.`);
 
     setSaving(true);
     try {
       await recordPayment({
         patientId: selected.id,
+        ...(duePkg ? { packageId: duePkg.id } : {}),
         amount: Number(amount),
         method,
         plan: service.trim(),
@@ -153,6 +159,12 @@ export default function ReceptionBilling() {
 
           {/* Right: bill details */}
           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 space-y-5">
+            <PackageDuePicker
+              duePackages={duePackages}
+              packageId={packageId}
+              onPick={pick}
+              labelCls="block text-sm font-semibold text-slate-800 mb-2"
+            />
             <div>
               <label className="block text-sm font-semibold text-slate-800 mb-2">2 · Amount paid (₹)</label>
               <div className="relative">
@@ -168,6 +180,7 @@ export default function ReceptionBilling() {
                   onChange={(e) => setAmount(e.target.value)}
                 />
               </div>
+              <DueHint duePkg={duePkg} amount={amount} />
             </div>
 
             <div>

@@ -585,6 +585,7 @@ export interface Payment {
   status: PaymentStatus;
   plan: string; // service / plan label
   notes: string;
+  package?: string | null; // monthly package this payment is towards
   razorpayOrderId: string | null;
   razorpayPaymentId: string | null;
   createdAt?: string;
@@ -612,6 +613,7 @@ export async function listPayments(
 // Reception/admin: manually record a bill the patient has paid at the desk.
 export async function recordPayment(payload: {
   patientId: string;
+  packageId?: string; // pay (part of) this package's fee
   amount: number; // rupees (converted to paise server-side)
   method: ManualPaymentMethod;
   plan?: string; // service / treatment label
@@ -633,6 +635,28 @@ export async function deletePayment(id: string): Promise<{ ok: boolean; id: stri
   return request(`/payments/${id}`, { method: 'DELETE' });
 }
 
+export type PackagePaymentStatus = 'paid' | 'partial' | 'unpaid' | 'free';
+
+/** A package whose fee isn't fully paid yet. */
+export interface PendingDue {
+  id: string; // package id
+  patient: string;
+  patientName: string | null;
+  patientCode: string | null;
+  patientMobile: string | null;
+  name: string;
+  startDay: string;
+  endDay: string;
+  amount: number; // paise — package fee
+  amountPaid: number; // paise
+  amountDue: number; // paise
+  paymentStatus: PackagePaymentStatus;
+}
+
+export async function listDues(): Promise<{ dues: PendingDue[]; totalDue: number; partialCount: number }> {
+  return request('/payments/dues');
+}
+
 // ---- Monthly packages & attendance ----
 
 export type PackageState = 'active' | 'upcoming' | 'expired' | 'cancelled';
@@ -651,6 +675,9 @@ export interface PatientPackage {
   createdAt?: string;
   // Live usage, computed server-side.
   state: PackageState;
+  amountPaid: number; // paise paid so far (all instalments)
+  amountDue: number; // paise still pending
+  paymentStatus: PackagePaymentStatus;
   attendedDays: string[];
   sessionsUsed: number;
   markedToday: boolean;
@@ -673,6 +700,7 @@ export async function createPackage(payload: {
   months: number;
   startDay: string;
   amount?: number; // rupees
+  paidAmount?: number; // rupees paid now; defaults to the full fee
   method?: ManualPaymentMethod | 'none';
   notes?: string;
 }): Promise<{ package: PatientPackage }> {

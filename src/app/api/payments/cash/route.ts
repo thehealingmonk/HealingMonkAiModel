@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { connectDB } from '@/lib/server/db';
 import { Payment } from '@/lib/server/models/Payment';
 import { Patient } from '@/lib/server/models/Patient';
+import { PatientPackage, paidByPackage } from '@/lib/server/packages';
 import { requireAuth, requireRole } from '@/middleware/auth';
 import { sendMail, paymentReceiptEmail } from '@/lib/server/mailer';
 
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
 
   try {
     await connectDB();
-    const { patientId, amount, method, plan, notes } = (await req.json().catch(() => ({}))) || {};
+    const { patientId, packageId, amount, method, plan, notes } = (await req.json().catch(() => ({}))) || {};
     const paise = Math.round(Number(amount) * 100);
     if (!patientId || !paise || paise <= 0) {
       return NextResponse.json({ error: 'patientId and a positive amount are required' }, { status: 400 });
@@ -30,13 +31,31 @@ export async function POST(req: NextRequest) {
     const patient = mongoose.isValidObjectId(patientId) ? await Patient.findById(patientId) : null;
     if (!patient) return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
 
+    // Optional: this payment is (part of) a monthly package fee. It must be the
+    // same patient's package and must not take the package past its fee.
+    let pkg: any = null;
+    if (packageId) {
+      pkg = mongoose.isValidObjectId(packageId) ? await PatientPackage.findById(packageId) : null;
+      if (!pkg || pkg.patient.toString() !== patient._id.toString()) {
+        return NextResponse.json({ error: 'Package not found for this patient' }, { status: 404 });
+      }
+      const due = Math.max(0, pkg.amount - ((await paidByPackage([pkg])).get(pkg._id.toString()) || 0));
+      if (paise > due) {
+        return NextResponse.json(
+          { error: due > 0 ? `Only ₹${due / 100} is due on this package` : 'This package is already fully paid' },
+          { status: 400 }
+        );
+      }
+    }
+
     const payment = await Payment.create({
       patient: patient._id,
+      package: pkg ? pkg._id : null,
       amount: paise,
       currency: 'INR',
       method: payMethod,
       status: 'paid',
-      plan: plan || '',
+      plan: plan || (pkg ? pkg.name : ''),
       notes: notes || '',
       collectedBy: user._id,
     });

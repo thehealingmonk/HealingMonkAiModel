@@ -372,7 +372,7 @@ export default function PatientProfile({ patient, onBack, onStartAssessment }: P
       )}
 
       {/* Monthly package + attendance calendar. */}
-      <PatientPackages patient={current} />
+      <PatientPackages patient={current} onPaymentRecorded={loadPayments} />
 
       {/* Documents — X-rays, prescriptions, outside reports. Uploaded by
           reception/doctor/admin; multiple files per patient. */}

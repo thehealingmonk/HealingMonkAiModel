@@ -65,6 +65,12 @@ export async function POST(req: NextRequest) {
     const sessionsTotal = Math.max(0, Math.round(Number(body.sessionsTotal) || 0));
     const startDay = body.startDay ? String(body.startDay) : istDay();
     const paise = Math.max(0, Math.round(Number(body.amount || 0) * 100));
+    // Paid now — the full fee unless the client is paying part of it (the rest
+    // stays as a balance due on the package and is collected later).
+    const paidPaise =
+      body.paidAmount === undefined || body.paidAmount === ''
+        ? paise
+        : Math.max(0, Math.round(Number(body.paidAmount || 0) * 100));
 
     if (!body.patientId || !name) {
       return NextResponse.json({ error: 'Patient and package name are required' }, { status: 400 });
@@ -73,23 +79,11 @@ export async function POST(req: NextRequest) {
     if (months < 1 || months > 12) {
       return NextResponse.json({ error: 'Duration must be 1–12 months' }, { status: 400 });
     }
+    if (paidPaise > paise) {
+      return NextResponse.json({ error: 'Amount paid cannot be more than the package fee' }, { status: 400 });
+    }
     const patient = mongoose.isValidObjectId(body.patientId) ? await Patient.findById(body.patientId) : null;
     if (!patient) return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
-
-    let paymentId = null;
-    if (paise > 0 && MANUAL_METHODS.includes(body.method)) {
-      const payment = await Payment.create({
-        patient: patient._id,
-        amount: paise,
-        currency: 'INR',
-        method: body.method,
-        status: 'paid',
-        plan: name,
-        notes: `Monthly package from ${startDay}`,
-        collectedBy: user._id,
-      });
-      paymentId = payment._id;
-    }
 
     const pkg = await PatientPackage.create({
       patient: patient._id,
@@ -99,9 +93,27 @@ export async function POST(req: NextRequest) {
       endDay: packageEndDay(startDay, months),
       amount: paise,
       notes: String(body.notes || '').trim(),
-      payment: paymentId,
       createdBy: user._id,
     });
+
+    if (paidPaise > 0 && MANUAL_METHODS.includes(body.method)) {
+      const payment = await Payment.create({
+        patient: patient._id,
+        package: pkg._id,
+        amount: paidPaise,
+        currency: 'INR',
+        method: body.method,
+        status: 'paid',
+        plan: name,
+        notes:
+          paidPaise < paise
+            ? `Monthly package from ${startDay} — part payment (₹${(paise - paidPaise) / 100} due)`
+            : `Monthly package from ${startDay}`,
+        collectedBy: user._id,
+      });
+      pkg.payment = payment._id;
+      await pkg.save();
+    }
     await pkg.populate('patient', 'name patientId mobile');
     const [out] = await withUsage([pkg]);
     return NextResponse.json({ package: out }, { status: 201 });

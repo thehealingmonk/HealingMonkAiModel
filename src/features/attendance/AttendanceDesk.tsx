@@ -13,8 +13,10 @@ import {
   ExternalLink,
   CalendarX,
   Pencil,
+  IndianRupee,
 } from 'lucide-react';
 import {
+  Patient,
   PatientPackage,
   listPackages,
   markAttendance,
@@ -27,6 +29,9 @@ import { istDay, formatDay } from '@/lib/packageDates';
 import { daysLeft, sessionsLeft, isExpiring, isExhausted, sessionsLabel } from '@/features/attendance/packageInfo';
 import AttendanceCalendar from '@/features/attendance/AttendanceCalendar';
 import PackageModal from '@/features/attendance/PackageModal';
+import PaymentBadge from '@/features/attendance/PaymentBadge';
+import RecordPaymentModal from '@/features/reception/RecordPaymentModal';
+import { formatMoney } from '@/utils/formatter';
 
 type Tab = 'today' | 'expiring' | 'expired';
 
@@ -55,6 +60,7 @@ export default function AttendanceDesk({ profileBase }: Props) {
   const [creating, setCreating] = useState(false);
   const [renewing, setRenewing] = useState<PatientPackage | null>(null);
   const [editing, setEditing] = useState<PatientPackage | null>(null);
+  const [collecting, setCollecting] = useState<PatientPackage | null>(null);
 
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -278,6 +284,9 @@ export default function AttendanceDesk({ profileBase }: Props) {
                             ? `until ${formatDay(p.endDay)}`
                             : `${dLeft} day${dLeft === 1 ? '' : 's'} left`}
                         </span>
+                        {p.amountDue > 0 && p.state !== 'cancelled' && (
+                          <span className="text-amber-700 font-medium">{formatMoney(p.amountDue)} due</span>
+                        )}
                       </span>
                     </span>
                   </button>
@@ -345,6 +354,11 @@ export default function AttendanceDesk({ profileBase }: Props) {
                         <span className="text-slate-400">Attended:</span> {sessionsLabel(p)}
                         {left !== null && ` · ${left} left`}
                       </p>
+                      {p.paymentStatus !== 'free' && (
+                        <p>
+                          <span className="text-slate-400">Fee:</span> <PaymentBadge pkg={p} />
+                        </p>
+                      )}
                       {p.notes && (
                         <p>
                           <span className="text-slate-400">Notes:</span> {p.notes}
@@ -358,6 +372,14 @@ export default function AttendanceDesk({ profileBase }: Props) {
                         )}
                         {canManage && (
                           <>
+                            {p.amountDue > 0 && (
+                              <button
+                                onClick={() => setCollecting(p)}
+                                className={`${secondaryBtn} text-amber-800 border-amber-200 bg-amber-50 hover:bg-amber-100`}
+                              >
+                                <IndianRupee className="w-3.5 h-3.5" /> Collect {formatMoney(p.amountDue)}
+                              </button>
+                            )}
                             <button onClick={() => setEditing(p)} className={secondaryBtn}>
                               <Pencil className="w-3.5 h-3.5" /> Edit
                             </button>
@@ -392,6 +414,17 @@ export default function AttendanceDesk({ profileBase }: Props) {
             setEditing(null);
           }}
           onSaved={() => load()}
+        />
+      )}
+
+      {collecting && (
+        <RecordPaymentModal
+          presetPatient={
+            { id: collecting.patient, name: collecting.patientName, patientId: collecting.patientCode, mobile: collecting.patientMobile } as Patient
+          }
+          presetPackageId={collecting.id}
+          onClose={() => setCollecting(null)}
+          onRecorded={() => load()}
         />
       )}
     </div>

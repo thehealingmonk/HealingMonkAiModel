@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { X, Search, Wallet, CreditCard, Smartphone, IndianRupee } from 'lucide-react';
 import { Patient, ManualPaymentMethod, listPatients, recordPayment } from '@/services/api';
 import ModalPortal from '@/components/common/ModalPortal';
+import { formatMoney } from '@/utils/formatter';
+import { useDuePackages, PackageDuePicker, DueHint, exceedsDue } from '@/features/reception/PackageDuePicker';
 
 interface Props {
   onClose: () => void;
@@ -9,6 +11,8 @@ interface Props {
   onRecorded: () => void;
   /** Optionally pre-select a patient (e.g. billing straight from a profile). */
   presetPatient?: Patient | null;
+  /** Optionally pre-select the package this payment is towards (collecting a pending balance). */
+  presetPackageId?: string | null;
 }
 
 const METHODS: { value: ManualPaymentMethod; label: string; icon: React.ReactNode }[] = [
@@ -20,12 +24,14 @@ const METHODS: { value: ManualPaymentMethod; label: string; icon: React.ReactNod
 // Manual billing at the reception desk: pick the client, type how much they paid
 // and by which method, add an optional service/notes, and record it. The payment
 // then shows up in Collections with the patient info and amount. No auto-charge.
-export default function RecordPaymentModal({ onClose, onRecorded, presetPatient = null }: Props) {
+export default function RecordPaymentModal({ onClose, onRecorded, presetPatient = null, presetPackageId = null }: Props) {
   const [query, setQuery] = useState('');
   const [patients, setPatients] = useState<Patient[]>([]);
   const [selected, setSelected] = useState<Patient | null>(presetPatient);
 
   const [amount, setAmount] = useState('');
+  // Packages with a pending balance; the payment can go towards one of them.
+  const { duePackages, packageId, duePkg, pick } = useDuePackages(selected?.id ?? null, presetPackageId, setAmount);
   const [method, setMethod] = useState<ManualPaymentMethod>('cash');
   const [service, setService] = useState('');
   const [notes, setNotes] = useState('');
@@ -49,17 +55,20 @@ export default function RecordPaymentModal({ onClose, onRecorded, presetPatient 
   }, [query, selected]);
 
   const amountValid = useMemo(() => Number(amount) > 0, [amount]);
+  const overDue = exceedsDue(duePkg, amount);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (!selected) return setError('Please select the patient this bill is for.');
     if (!amountValid) return setError('Enter a valid amount greater than 0.');
+    if (overDue) return setError(`Only ${formatMoney(duePkg!.amountDue)} is due on this package.`);
 
     setSaving(true);
     try {
       await recordPayment({
         patientId: selected.id,
+        ...(duePkg ? { packageId: duePkg.id } : {}),
         amount: Number(amount),
         method,
         plan: service.trim(),
@@ -141,6 +150,9 @@ export default function RecordPaymentModal({ onClose, onRecorded, presetPatient 
             )}
           </div>
 
+          {/* Pending package balance this payment goes towards */}
+          <PackageDuePicker duePackages={duePackages} packageId={packageId} onPick={pick} />
+
           {/* Amount */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Amount paid (₹)</label>
@@ -157,6 +169,7 @@ export default function RecordPaymentModal({ onClose, onRecorded, presetPatient 
                 onChange={(e) => setAmount(e.target.value)}
               />
             </div>
+            <DueHint duePkg={duePkg} amount={amount} />
           </div>
 
           {/* Method */}
