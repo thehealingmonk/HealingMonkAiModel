@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Camera, ChevronLeft, CheckCircle2, RotateCcw, SwitchCamera, ArrowRight,
 } from 'lucide-react';
-import { openCamera } from '@/lib/camera';
+import { openCamera, getPreferredLens } from '@/lib/camera';
 import { initializePoseLandmarker, detectPose, Landmark, toIsotropic, frameAspect } from '@/lib/poseDetection';
 import { extractErgoAngles } from '@/lib/ergo/landmarksToAngles';
 import { ErgoCaptures, ErgoCapturedFrame } from './ergoTypes';
@@ -107,8 +107,13 @@ export default function ErgoCapture({ onComplete, onBack }: Props) {
   useEffect(() => {
     disposed.current = false;
     const setup = async () => {
+      // Start the model download before opening the camera so the two overlap.
+      const model = initializePoseLandmarker();
+      model.catch(() => {}); // handled below; avoid an unhandled rejection
+      const lens = getPreferredLens('user');
+      setFacingMode(lens);
       try {
-        await startStream('user');
+        await startStream(lens);
       } catch (err) {
         setStatus('Camera setup failed. Please allow camera access.');
         console.error(err);
@@ -116,7 +121,7 @@ export default function ErgoCapture({ onComplete, onBack }: Props) {
       }
       try {
         setStatus('Loading pose model...');
-        await initializePoseLandmarker();
+        await model;
         setStatus('Tracking...');
       } catch (err) {
         setStatus('Pose model failed to load. Check your connection.');

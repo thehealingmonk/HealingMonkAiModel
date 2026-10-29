@@ -16,6 +16,7 @@
 import type { ObjectDetector as ObjectDetectorInstance } from '@mediapipe/tasks-vision';
 import { DetectedObject } from './ergoTypes';
 import { COCO_TO_ERGO } from './ergoKnowledge';
+import { loadVisionFileset } from '@/lib/visionRuntime';
 
 let objectDetector: ObjectDetectorInstance | null = null;
 
@@ -41,13 +42,11 @@ export function initializeObjectDetector(): Promise<ObjectDetectorInstance> {
 }
 
 async function loadObjectDetector(): Promise<ObjectDetectorInstance> {
-  const { ObjectDetector, FilesetResolver } = await import('@mediapipe/tasks-vision');
-
-  // Same pinned WASM build as the pose landmarker (see poseDetection.ts) so both
-  // models run against a runtime that matches the bundled JS API.
-  const vision = await FilesetResolver.forVisionTasks(
-    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm'
-  );
+  // Same shared, pinned WASM runtime as the pose landmarker (see visionRuntime).
+  const [{ ObjectDetector }, vision] = await Promise.all([
+    import('@mediapipe/tasks-vision'),
+    loadVisionFileset(),
+  ]);
 
   const create = (delegate: 'GPU' | 'CPU') =>
     ObjectDetector.createFromOptions(vision, {

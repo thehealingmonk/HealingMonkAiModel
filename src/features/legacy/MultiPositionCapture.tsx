@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { openCamera } from '@/lib/camera';
+import { openCamera, getPreferredLens } from '@/lib/camera';
 import { initializePoseLandmarker, detectPose, drawPoseSkeleton } from '@/lib/poseDetection';
 import { analyzePosture } from '@/lib/poseAnalyzer';
 import { PAIN_AREAS, PosePosition, CapturedImage } from '@/lib/painAssessment';
@@ -58,11 +58,16 @@ export default function MultiPositionCapture({ selectedAreas, onComplete, onSkip
   useEffect(() => {
     const setup = async () => {
       try {
-        await initializePoseLandmarker();
-        await startStream('user', () => {
-          setPhase('guidance');
-          beginAssessment();
-        });
+        // Load the model and open the camera in parallel, not one after another.
+        const lens = getPreferredLens('user');
+        setFacingMode(lens);
+        await Promise.all([
+          initializePoseLandmarker(),
+          startStream(lens, () => {
+            setPhase('guidance');
+            beginAssessment();
+          }),
+        ]);
       } catch (err) {
         setStatus('Camera setup failed');
         console.error(err);

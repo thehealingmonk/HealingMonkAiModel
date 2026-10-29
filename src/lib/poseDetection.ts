@@ -1,5 +1,6 @@
 import type { PoseLandmarker as PoseLandmarkerInstance } from '@mediapipe/tasks-vision';
 import { PoseSmoother } from '@/lib/poseSmoothing';
+import { loadVisionFileset } from '@/lib/visionRuntime';
 
 let poseLandmarker: PoseLandmarkerInstance | null = null;
 
@@ -26,17 +27,11 @@ export function initializePoseLandmarker(): Promise<PoseLandmarkerInstance> {
 }
 
 async function loadPoseLandmarker(): Promise<PoseLandmarkerInstance> {
-  // Load the multi-MB MediaPipe runtime ON DEMAND (dynamic import) so it is
-  // code-split into its own chunk. The marketing site and patient intake never
-  // download it — it arrives only when the assessment actually needs the camera.
-  const { PoseLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision');
-
-  // Pin the WASM build to the exact installed @mediapipe/tasks-vision version.
-  // Using `@latest` can pull a WASM runtime newer than the bundled JS API, which
-  // silently breaks landmark detection on some days — unacceptable for clinic use.
-  const vision = await FilesetResolver.forVisionTasks(
-    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm'
-  );
+  // Code-split MediaPipe chunk + shared, pinned WASM runtime (see visionRuntime).
+  const [{ PoseLandmarker }, vision] = await Promise.all([
+    import('@mediapipe/tasks-vision'),
+    loadVisionFileset(),
+  ]);
 
   const create = (delegate: 'GPU' | 'CPU') =>
     PoseLandmarker.createFromOptions(vision, {

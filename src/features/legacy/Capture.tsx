@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { SwitchCamera } from 'lucide-react';
-import { openCamera } from '@/lib/camera';
+import { openCamera, getPreferredLens } from '@/lib/camera';
 import { initializePoseLandmarker, detectPose, drawPoseSkeleton, Landmark } from '@/lib/poseDetection';
 import { analyzePosture, calculateMobilityScore, calculateStabilityScore } from '@/lib/poseAnalyzer';
 import {
@@ -75,8 +75,10 @@ export default function Capture({ onComplete }: Props) {
   useEffect(() => {
     const setup = async () => {
       try {
-        await initializePoseLandmarker();
-        await startStream('user');
+        // Load the model and open the camera in parallel, not one after another.
+        const lens = getPreferredLens('user');
+        setFacingMode(lens);
+        await Promise.all([initializePoseLandmarker(), startStream(lens)]);
       } catch (err) {
         setStatus('Camera setup failed');
         console.error(err);

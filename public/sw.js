@@ -8,6 +8,11 @@
    - only content-hashed static assets (/_next/static, images, fonts) are cached,
    - respondWith() ALWAYS receives a valid Response (never undefined). */
 const CACHE = 'hm-shell-v3';
+// AI runtime + models (MediaPipe WASM from jsdelivr, .task/.tflite from Google's
+// model bucket). They are ~20 MB and every URL is VERSION-PINNED, so they are
+// immutable and safe to serve CACHE-FIRST: after the first visit the AI starts
+// without downloading anything. Bump this name if the pinned versions change.
+const AI_CACHE = 'hm-ai-models-v1';
 const SHELL = '/';
 
 self.addEventListener('install', (event) => {
@@ -22,7 +27,9 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) =>
+        Promise.all(keys.filter((k) => k !== CACHE && k !== AI_CACHE).map((k) => caches.delete(k)))
+      )
       .then(() => self.clients.claim())
   );
 });
@@ -35,9 +42,33 @@ function isCacheableAsset(url) {
   );
 }
 
+// Pinned, immutable AI assets (see AI_CACHE).
+function isAiAsset(url) {
+  return (
+    (url.hostname === 'cdn.jsdelivr.net' && url.pathname.startsWith('/npm/@mediapipe/tasks-vision@')) ||
+    (url.hostname === 'storage.googleapis.com' && url.pathname.startsWith('/mediapipe-models/'))
+  );
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
+
+  if (req.method === 'GET' && isAiAsset(url)) {
+    event.respondWith(
+      caches.open(AI_CACHE).then(async (cache) => {
+        const cached = await cache.match(req, { ignoreVary: true });
+        if (cached) return cached;
+        const res = await fetch(req);
+        // Store only complete, successful responses (opaque = no-cors script).
+        if (res && (res.status === 200 || res.type === 'opaque')) {
+          cache.put(req, res.clone()).catch(() => {});
+        }
+        return res;
+      })
+    );
+    return;
+  }
 
   // Only handle same-origin GET. Everything else (API, cross-origin, POST…) is
   // left to the browser's default handling — we don't call respondWith at all.

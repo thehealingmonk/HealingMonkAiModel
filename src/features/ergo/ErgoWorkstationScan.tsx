@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Camera, ChevronLeft, CheckCircle2, SwitchCamera, ArrowRight, ScanSearch, SkipForward,
 } from 'lucide-react';
-import { openCamera } from '@/lib/camera';
+import { openCamera, getPreferredLens } from '@/lib/camera';
 import { initializePoseLandmarker, detectPose, Landmark, toIsotropic, frameAspect } from '@/lib/poseDetection';
 import { initializeObjectDetector, detectObjects } from '@/lib/ergo/objectDetection';
 import { extractErgoAngles } from '@/lib/ergo/landmarksToAngles';
@@ -92,18 +92,22 @@ export default function ErgoWorkstationScan({ onComplete, onBack }: Props) {
   useEffect(() => {
     disposed.current = false;
     const setup = async () => {
+      // Download both models in parallel, and before the camera opens, so the
+      // network work overlaps instead of running one step after another.
+      const models = Promise.all([initializePoseLandmarker(), initializeObjectDetector()]);
+      models.catch(() => {}); // handled below; avoid an unhandled rejection
+      const lens = getPreferredLens('environment');
+      setFacingMode(lens);
       try {
-        await startStream('environment');
+        await startStream(lens);
       } catch (err) {
         setStatus('Camera setup failed. Please allow camera access.');
         console.error(err);
         return;
       }
       try {
-        setStatus('Loading pose model…');
-        await initializePoseLandmarker();
-        setStatus('Loading object model…');
-        await initializeObjectDetector();
+        setStatus('Loading AI models…');
+        await models;
         objectsReady.current = true;
         setStatus('Scanning…');
       } catch (err) {

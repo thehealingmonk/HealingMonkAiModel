@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { openCamera } from '@/lib/camera';
+import { openCamera, getPreferredLens } from '@/lib/camera';
 import { initializePoseLandmarker, detectPose, Landmark, toIsotropic } from '@/lib/poseDetection';
 import { computePostureChain, PostureChain } from '@/lib/postureVisualizer';
 import { computeClinicalPlumbLine, drawClinicalPlumbLine, ClinicalPlumbLine } from '@/lib/plumbLine';
@@ -178,8 +178,13 @@ export default function ClinicalCapture({ assessments, onComplete, onBack, exter
       // the (multi-MB) pose model in parallel. The render loop safely returns no
       // landmarks until the model is ready, so tracking simply switches on the
       // moment the download finishes — the doctor never waits on a black screen.
+      // The model download starts BEFORE the camera opens so the two overlap.
+      const model = initializePoseLandmarker();
+      model.catch(() => {}); // handled below; avoid an unhandled rejection
+      const lens = getPreferredLens('user');
+      setFacingMode(lens);
       try {
-        await startStream('user');
+        await startStream(lens);
       } catch (err) {
         setStatus('Camera setup failed. Please allow camera access.');
         console.error(err);
@@ -187,7 +192,7 @@ export default function ClinicalCapture({ assessments, onComplete, onBack, exter
       }
       try {
         setStatus('Loading pose model...');
-        await initializePoseLandmarker();
+        await model;
         setStatus('Tracking...');
       } catch (err) {
         setStatus('Pose model failed to load. Check your connection.');
