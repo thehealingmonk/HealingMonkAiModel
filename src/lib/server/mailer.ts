@@ -278,12 +278,14 @@ export function paymentReceiptEmail({
   currency,
   method,
   reference,
+  paidOn,
 }: {
   patientName: string;
   amount: number;
   currency?: string;
   method: string;
   reference?: string;
+  paidOn?: string; // display date, only for back-dated desk payments
 }) {
   const amt = `${currency || 'INR'} ${(amount / 100).toFixed(2)}`;
   return {
@@ -294,6 +296,7 @@ export function paymentReceiptEmail({
        <table style="margin:12px 0">
          ${row('Amount', amt)}
          ${row('Method', methodLabel(method))}
+         ${paidOn ? row('Paid on', paidOn) : ''}
          ${reference ? row('Reference', reference) : ''}
        </table>`
     ),

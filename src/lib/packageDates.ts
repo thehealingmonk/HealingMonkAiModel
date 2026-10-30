@@ -46,3 +46,9 @@ export function formatDay(day: string): string {
   if (!isDay(day)) return '—';
   return toUTC(day).toLocaleDateString('en-IN', { dateStyle: 'medium', timeZone: 'UTC' });
 }
+
+/** A moment on IST day `day` at the current IST clock time (backdating keeps a natural time-of-day). */
+export function atIstDay(day: string, now: Date = new Date()): Date {
+  const time = now.toLocaleTimeString('en-GB', { timeZone: TZ, hour12: false });
+  return new Date(`${day}T${time}+05:30`);
+}

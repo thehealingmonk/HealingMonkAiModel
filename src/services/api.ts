@@ -618,6 +618,7 @@ export async function recordPayment(payload: {
   method: ManualPaymentMethod;
   plan?: string; // service / treatment label
   notes?: string;
+  paidOn?: string; // YYYY-MM-DD (IST): omit for today, an earlier day to back-date
 }): Promise<{ payment: Payment }> {
   return request('/payments/cash', { method: 'POST', body: JSON.stringify(payload) });
 }

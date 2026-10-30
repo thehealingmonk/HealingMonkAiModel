@@ -6,6 +6,7 @@ import { Patient } from '@/lib/server/models/Patient';
 import { PatientPackage, paidByPackage } from '@/lib/server/packages';
 import { requireAuth, requireRole } from '@/middleware/auth';
 import { sendMail, paymentReceiptEmail } from '@/lib/server/mailer';
+import { istDay, isDay, atIstDay, formatDay } from '@/lib/packageDates';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,11 +21,22 @@ export async function POST(req: NextRequest) {
 
   try {
     await connectDB();
-    const { patientId, packageId, amount, method, plan, notes } = (await req.json().catch(() => ({}))) || {};
+    const { patientId, packageId, amount, method, plan, notes, paidOn } = (await req.json().catch(() => ({}))) || {};
     const paise = Math.round(Number(amount) * 100);
     if (!patientId || !paise || paise <= 0) {
       return NextResponse.json({ error: 'patientId and a positive amount are required' }, { status: 400 });
     }
+    // Optional back-dating: the IST day the money was actually received. It
+    // becomes the payment's createdAt, so Collections, analytics and dues all
+    // count it on that day. Future days are rejected.
+    const today = istDay();
+    if (paidOn && !isDay(paidOn)) {
+      return NextResponse.json({ error: 'Invalid payment date' }, { status: 400 });
+    }
+    if (paidOn && paidOn > today) {
+      return NextResponse.json({ error: 'Payment date cannot be in the future' }, { status: 400 });
+    }
+    const backdated = Boolean(paidOn) && paidOn < today;
     // Default to cash; only accept the desk-collectable methods (never 'online',
     // which is reserved for the Razorpay gateway flow).
     const payMethod = MANUAL_METHODS.includes(method) ? method : 'cash';
@@ -58,6 +70,7 @@ export async function POST(req: NextRequest) {
       plan: plan || (pkg ? pkg.name : ''),
       notes: notes || '',
       collectedBy: user._id,
+      ...(backdated ? { createdAt: atIstDay(paidOn) } : {}),
     });
 
     if (patient.email) {
@@ -68,6 +81,7 @@ export async function POST(req: NextRequest) {
           amount: paise,
           currency: 'INR',
           method: payMethod,
+          ...(backdated ? { paidOn: formatDay(paidOn) } : {}),
         }),
       });
     }

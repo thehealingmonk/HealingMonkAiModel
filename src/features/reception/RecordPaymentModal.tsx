@@ -4,6 +4,7 @@ import { Patient, ManualPaymentMethod, listPatients, recordPayment } from '@/ser
 import ModalPortal from '@/components/common/ModalPortal';
 import { formatMoney } from '@/utils/formatter';
 import { useDuePackages, PackageDuePicker, DueHint, exceedsDue } from '@/features/reception/PackageDuePicker';
+import { istDay, formatDay } from '@/lib/packageDates';
 
 interface Props {
   onClose: () => void;
@@ -35,6 +36,9 @@ export default function RecordPaymentModal({ onClose, onRecorded, presetPatient 
   const [method, setMethod] = useState<ManualPaymentMethod>('cash');
   const [service, setService] = useState('');
   const [notes, setNotes] = useState('');
+  // Day the money was received — defaults to today, can be back-dated.
+  const today = istDay();
+  const [paidOn, setPaidOn] = useState(today);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -63,6 +67,7 @@ export default function RecordPaymentModal({ onClose, onRecorded, presetPatient 
     if (!selected) return setError('Please select the patient this bill is for.');
     if (!amountValid) return setError('Enter a valid amount greater than 0.');
     if (overDue) return setError(`Only ${formatMoney(duePkg!.amountDue)} is due on this package.`);
+    if (!paidOn || paidOn > today) return setError('Pick a payment date that is today or earlier.');
 
     setSaving(true);
     try {
@@ -73,6 +78,7 @@ export default function RecordPaymentModal({ onClose, onRecorded, presetPatient 
         method,
         plan: service.trim(),
         notes: notes.trim(),
+        paidOn,
       });
       onRecorded();
       onClose();
@@ -192,6 +198,21 @@ export default function RecordPaymentModal({ onClose, onRecorded, presetPatient 
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Payment date (back-dating) */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Payment date</label>
+            <input
+              type="date"
+              max={today}
+              className={inputCls}
+              value={paidOn}
+              onChange={(e) => setPaidOn(e.target.value)}
+            />
+            {paidOn && paidOn < today && (
+              <p className="text-xs text-amber-600 mt-1">Back-dated — will be recorded on {formatDay(paidOn)}.</p>
+            )}
           </div>
 
           {/* Service / plan */}

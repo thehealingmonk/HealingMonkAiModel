@@ -4,6 +4,7 @@ import { ChevronLeft, Search, Wallet, CreditCard, Smartphone, IndianRupee, Check
 import { Patient, ManualPaymentMethod, listPatients, recordPayment } from '@/services/api';
 import { formatMoney } from '@/utils/formatter';
 import { useDuePackages, PackageDuePicker, DueHint, exceedsDue } from '@/features/reception/PackageDuePicker';
+import { istDay, formatDay } from '@/lib/packageDates';
 
 const METHODS: { value: ManualPaymentMethod; label: string; icon: React.ReactNode }[] = [
   { value: 'cash', label: 'Cash', icon: <Wallet className="w-4 h-4" /> },
@@ -30,6 +31,9 @@ export default function ReceptionBilling() {
   const [method, setMethod] = useState<ManualPaymentMethod>('cash');
   const [service, setService] = useState('');
   const [notes, setNotes] = useState('');
+  // Day the money was received — defaults to today, can be back-dated.
+  const today = istDay();
+  const [paidOn, setPaidOn] = useState(today);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -58,6 +62,7 @@ export default function ReceptionBilling() {
     if (!selected) return setError('Please select the patient this bill is for.');
     if (!amountValid) return setError('Enter a valid amount greater than 0.');
     if (exceedsDue(duePkg, amount)) return setError(`Only ${formatMoney(duePkg!.amountDue)} is due on this package.`);
+    if (!paidOn || paidOn > today) return setError('Pick a payment date that is today or earlier.');
 
     setSaving(true);
     try {
@@ -68,6 +73,7 @@ export default function ReceptionBilling() {
         method,
         plan: service.trim(),
         notes: notes.trim(),
+        paidOn,
       });
       setDone(true);
       // Give a beat of visual confirmation, then go to the Billing list.
@@ -202,6 +208,20 @@ export default function ReceptionBilling() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-800 mb-2">Payment date</label>
+              <input
+                type="date"
+                max={today}
+                className={inputCls}
+                value={paidOn}
+                onChange={(e) => setPaidOn(e.target.value)}
+              />
+              {paidOn && paidOn < today && (
+                <p className="text-xs text-amber-600 mt-1">Back-dated — will be recorded on {formatDay(paidOn)}.</p>
+              )}
             </div>
 
             <div>
