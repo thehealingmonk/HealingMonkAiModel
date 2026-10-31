@@ -6,6 +6,15 @@ import { openCamera, getPreferredLens } from '@/lib/camera';
 import { initializePoseLandmarker, detectPose, Landmark, toIsotropic, frameAspect } from '@/lib/poseDetection';
 import { extractErgoAngles } from '@/lib/ergo/landmarksToAngles';
 import { ErgoCaptures, ErgoCapturedFrame } from './ergoTypes';
+import { initializeObjectDetector, detectObjects } from '@/lib/ergo/objectDetection';
+import { DetectedObject } from '@/lib/ergo/ergoTypes';
+import LiveMeasurePanel from './LiveMeasurePanel';
+import {
+  drawLiveSizes, resolveLiveScale, LiveMeasureSettings, LiveScaleSource, DEFAULT_DISTANCE_CM,
+} from '@/lib/ergo/liveMeasure';
+
+// Objects are only sized here (not scored), so a few runs a second is plenty.
+const OBJECT_INTERVAL_MS = 300;
 
 interface Props {
   /** Which views to capture. Side is always required; front adds coronal
@@ -62,6 +71,13 @@ export default function ErgoCapture({ onComplete, onBack }: Props) {
   const [bodyDetected, setBodyDetected] = useState(false);
   const [flash, setFlash] = useState(false);
   const [captures, setCaptures] = useState<ErgoCaptures>({ side: null, front: null });
+  const latestObjects = useRef<DetectedObject[]>([]);
+  const lastObjectRun = useRef(0);
+  const objectsReady = useRef(false);
+  const [measure, setMeasure] = useState<LiveMeasureSettings>({ distanceCm: DEFAULT_DISTANCE_CM, statureCm: null });
+  const measureRef = useRef(measure);
+  measureRef.current = measure;
+  const [scaleSource, setScaleSource] = useState<LiveScaleSource | null>(null);
 
   const current = VIEWS[index];
   const currentRef = useRef(current);
@@ -110,6 +126,10 @@ export default function ErgoCapture({ onComplete, onBack }: Props) {
       // Start the model download before opening the camera so the two overlap.
       const model = initializePoseLandmarker();
       model.catch(() => {}); // handled below; avoid an unhandled rejection
+      // Object detector for live sizes — optional, never blocks posture capture.
+      initializeObjectDetector()
+        .then(() => { objectsReady.current = true; })
+        .catch((err) => console.warn('Object detector unavailable; live object sizes off.', err));
       const lens = getPreferredLens('user');
       setFacingMode(lens);
       try {
@@ -177,6 +197,10 @@ export default function ErgoCapture({ onComplete, onBack }: Props) {
         lastVideoTime.current = video.currentTime;
         const result = await detectPose(video);
         if (disposed.current || gen !== loopGen.current) return;
+        if (objectsReady.current && performance.now() - lastObjectRun.current > OBJECT_INTERVAL_MS) {
+          lastObjectRun.current = performance.now();
+          latestObjects.current = detectObjects(video);
+        }
         if (result?.landmarks && result.landmarks.length > 0) {
           latestLandmarks.current = result.landmarks;
           setBodyDetected(true);
@@ -186,6 +210,7 @@ export default function ErgoCapture({ onComplete, onBack }: Props) {
           setBodyDetected(false);
           clearCanvas(canvas, video);
         }
+        drawSizes(canvas, video, latestLandmarks.current);
       }
     } catch (err) {
       console.error('ergo pose loop frame error', err);
@@ -198,6 +223,32 @@ export default function ErgoCapture({ onComplete, onBack }: Props) {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
+  };
+
+  // Boxes + live height × width for objects (chair, bottle…) and the person.
+  const drawSizes = (canvas: HTMLCanvasElement, video: HTMLVideoElement, lm: Landmark[] | null) => {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    const objects = latestObjects.current;
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 3;
+    for (const o of objects) {
+      if (o.type === 'person') continue;
+      const x = o.box.x * w;
+      const y = o.box.y * h;
+      ctx.strokeRect(x, y, o.box.w * w, o.box.h * h);
+      ctx.font = `600 ${Math.max(14, Math.round(w / 48))}px system-ui, sans-serif`;
+      const tw = ctx.measureText(o.label).width;
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(x, Math.max(0, y - 24), tw + 12, 24);
+      ctx.fillStyle = '#0f172a';
+      ctx.fillText(o.label, x + 6, Math.max(17, y - 7));
+    }
+    const scale = resolveLiveScale(lm, w, h, measureRef.current);
+    setScaleSource(scale?.source ?? null);
+    drawLiveSizes(ctx, w, h, lm, objects, scale);
   };
 
   const drawScene = (canvas: HTMLCanvasElement, video: HTMLVideoElement, lm: Landmark[]) => {
@@ -321,6 +372,8 @@ export default function ErgoCapture({ onComplete, onBack }: Props) {
           {bodyDetected ? 'Body detected · points live' : 'Stand in frame...'}
         </span>
       </div>
+
+      <LiveMeasurePanel settings={measure} onChange={setMeasure} source={scaleSource} />
 
       {/* Front/back camera toggle */}
       <button

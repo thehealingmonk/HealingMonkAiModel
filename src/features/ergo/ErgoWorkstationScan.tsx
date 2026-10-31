@@ -9,6 +9,10 @@ import { extractErgoAngles } from '@/lib/ergo/landmarksToAngles';
 import { scoreConfidence, CONFIDENCE_COLOR } from '@/lib/ergo/ergoKnowledge';
 import { DetectedObject } from '@/lib/ergo/ergoTypes';
 import { ErgoWorkstationCapture } from './ergoTypes';
+import LiveMeasurePanel from './LiveMeasurePanel';
+import {
+  drawLiveSizes, resolveLiveScale, LiveMeasureSettings, LiveScaleSource, DEFAULT_DISTANCE_CM,
+} from '@/lib/ergo/liveMeasure';
 
 interface Props {
   /** Called with the captured workstation frame, or null when the user skips. */
@@ -51,6 +55,10 @@ export default function ErgoWorkstationScan({ onComplete, onBack }: Props) {
   const [bodyDetected, setBodyDetected] = useState(false);
   const [objectCount, setObjectCount] = useState(0);
   const [flash, setFlash] = useState(false);
+  const [measure, setMeasure] = useState<LiveMeasureSettings>({ distanceCm: DEFAULT_DISTANCE_CM, statureCm: null });
+  const measureRef = useRef(measure);
+  measureRef.current = measure;
+  const [scaleSource, setScaleSource] = useState<LiveScaleSource | null>(null);
 
   const startStream = async (mode: 'user' | 'environment') => {
     const video = videoRef.current;
@@ -247,6 +255,11 @@ export default function ErgoWorkstationScan({ onComplete, onBack }: Props) {
         ctx.stroke();
       }
     }
+
+    // ---- Live height × width of every object and the person ----
+    const scale = resolveLiveScale(lm, w, h, measureRef.current);
+    setScaleSource(scale?.source ?? null);
+    drawLiveSizes(ctx, w, h, lm, objects, scale);
   };
 
   // Grab the current frame with skeleton + boxes baked in.
@@ -327,6 +340,8 @@ export default function ErgoWorkstationScan({ onComplete, onBack }: Props) {
           {objectCount > 0 ? `${objectCount} object${objectCount > 1 ? 's' : ''} detected` : 'Looking for objects…'}
         </span>
       </div>
+
+      <LiveMeasurePanel settings={measure} onChange={setMeasure} source={scaleSource} />
 
       {/* Front/back camera toggle */}
       <button
