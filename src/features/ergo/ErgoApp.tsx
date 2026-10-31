@@ -142,6 +142,7 @@ export default function ErgoApp() {
     return (
       <ErgoCapture
         onBack={() => setStep('setup')}
+        onArItems={(its) => setItems((prev) => [...prev, ...its])}
         onComplete={(caps) => {
           setCaptures(caps);
           setStep('workstation');
@@ -154,6 +155,7 @@ export default function ErgoApp() {
     return (
       <ErgoWorkstationScan
         onBack={() => setStep('capture')}
+        onArItems={(its) => setItems((prev) => [...prev, ...its])}
         onComplete={(cap) => {
           setWorkstation(cap);
           // Even when skipped, the measure step can still measure the body

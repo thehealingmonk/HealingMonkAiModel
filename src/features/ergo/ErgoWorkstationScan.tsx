@@ -10,14 +10,18 @@ import { scoreConfidence, CONFIDENCE_COLOR } from '@/lib/ergo/ergoKnowledge';
 import { DetectedObject } from '@/lib/ergo/ergoTypes';
 import { ErgoWorkstationCapture } from './ergoTypes';
 import LiveMeasurePanel from './LiveMeasurePanel';
+import ErgoArMeasure from './ErgoArMeasure';
+import type { MeasuredItem } from '@/lib/ergo/ergoTypes';
 import {
-  drawLiveSizes, resolveLiveScale, LiveMeasureSettings, LiveScaleSource, DEFAULT_DISTANCE_CM,
+  drawLiveSizes, resolveLiveScale, LiveMeasureSettings, LiveScale, LiveScaleSource, DEFAULT_DISTANCE_CM,
 } from '@/lib/ergo/liveMeasure';
 
 interface Props {
   /** Called with the captured workstation frame, or null when the user skips. */
   onComplete: (capture: ErgoWorkstationCapture | null) => void;
   onBack: () => void;
+  /** Objects measured in AR mode (exact height × width). */
+  onArItems?: (items: MeasuredItem[]) => void;
 }
 
 // Skeleton connections (MediaPipe Pose indices) — same whole-body set as the
@@ -35,7 +39,8 @@ const DRAW_POINTS = new Set<number>([0, 7, 8, 11, 12, 13, 14, 15, 16, 23, 24, 25
 // every frame so the live skeleton stays smooth (spec §33).
 const OBJECT_INTERVAL_MS = 300;
 
-export default function ErgoWorkstationScan({ onComplete, onBack }: Props) {
+export default function ErgoWorkstationScan({ onComplete, onBack, onArItems }: Props) {
+  const [arOpen, setArOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>();
@@ -55,10 +60,14 @@ export default function ErgoWorkstationScan({ onComplete, onBack }: Props) {
   const [bodyDetected, setBodyDetected] = useState(false);
   const [objectCount, setObjectCount] = useState(0);
   const [flash, setFlash] = useState(false);
-  const [measure, setMeasure] = useState<LiveMeasureSettings>({ distanceCm: DEFAULT_DISTANCE_CM, statureCm: null });
+  const [measure, setMeasure] = useState<LiveMeasureSettings>({
+    distanceCm: DEFAULT_DISTANCE_CM, statureCm: null, autoDistance: true,
+  });
   const measureRef = useRef(measure);
   measureRef.current = measure;
+  const lastScale = useRef<LiveScale | null>(null);
   const [scaleSource, setScaleSource] = useState<LiveScaleSource | null>(null);
+  const [liveDistance, setLiveDistance] = useState<number | null>(null);
 
   const startStream = async (mode: 'user' | 'environment') => {
     const video = videoRef.current;
@@ -257,8 +266,10 @@ export default function ErgoWorkstationScan({ onComplete, onBack }: Props) {
     }
 
     // ---- Live height × width of every object and the person ----
-    const scale = resolveLiveScale(lm, w, h, measureRef.current);
+    const scale = resolveLiveScale(lm, w, h, measureRef.current, objects, lastScale.current);
+    lastScale.current = scale;
     setScaleSource(scale?.source ?? null);
+    setLiveDistance(scale ? Math.round(scale.distanceCm / 5) * 5 : null);
     drawLiveSizes(ctx, w, h, lm, objects, scale);
   };
 
@@ -288,6 +299,24 @@ export default function ErgoWorkstationScan({ onComplete, onBack }: Props) {
     if (!octx) return undefined;
     octx.drawImage(video, 0, 0, out.width, out.height);
     return out.toDataURL('image/jpeg', 0.9);
+  };
+
+  // AR needs the camera to itself: stop our stream, restart it afterwards.
+  const openAr = () => {
+    loopGen.current++;
+    cancelFrame();
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    setReady(false);
+    setArOpen(true);
+  };
+  const closeAr = (items: MeasuredItem[]) => {
+    setArOpen(false);
+    if (items.length) onArItems?.(items);
+    setStatus('Restarting camera…');
+    startStream(facingMode).catch((err) => {
+      setStatus('Camera setup failed. Please allow camera access.');
+      console.error(err);
+    });
   };
 
   const handleCapture = () => {
@@ -341,7 +370,14 @@ export default function ErgoWorkstationScan({ onComplete, onBack }: Props) {
         </span>
       </div>
 
-      <LiveMeasurePanel settings={measure} onChange={setMeasure} source={scaleSource} />
+      <LiveMeasurePanel
+        settings={measure}
+        onChange={setMeasure}
+        source={scaleSource}
+        distanceCm={liveDistance}
+        onArMeasure={openAr}
+      />
+      {arOpen && <ErgoArMeasure onClose={closeAr} />}
 
       {/* Front/back camera toggle */}
       <button

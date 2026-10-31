@@ -22,43 +22,173 @@ export const DISTANCE_MIN_CM = 30;
 export const DISTANCE_MAX_CM = 400;
 export const DEFAULT_DISTANCE_CM = 150;
 
-export type LiveScaleSource = 'height' | 'distance';
+/**
+ * - height        : user's real height, standing fully in frame (best)
+ * - auto-person   : AI distance from average human body proportions
+ * - auto-objects  : AI distance from standard-size objects (phone, keyboard…)
+ * - distance      : the manual slider (fallback / auto switched off)
+ */
+export type LiveScaleSource = 'height' | 'auto-person' | 'auto-objects' | 'distance';
 
 export interface LiveScale {
   pxPerCm: number;
   source: LiveScaleSource;
+  /** Camera → subject distance (cm) this scale implies. */
+  distanceCm: number;
 }
 
 export interface LiveMeasureSettings {
-  /** Approx. camera → subject distance (cm). */
+  /** Manual camera → subject distance (cm), used when auto can't tell. */
   distanceCm: number;
   /** The person's real height (cm), if they entered it. */
   statureCm: number | null;
+  /** Let the AI estimate the distance itself. */
+  autoDistance: boolean;
 }
 
-/** Scale from distance: at distance d the frame width covers 2·d·tan(fov/2) cm. */
+/** Camera focal length in pixels, from the assumed field of view. */
+export function focalPx(frameW: number): number {
+  return frameW / (2 * Math.tan(((ASSUMED_HFOV_DEG / 2) * Math.PI) / 180));
+}
+
+/** Scale from distance: pinhole camera, pxPerCm = focal / distance. */
 export function pxPerCmFromDistance(frameW: number, distanceCm: number): number | null {
   if (!frameW || !(distanceCm > 0)) return null;
-  const viewWidthCm = 2 * distanceCm * Math.tan(((ASSUMED_HFOV_DEG / 2) * Math.PI) / 180);
-  return frameW / viewWidthCm;
+  return focalPx(frameW) / distanceCm;
 }
 
-/** Pick the best scale for this frame. */
+/** Average adult stature used when the user hasn't entered theirs. */
+const DEFAULT_STATURE_CM = 162;
+
+/**
+ * Body segments with their real length as a fraction of stature. MediaPipe
+ * landmark indices. Eye span (IPD) is a fixed ~6.3 cm, not stature-based.
+ */
+const BODY_SEGMENTS: { a: number[]; b: number[]; ratio?: number; cm?: number }[] = [
+  { a: [2], b: [5], cm: 6.3 }, // eye centre ↔ eye centre
+  { a: [11], b: [12], ratio: 0.23 * 0.88 }, // shoulder joint span
+  { a: [11, 12], b: [23, 24], ratio: 0.29 }, // mid-shoulder ↔ mid-hip (torso)
+  { a: [11], b: [13], ratio: 0.186 }, // upper arms
+  { a: [12], b: [14], ratio: 0.186 },
+  { a: [13], b: [15], ratio: 0.146 }, // forearms
+  { a: [14], b: [16], ratio: 0.146 },
+  { a: [23], b: [25], ratio: 0.245 }, // thighs
+  { a: [24], b: [26], ratio: 0.245 },
+  { a: [25], b: [27], ratio: 0.27 }, // shins
+  { a: [26], b: [28], ratio: 0.27 },
+];
+
+function avgPoint(lm: Landmark[], idx: number[], frameW: number, frameH: number) {
+  const pts = idx.map((i) => lm[i]);
+  if (pts.some((p) => !p || (p.visibility ?? 1) < 0.6)) return null;
+  return {
+    x: (pts.reduce((s, p) => s + p.x, 0) / pts.length) * frameW,
+    y: (pts.reduce((s, p) => s + p.y, 0) / pts.length) * frameH,
+  };
+}
+
+/**
+ * Distance to the person from average body proportions. A segment pointing
+ * towards the camera looks SHORTER, which can only make it look farther away,
+ * so the nearest estimate across segments is the least foreshortened one. We
+ * take the 2nd-nearest to shrug off one bad landmark.
+ */
+export function distanceFromPerson(
+  lm: Landmark[] | null,
+  frameW: number,
+  frameH: number,
+  statureCm: number | null
+): number | null {
+  if (!lm?.length || !frameW || !frameH) return null;
+  const stature = isPlausibleStature(statureCm) ? statureCm : DEFAULT_STATURE_CM;
+  const f = focalPx(frameW);
+  const est: number[] = [];
+  for (const s of BODY_SEGMENTS) {
+    const a = avgPoint(lm, s.a, frameW, frameH);
+    const b = avgPoint(lm, s.b, frameW, frameH);
+    if (!a || !b) continue;
+    const px = Math.hypot(b.x - a.x, b.y - a.y);
+    if (px < 8) continue;
+    const realCm = s.cm ?? stature * (s.ratio ?? 0);
+    est.push((f * realCm) / px);
+  }
+  if (!est.length) return null;
+  est.sort((x, y) => x - y);
+  return est[Math.min(1, est.length - 1)];
+}
+
+/** Typical size (cm) of the LONGER side of standard everyday objects. */
+const TYPICAL_LONG_SIDE_CM: Record<string, number> = {
+  'cell phone': 15,
+  keyboard: 44,
+  mouse: 11,
+  laptop: 33,
+  cup: 10,
+  book: 23,
+  remote: 18,
+};
+
+/** Distance from standard-size objects in frame (median over all of them). */
+export function distanceFromObjects(objects: DetectedObject[], frameW: number, frameH: number): number | null {
+  const f = focalPx(frameW);
+  const est: number[] = [];
+  for (const o of objects) {
+    const real = TYPICAL_LONG_SIDE_CM[o.rawLabel];
+    if (!real || o.score < 0.45) continue;
+    const px = Math.max(o.box.w * frameW, o.box.h * frameH);
+    if (px < 12) continue;
+    est.push((f * real) / px);
+  }
+  if (!est.length) return null;
+  est.sort((x, y) => x - y);
+  return est[Math.floor(est.length / 2)];
+}
+
+const clampDist = (d: number) => Math.min(DISTANCE_MAX_CM * 2, Math.max(15, d));
+
+/**
+ * Pick the best scale for this frame. `prev` (last frame's scale) smooths the
+ * auto distance so the numbers don't jump around with every landmark wobble.
+ */
 export function resolveLiveScale(
   lm: Landmark[] | null,
   frameW: number,
   frameH: number,
-  settings: LiveMeasureSettings
+  settings: LiveMeasureSettings,
+  objects: DetectedObject[] = [],
+  prev: LiveScale | null = null
 ): LiveScale | null {
+  if (!frameW) return null;
+  const f = focalPx(frameW);
+
   if (isPlausibleStature(settings.statureCm)) {
     const pts = standingPersonPoints(lm, frameW, frameH);
     if (pts?.standing) {
       const px = pts.floor.y - pts.top.y;
-      if (px > frameH * 0.3) return { pxPerCm: px / settings.statureCm, source: 'height' };
+      if (px > frameH * 0.3) {
+        const pxPerCm = px / settings.statureCm;
+        return { pxPerCm, source: 'height', distanceCm: f / pxPerCm };
+      }
     }
   }
-  const d = pxPerCmFromDistance(frameW, settings.distanceCm);
-  return d ? { pxPerCm: d, source: 'distance' } : null;
+
+  if (settings.autoDistance) {
+    let source: LiveScaleSource | null = null;
+    let d = distanceFromPerson(lm, frameW, frameH, settings.statureCm);
+    if (d != null) source = 'auto-person';
+    else {
+      d = distanceFromObjects(objects, frameW, frameH);
+      if (d != null) source = 'auto-objects';
+    }
+    if (d != null && source) {
+      d = clampDist(d);
+      if (prev && prev.source === source) d = prev.distanceCm * 0.8 + d * 0.2;
+      return { pxPerCm: f / d, source, distanceCm: d };
+    }
+  }
+
+  const d = settings.distanceCm;
+  return { pxPerCm: f / d, source: 'distance', distanceCm: d };
 }
 
 const r0 = (v: number) => Math.round(v);
@@ -166,7 +296,7 @@ export function drawLiveSizes(
 ) {
   if (!scale) return;
   const font = tagFontPx(frameW);
-  const approx = scale.source === 'distance';
+  const approx = scale.source !== 'height';
 
   for (const o of objects) {
     if (o.type === 'person') continue; // measured from the pose below
