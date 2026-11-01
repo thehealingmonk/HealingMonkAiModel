@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/server/db';
-import { PatientPackage, paidByPackage, paymentState } from '@/lib/server/packages';
+import { PatientPackage, paidByPackage, paymentState, billedAmount, sessionsByPackage } from '@/lib/server/packages';
 import { requireAuth, requireRole } from '@/middleware/auth';
 
 export const dynamic = 'force-dynamic';
@@ -16,16 +16,21 @@ export async function GET(req: NextRequest) {
 
   try {
     await connectDB();
-    const pkgs = await PatientPackage.find({ status: 'active', amount: { $gt: 0 } })
-      .select('patient name amount startDay endDay payment')
+    const pkgs = await PatientPackage.find({
+      status: 'active',
+      $or: [{ amount: { $gt: 0 } }, { billing: 'per_session', sessionRate: { $gt: 0 } }],
+    })
+      .select('patient name amount billing sessionRate startDay endDay payment')
       .populate('patient', 'name patientId mobile')
       .lean();
-    const paid = await paidByPackage(pkgs);
+    const [paid, sessions] = await Promise.all([paidByPackage(pkgs), sessionsByPackage(pkgs)]);
 
     const dues = (pkgs as any[])
       .map((p) => {
         const id = p._id.toString();
         const amountPaid = paid.get(id) || 0;
+        const sessionsUsed = sessions.get(id) || 0;
+        const amount = billedAmount(p, sessionsUsed);
         return {
           id,
           patient: p.patient?._id ? p.patient._id.toString() : String(p.patient),
@@ -35,10 +40,13 @@ export async function GET(req: NextRequest) {
           name: p.name,
           startDay: p.startDay,
           endDay: p.endDay,
-          amount: p.amount,
+          billing: p.billing || 'upfront',
+          sessionRate: p.sessionRate || 0,
+          sessionsUsed,
+          amount,
           amountPaid,
-          amountDue: Math.max(0, p.amount - amountPaid),
-          paymentStatus: paymentState(p.amount, amountPaid),
+          amountDue: Math.max(0, amount - amountPaid),
+          paymentStatus: paymentState(amount, amountPaid),
         };
       })
       .filter((d) => d.amountDue > 0)

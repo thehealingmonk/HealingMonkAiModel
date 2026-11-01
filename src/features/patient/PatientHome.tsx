@@ -137,7 +137,10 @@ export default function PatientHome() {
                     </p>
                     {pkg.amountDue > 0 && (
                       <p className="text-amber-300">
-                        Fee {formatMoney(pkg.amount)} · paid {formatMoney(pkg.amountPaid)} · {formatMoney(pkg.amountDue)} pending
+                        {pkg.billing === 'per_session'
+                          ? `Bill ${pkg.sessionsUsed} × ${formatMoney(pkg.sessionRate)} = ${formatMoney(pkg.amount)}`
+                          : `Fee ${formatMoney(pkg.amount)}`}{' '}
+                        · paid {formatMoney(pkg.amountPaid)} · {formatMoney(pkg.amountDue)} pending
                       </p>
                     )}
                     {pkg.state === 'active' ? (

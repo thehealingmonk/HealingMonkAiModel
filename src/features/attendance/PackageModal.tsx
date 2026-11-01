@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { X, Search, Wallet, CreditCard, Smartphone, Clock, CalendarCheck, IndianRupee } from 'lucide-react';
-import { Patient, PatientPackage, ManualPaymentMethod, listPatients, createPackage, updatePackage } from '@/services/api';
+import { Patient, PatientPackage, PackageBilling, ManualPaymentMethod, listPatients, createPackage, updatePackage } from '@/services/api';
 import { istDay, addDays, packageEndDay, formatDay } from '@/lib/packageDates';
 import ModalPortal from '@/components/common/ModalPortal';
 import { formatMoney } from '@/utils/formatter';
@@ -28,6 +28,7 @@ const PRESETS = [
   { name: 'Monthly package – 8 sessions', sessions: 8 },
   { name: 'Monthly package – Unlimited', sessions: 0 },
 ];
+const PAY_LATER_NAME = 'Monthly – pay per session';
 
 const METHODS: { value: ManualPaymentMethod | 'none'; label: string; icon: React.ReactNode }[] = [
   { value: 'cash', label: 'Cash', icon: <Wallet className="w-4 h-4" /> },
@@ -60,12 +61,17 @@ export default function PackageModal({ onClose, onSaved, presetPatient = null, r
   );
   // Edit mode sets the end date directly instead of a duration.
   const [editEndDay, setEditEndDay] = useState(editPkg?.endDay || '');
-  const [amount, setAmount] = useState(source?.amount ? String(source.amount / 100) : '');
+  // How this patient pays: a fixed fee up front, or later (end of month) for
+  // the sessions they actually attended.
+  const [billing, setBilling] = useState<PackageBilling>(source?.billing || 'upfront');
+  const perSession = billing === 'per_session';
+  const [rate, setRate] = useState(source?.sessionRate ? String(source.sessionRate / 100) : '');
+  const [amount, setAmount] = useState(source?.amount && source.billing !== 'per_session' ? String(source.amount / 100) : '');
   // Paid now: blank = the full fee; less than the fee = part payment (rest due).
   const [paidNow, setPaidNow] = useState('');
   const [method, setMethod] = useState<ManualPaymentMethod | 'none'>('cash');
   const fee = Number(amount) || 0;
-  const paid = method === 'none' ? 0 : paidNow === '' ? fee : Number(paidNow) || 0;
+  const paid = perSession || method === 'none' ? 0 : paidNow === '' ? fee : Number(paidNow) || 0;
   const balance = Math.max(0, fee - paid);
   const [notes, setNotes] = useState(editPkg?.notes || '');
   const [saving, setSaving] = useState(false);
@@ -97,6 +103,7 @@ export default function PackageModal({ onClose, onSaved, presetPatient = null, r
     if (!name.trim()) return setError('Give the package a name.');
     if (!startDay) return setError('Pick a start date.');
     if (editPkg && (!endDay || endDay < startDay)) return setError('End date must be on or after the start date.');
+    if (perSession && !(Number(rate) > 0)) return setError('Enter the charge per session.');
     if (!editPkg && paid > fee) return setError('Amount paid cannot be more than the package fee.');
     setSaving(true);
     try {
@@ -106,7 +113,8 @@ export default function PackageModal({ onClose, onSaved, presetPatient = null, r
             sessionsTotal: Number(sessions) || 0,
             startDay,
             endDay,
-            amount: Number(amount) || 0,
+            billing,
+            ...(perSession ? { sessionRate: Number(rate) || 0 } : { amount: Number(amount) || 0 }),
             notes: notes.trim(),
           })
         : await createPackage({
@@ -115,9 +123,8 @@ export default function PackageModal({ onClose, onSaved, presetPatient = null, r
         sessionsTotal: Number(sessions) || 0,
         months,
         startDay,
-        amount: fee,
-        paidAmount: paid,
-        method,
+        billing,
+        ...(perSession ? { sessionRate: Number(rate) || 0, method: 'none' as const } : { amount: fee, paidAmount: paid, method }),
         notes: notes.trim(),
       });
       onSaved(r.package);
@@ -258,7 +265,72 @@ export default function PackageModal({ onClose, onSaved, presetPatient = null, r
             </div>
           )}
 
-          {/* Fee */}
+          {/* How they pay */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Payment</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  { value: 'upfront', label: 'Pays upfront', hint: 'Fixed package fee' },
+                  { value: 'per_session', label: 'Pays later', hint: 'Billed per session, month end' },
+                ] as const
+              ).map((b) => (
+                <button
+                  key={b.value}
+                  type="button"
+                  onClick={() => {
+                    setBilling(b.value);
+                    // Swap the default plan name along with the mode.
+                    if (!source && b.value === 'per_session' && PRESETS.some((p) => p.name === name)) {
+                      setName(PAY_LATER_NAME);
+                      setSessions('0');
+                    } else if (!source && b.value === 'upfront' && name === PAY_LATER_NAME) {
+                      setName(PRESETS[0].name);
+                      setSessions(String(PRESETS[0].sessions));
+                    }
+                  }}
+                  className={`text-left px-3 py-2 rounded-lg border text-sm transition-colors ${
+                    billing === b.value ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className={`block font-medium ${billing === b.value ? 'text-emerald-700' : 'text-slate-800'}`}>{b.label}</span>
+                  <span className="block text-xs text-slate-500">{b.hint}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {perSession ? (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Charge per session (₹)</label>
+            <div className="relative">
+              <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="number"
+                min="0"
+                inputMode="numeric"
+                className={`${inputCls} pl-9`}
+                placeholder="e.g. 500"
+                value={rate}
+                onChange={(e) => setRate(e.target.value)}
+              />
+            </div>
+            {editPkg ? (
+              <p className="text-xs text-slate-600 mt-1.5">
+                {editPkg.sessionsUsed} session{editPkg.sessionsUsed === 1 ? '' : 's'} attended
+                {Number(rate) > 0 && ` · bill ${formatMoney(editPkg.sessionsUsed * Math.round(Number(rate) * 100))}`} · paid{' '}
+                {formatMoney(editPkg.amountPaid)}
+              </p>
+            ) : (
+              <p className="text-xs text-slate-400 mt-1.5">
+                Nothing is charged now. Each session marked present adds{' '}
+                {Number(rate) > 0 ? formatMoney(Math.round(Number(rate) * 100)) : 'this amount'} to the bill — collect it at the end of
+                the month from Pending payments.
+              </p>
+            )}
+          </div>
+          ) : (
+          /* Fee */
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Package fee (₹)</label>
             <div className="relative mb-2">
@@ -332,6 +404,7 @@ export default function PackageModal({ onClose, onSaved, presetPatient = null, r
             </>
             )}
           </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Notes (optional)</label>

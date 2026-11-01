@@ -33,7 +33,7 @@ import PaymentBadge from '@/features/attendance/PaymentBadge';
 import RecordPaymentModal from '@/features/reception/RecordPaymentModal';
 import { formatMoney } from '@/utils/formatter';
 
-type Tab = 'today' | 'expiring' | 'expired';
+type Tab = 'today' | 'paylater' | 'expiring' | 'expired';
 
 interface Props {
   /** Base path of the patient profile route, e.g. "/admin/patient" (omit if the role has none). */
@@ -139,6 +139,10 @@ export default function AttendanceDesk({ profileBase }: Props) {
       active: current,
       expiring: current.filter((p) => isExpiring(p, today) && !renewedPatients.has(p.patient)),
       expired: packages.filter((p) => p.state === 'expired' && !renewedPatients.has(p.patient)),
+      // Pay-later patients: running ones, plus ended ones still owing money.
+      paylater: packages.filter(
+        (p) => p.billing === 'per_session' && p.state !== 'cancelled' && (p.state !== 'expired' || p.amountDue > 0)
+      ),
     };
   }, [packages, today, renewedPatients]);
 
@@ -161,6 +165,7 @@ export default function AttendanceDesk({ profileBase }: Props) {
 
   const TABS: { key: Tab; label: string; count: number }[] = [
     { key: 'today', label: 'Active', count: groups.today.length },
+    { key: 'paylater', label: 'Pay later', count: groups.paylater.length },
     { key: 'expiring', label: 'Expiring soon', count: groups.expiring.length },
     { key: 'expired', label: 'Expired', count: groups.expired.length },
   ];
@@ -235,6 +240,8 @@ export default function AttendanceDesk({ profileBase }: Props) {
               ? 'No matching patients.'
               : tab === 'today'
               ? 'No active packages yet. Start one with "New package".'
+              : tab === 'paylater'
+              ? 'No pay-later patients. Choose "Pays later" when starting a package.'
               : tab === 'expiring'
               ? 'Nobody is close to the end of their package.'
               : 'No lapsed packages in the last 30 days.'}
@@ -269,6 +276,9 @@ export default function AttendanceDesk({ profileBase }: Props) {
                       <span className="block text-xs text-slate-500 truncate">
                         {p.patientCode}
                         {p.patientMobile ? ` · ${p.patientMobile}` : ''} · {p.name}
+                        {p.billing === 'per_session' && (
+                          <span className="ml-1.5 inline-block px-1.5 rounded bg-violet-100 text-violet-700 font-medium">Pay later</span>
+                        )}
                       </span>
                       <span className="mt-1.5 flex items-center gap-2 text-xs">
                         {p.sessionsTotal > 0 && (
@@ -356,7 +366,7 @@ export default function AttendanceDesk({ profileBase }: Props) {
                       </p>
                       {p.paymentStatus !== 'free' && (
                         <p>
-                          <span className="text-slate-400">Fee:</span> <PaymentBadge pkg={p} />
+                          <span className="text-slate-400">{p.billing === 'per_session' ? 'Bill:' : 'Fee:'}</span> <PaymentBadge pkg={p} />
                         </p>
                       )}
                       {p.notes && (

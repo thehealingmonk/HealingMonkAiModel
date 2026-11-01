@@ -161,7 +161,7 @@ export default function ReceptionCollections() {
                 <tr>
                   <th className="px-4 py-2.5 font-medium">Patient</th>
                   <th className="px-4 py-2.5 font-medium">Package</th>
-                  <th className="px-4 py-2.5 font-medium">Fee</th>
+                  <th className="px-4 py-2.5 font-medium">Fee / bill</th>
                   <th className="px-4 py-2.5 font-medium">Paid</th>
                   <th className="px-4 py-2.5 font-medium">Due</th>
                   <th className="px-4 py-2.5 font-medium text-right"></th>
@@ -183,7 +183,14 @@ export default function ReceptionCollections() {
                         {formatDay(d.startDay)} – {formatDay(d.endDay)}
                       </p>
                     </td>
-                    <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{formatMoney(d.amount)}</td>
+                    <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">
+                      {formatMoney(d.amount)}
+                      {d.billing === 'per_session' && (
+                        <p className="text-xs text-violet-700">
+                          Pay later · {d.sessionsUsed} × {formatMoney(d.sessionRate)}
+                        </p>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5 whitespace-nowrap">
                       {formatMoney(d.amountPaid)}
                       <span

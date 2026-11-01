@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { PatientPackage, listPackages } from '@/services/api';
 import { formatMoney } from '@/utils/formatter';
 
-export type DuePackage = Pick<PatientPackage, 'id' | 'name' | 'amount' | 'amountPaid' | 'amountDue'>;
+export type DuePackage = Pick<PatientPackage, 'id' | 'name' | 'amount' | 'amountPaid' | 'amountDue'> &
+  Partial<Pick<PatientPackage, 'billing' | 'sessionsUsed'>>;
 
 /**
  * The selected patient's packages that still have a balance to pay, and the
@@ -73,7 +74,8 @@ export function PackageDuePicker({
               <span className="text-amber-700 font-semibold whitespace-nowrap">{formatMoney(p.amountDue)} due</span>
             </span>
             <span className="block text-xs text-slate-500">
-              Fee {formatMoney(p.amount)} · paid {formatMoney(p.amountPaid)}
+              {p.billing === 'per_session' ? `Bill for ${p.sessionsUsed ?? 0} sessions` : 'Fee'} {formatMoney(p.amount)} · paid{' '}
+              {formatMoney(p.amountPaid)}
             </span>
           </button>
         ))}

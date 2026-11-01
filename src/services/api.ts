@@ -648,7 +648,10 @@ export interface PendingDue {
   name: string;
   startDay: string;
   endDay: string;
-  amount: number; // paise — package fee
+  billing: PackageBilling;
+  sessionRate: number; // paise per session (pay-later only)
+  sessionsUsed: number;
+  amount: number; // paise — package fee, or the pay-later bill so far
   amountPaid: number; // paise
   amountDue: number; // paise
   paymentStatus: PackagePaymentStatus;
@@ -661,6 +664,8 @@ export async function listDues(): Promise<{ dues: PendingDue[]; totalDue: number
 // ---- Monthly packages & attendance ----
 
 export type PackageState = 'active' | 'upcoming' | 'expired' | 'cancelled';
+/** 'upfront' = fixed fee; 'per_session' = pay later, billed per attended session. */
+export type PackageBilling = 'upfront' | 'per_session';
 
 export interface PatientPackage {
   id: string;
@@ -669,7 +674,9 @@ export interface PatientPackage {
   sessionsTotal: number; // 0 = unlimited visits within the period
   startDay: string; // YYYY-MM-DD (IST), inclusive
   endDay: string; // YYYY-MM-DD (IST), inclusive
-  amount: number; // paise
+  amount: number; // paise — fixed fee, or for pay-later the bill so far (rate × attended)
+  billing: PackageBilling;
+  sessionRate: number; // paise per attended session (pay-later only)
   status: 'active' | 'cancelled';
   notes: string;
   payment: string | null;
@@ -701,6 +708,8 @@ export async function createPackage(payload: {
   months: number;
   startDay: string;
   amount?: number; // rupees
+  billing?: PackageBilling;
+  sessionRate?: number; // rupees per session (pay-later)
   paidAmount?: number; // rupees paid now; defaults to the full fee
   method?: ManualPaymentMethod | 'none';
   notes?: string;
@@ -716,6 +725,8 @@ export async function updatePackage(
     startDay?: string;
     endDay?: string;
     amount?: number; // rupees
+    billing?: PackageBilling;
+    sessionRate?: number; // rupees
     status?: 'active' | 'cancelled';
     notes?: string;
   }

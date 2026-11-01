@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import { connectDB } from '@/lib/server/db';
 import { PatientPackage, Attendance, withUsage } from '@/lib/server/packages';
-import { PACKAGE_STATUSES } from '@/lib/server/models/PatientPackage';
+import { PACKAGE_STATUSES, BILLING_MODES } from '@/lib/server/models/PatientPackage';
 import { requireAuth, requireRole } from '@/middleware/auth';
 import { isDay } from '@/lib/packageDates';
 
@@ -50,7 +50,20 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       pkg.startDay = startDay;
       pkg.endDay = endDay;
     }
+    if (body.billing !== undefined) {
+      if (!BILLING_MODES.includes(body.billing)) return NextResponse.json({ error: 'Invalid billing type' }, { status: 400 });
+      pkg.billing = body.billing;
+    }
+    if (body.sessionRate !== undefined) pkg.sessionRate = Math.max(0, Math.round(Number(body.sessionRate || 0) * 100));
     if (body.amount !== undefined) pkg.amount = Math.max(0, Math.round(Number(body.amount || 0) * 100));
+    if (pkg.billing === 'per_session') {
+      pkg.amount = 0;
+      if (!(pkg.sessionRate > 0)) {
+        return NextResponse.json({ error: 'Enter the charge per session for a pay-later package' }, { status: 400 });
+      }
+    } else {
+      pkg.sessionRate = 0;
+    }
     if (body.status !== undefined) {
       if (!PACKAGE_STATUSES.includes(body.status)) return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
       pkg.status = body.status;

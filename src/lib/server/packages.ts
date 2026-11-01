@@ -29,6 +29,28 @@ export async function paidByPackage(pkgs: any[]): Promise<Map<string, number>> {
   return paid;
 }
 
+/**
+ * What the patient owes for a package in paise: the fixed fee, or for
+ * pay-later (per_session) packages the rate × sessions attended so far.
+ */
+export function billedAmount(pkg: any, sessionsUsed: number): number {
+  if (pkg.billing === 'per_session') return (pkg.sessionRate || 0) * sessionsUsed;
+  return pkg.amount || 0;
+}
+
+/** Attendance count per pay-later package id (other packages are skipped). */
+export async function sessionsByPackage(pkgs: any[]): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  const ids = pkgs.filter((p) => p.billing === 'per_session').map((p) => p._id);
+  if (!ids.length) return counts;
+  const rows = await Attendance.aggregate([
+    { $match: { package: { $in: ids } } },
+    { $group: { _id: '$package', n: { $sum: 1 } } },
+  ]);
+  for (const r of rows) counts.set(r._id.toString(), r.n);
+  return counts;
+}
+
 /** 'paid' / 'partial' / 'unpaid', or 'free' when the package has no fee. */
 export function paymentState(amount: number, amountPaid: number) {
   if (!amount) return 'free';
@@ -62,12 +84,16 @@ export async function withUsage(pkgs: any[]) {
     const state =
       p.status === 'cancelled' ? 'cancelled' : today > p.endDay ? 'expired' : today < p.startDay ? 'upcoming' : 'active';
     const amountPaid = paid.get(base.id) || 0;
+    // For pay-later packages `amount` is the bill so far, so every screen that
+    // shows fee / paid / due works the same for both kinds.
+    const amount = billedAmount(p, days.length);
     return {
       ...base,
+      amount,
       state,
       amountPaid,
-      amountDue: Math.max(0, base.amount - amountPaid),
-      paymentStatus: paymentState(base.amount, amountPaid),
+      amountDue: Math.max(0, amount - amountPaid),
+      paymentStatus: paymentState(amount, amountPaid),
       attendedDays: days,
       sessionsUsed: days.length,
       markedToday: days.includes(today),

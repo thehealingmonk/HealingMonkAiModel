@@ -64,11 +64,14 @@ export async function POST(req: NextRequest) {
     const months = Math.round(Number(body.months) || 1);
     const sessionsTotal = Math.max(0, Math.round(Number(body.sessionsTotal) || 0));
     const startDay = body.startDay ? String(body.startDay) : istDay();
-    const paise = Math.max(0, Math.round(Number(body.amount || 0) * 100));
+    // Pay-later patients are billed per attended session instead of a fixed fee.
+    const perSession = body.billing === 'per_session';
+    const sessionRate = Math.max(0, Math.round(Number(body.sessionRate || 0) * 100));
+    const paise = perSession ? 0 : Math.max(0, Math.round(Number(body.amount || 0) * 100));
     // Paid now — the full fee unless the client is paying part of it (the rest
     // stays as a balance due on the package and is collected later).
     const paidPaise =
-      body.paidAmount === undefined || body.paidAmount === ''
+      perSession || body.paidAmount === undefined || body.paidAmount === ''
         ? paise
         : Math.max(0, Math.round(Number(body.paidAmount || 0) * 100));
 
@@ -78,6 +81,9 @@ export async function POST(req: NextRequest) {
     if (!isDay(startDay)) return NextResponse.json({ error: 'Invalid start date' }, { status: 400 });
     if (months < 1 || months > 12) {
       return NextResponse.json({ error: 'Duration must be 1–12 months' }, { status: 400 });
+    }
+    if (perSession && sessionRate <= 0) {
+      return NextResponse.json({ error: 'Enter the charge per session for a pay-later package' }, { status: 400 });
     }
     if (paidPaise > paise) {
       return NextResponse.json({ error: 'Amount paid cannot be more than the package fee' }, { status: 400 });
@@ -92,6 +98,8 @@ export async function POST(req: NextRequest) {
       startDay,
       endDay: packageEndDay(startDay, months),
       amount: paise,
+      billing: perSession ? 'per_session' : 'upfront',
+      sessionRate: perSession ? sessionRate : 0,
       notes: String(body.notes || '').trim(),
       createdBy: user._id,
     });

@@ -3,6 +3,10 @@ import mongoose from 'mongoose';
 // 'active' packages become expired on their own once endDay passes (derived,
 // not stored); 'cancelled' is an explicit stop by the desk.
 export const PACKAGE_STATUSES = ['active', 'cancelled'];
+// 'upfront'     = a fixed package fee (paid at the start, or in parts).
+// 'per_session' = pay later: the bill is sessionRate × sessions attended,
+//                 collected at month end.
+export const BILLING_MODES = ['upfront', 'per_session'];
 
 // A monthly treatment package a clinic patient has subscribed to, e.g.
 // "Monthly Physio — 12 sessions". Attendance is marked against it per day.
@@ -17,6 +21,9 @@ const packageSchema = new mongoose.Schema(
     endDay: { type: String, required: true, index: true },
     // Amount in the smallest currency unit (paise for INR).
     amount: { type: Number, default: 0 },
+    billing: { type: String, enum: BILLING_MODES, default: 'upfront' },
+    // Paise charged per attended session (per_session billing only).
+    sessionRate: { type: Number, default: 0, min: 0 },
     status: { type: String, enum: PACKAGE_STATUSES, default: 'active', index: true },
     notes: { type: String, default: '' },
     payment: { type: mongoose.Schema.Types.ObjectId, ref: 'Payment', default: null },
@@ -36,6 +43,8 @@ packageSchema.methods.toJSONSafe = function toJSONSafe(this: any) {
     startDay: this.startDay,
     endDay: this.endDay,
     amount: this.amount || 0,
+    billing: this.billing || 'upfront',
+    sessionRate: this.sessionRate || 0,
     status: this.status,
     notes: this.notes || '',
     payment: this.payment ? this.payment.toString() : null,
