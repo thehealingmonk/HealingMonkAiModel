@@ -299,6 +299,14 @@ export interface ReportFinding {
   severity: 'normal' | 'mild' | 'moderate' | 'severe' | null;
   painArea: string;
   painCorrelation: string;
+  /** Capture reliability (multi-frame stability, image quality). Absent on older reports. */
+  reliability?: {
+    frames: number;
+    spread: number | null;
+    stable: boolean;
+    landmarkConfidence: number | null;
+    issues: string[];
+  };
 }
 
 export interface ReportExercise {

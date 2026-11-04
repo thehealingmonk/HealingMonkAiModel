@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ArrowRight, Building2, ClipboardList } from 'lucide-react';
 import { ErgoEnvironment, ErgoTask } from '@/lib/ergo/ergoTypes';
 import { ENVIRONMENTS, TASKS, methodsForTask } from '@/lib/ergo/ergoKnowledge';
+import { initializePoseLandmarker } from '@/lib/poseDetection';
 
 interface Props {
   environment: ErgoEnvironment;
@@ -16,6 +17,15 @@ export default function ErgoSetup({ environment, task, onChange, onContinue, onE
   const [tsk, setTsk] = useState<ErgoTask>(task);
 
   const methods = useMemo(() => methodsForTask(env, tsk), [env, tsk]);
+
+  // Start the pose model download now, while the user picks the environment, so
+  // the capture screen starts tracking without waiting on the network. Shared
+  // in-flight promise — the capture screen reuses this exact load.
+  useEffect(() => {
+    initializePoseLandmarker().catch(() => {
+      /* non-fatal here; the capture screen retries and shows any error */
+    });
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">

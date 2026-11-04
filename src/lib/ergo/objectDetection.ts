@@ -17,6 +17,7 @@ import type { ObjectDetector as ObjectDetectorInstance } from '@mediapipe/tasks-
 import { DetectedObject } from './ergoTypes';
 import { COCO_TO_ERGO } from './ergoKnowledge';
 import { loadVisionFileset } from '@/lib/visionRuntime';
+import { startTimer } from '@/lib/measurement/perfLog';
 
 let objectDetector: ObjectDetectorInstance | null = null;
 
@@ -42,6 +43,7 @@ export function initializeObjectDetector(): Promise<ObjectDetectorInstance> {
 }
 
 async function loadObjectDetector(): Promise<ObjectDetectorInstance> {
+  const done = startTimer('object-model-load');
   // Same shared, pinned WASM runtime as the pose landmarker (see visionRuntime).
   const [{ ObjectDetector }, vision] = await Promise.all([
     import('@mediapipe/tasks-vision'),
@@ -64,6 +66,7 @@ async function loadObjectDetector(): Promise<ObjectDetectorInstance> {
     console.warn('GPU object-detector delegate unavailable, falling back to CPU.', err);
     objectDetector = await create('CPU');
   }
+  done();
 
   return objectDetector!;
 }

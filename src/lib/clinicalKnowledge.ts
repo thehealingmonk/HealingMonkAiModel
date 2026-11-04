@@ -105,6 +105,21 @@ export interface ExtraShot {
   timestamp: number;
 }
 
+/** How trustworthy a captured value is — attached at capture time, never used
+ *  to alter the value itself. */
+export interface CaptureQuality {
+  /** Frames (from the last ~1 s) that produced a value. */
+  frames: number;
+  /** Robust frame-to-frame spread of the value (≈ SD, same unit). */
+  spread: number | null;
+  /** Enough frames that agree closely. */
+  stable: boolean;
+  /** Mean visibility (0–1) of the landmarks this measurement uses. */
+  landmarkConfidence: number | null;
+  /** Human-readable warnings (unsteady, low light, blur, low confidence…). */
+  issues: string[];
+}
+
 export interface AssessmentCapture {
   assessmentId: string;
   value: number | null;
@@ -115,6 +130,8 @@ export interface AssessmentCapture {
   postureDeviation?: CapturedPostureDeviation;
   /** Plumb-line alignment at capture time — drives the position correct/incorrect verdict. */
   plumbLine?: CapturedPlumbLine;
+  /** Reliability of `value` (multi-frame stability, image quality, landmark confidence). */
+  quality?: CaptureQuality;
   timestamp: number;
 }
 

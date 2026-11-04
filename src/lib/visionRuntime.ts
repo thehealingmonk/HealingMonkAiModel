@@ -12,14 +12,21 @@ type Fileset = Awaited<
   ReturnType<typeof import('@mediapipe/tasks-vision').FilesetResolver.forVisionTasks>
 >;
 
+import { startTimer } from '@/lib/measurement/perfLog';
+
 let fileset: Promise<Fileset> | null = null;
 
 export function loadVisionFileset(): Promise<Fileset> {
   if (!fileset) {
     // Load the multi-MB MediaPipe runtime ON DEMAND (dynamic import) so it is
     // code-split into its own chunk and only downloaded when the camera is used.
+    const done = startTimer('wasm-load');
     fileset = import('@mediapipe/tasks-vision')
       .then(({ FilesetResolver }) => FilesetResolver.forVisionTasks(VISION_WASM_URL))
+      .then((fs) => {
+        done();
+        return fs;
+      })
       .catch((err) => {
         // Let a later call retry (e.g. after the network comes back).
         fileset = null;

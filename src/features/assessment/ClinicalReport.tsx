@@ -570,6 +570,11 @@ function FindingCard({
                 {capture.value !== null ? `${capture.value}${assessment.unit}` : 'N/A'}
               </p>
               <p className="text-[10px] text-gray-400 mt-0.5">Your value (estimate)</p>
+              {capture.quality && capture.quality.issues.length > 0 && (
+                <p className="text-[10px] text-amber-600 mt-0.5 max-w-[14rem]" title={capture.quality.issues.join('\n')}>
+                  ⚠ Lower reliability: {capture.quality.issues[0]}
+                </p>
+              )}
             </div>
             <div>
               <p className="text-[11px] text-gray-500">Ideal</p>

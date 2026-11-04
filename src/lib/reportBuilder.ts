@@ -28,6 +28,17 @@ export function buildReportPayload(
     severity: capture.severity,
     painArea: assessment.painArea,
     painCorrelation: assessment.painCorrelation,
+    ...(capture.quality
+      ? {
+          reliability: {
+            frames: capture.quality.frames,
+            spread: capture.quality.spread,
+            stable: capture.quality.stable,
+            landmarkConfidence: capture.quality.landmarkConfidence,
+            issues: capture.quality.issues.slice(0, 10),
+          },
+        }
+      : {}),
   }));
 
   const totalPenalty = paired.reduce(

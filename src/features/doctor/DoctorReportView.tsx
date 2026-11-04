@@ -16,6 +16,11 @@ interface Props {
   onSaved?: (info: { reportId: string; shareId: string }) => void;
 }
 
+// Captures that were already turned into a report in this tab. If the report
+// view mounts again for the SAME capture set (browser back/forward to the
+// report URL), it reuses that report instead of saving a second copy.
+const savedSessions = new WeakMap<AssessmentCapture[], { reportId: string; shareId: string; presets: IdealPostureSet[] }>();
+
 // Maps a DB patient onto the PatientInfo shape ClinicalReport renders.
 function toPatientInfo(p: Patient): PatientInfo {
   return {
@@ -51,6 +56,13 @@ export default function DoctorReportView({ patient, captures, onDone, onSaved }:
   useEffect(() => {
     if (created.current) return;
     created.current = true;
+    const already = savedSessions.get(captures);
+    if (already) {
+      setReportId(already.reportId);
+      setIdealPostures(already.presets);
+      setShareUrl(`${window.location.origin}/r/${already.shareId}`);
+      return;
+    }
     (async () => {
       // Auto-populate the doctor's curated ideal reference postures for this
       // patient's pain areas. Non-fatal: the report still generates without them.
@@ -77,6 +89,7 @@ export default function DoctorReportView({ patient, captures, onDone, onSaved }:
         const payload = { ...buildReportPayload(patient.id, captures, patient.painAreas), shareId: slug };
         const { report } = await createReport(payload);
         setReportId(report.id);
+        savedSessions.set(captures, { reportId: report.id, shareId: slug, presets });
         onSaved?.({ reportId: report.id, shareId: slug });
       } catch (err) {
         setSaveError(err instanceof Error ? err.message : 'Could not save report to the patient record');

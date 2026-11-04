@@ -14,6 +14,20 @@ const findingSchema = new mongoose.Schema(
     severity: { type: String, enum: ['normal', 'mild', 'moderate', 'severe', null], default: null },
     painArea: String,
     painCorrelation: String,
+    // Optional capture reliability (added later; older findings simply lack it).
+    reliability: {
+      type: new mongoose.Schema(
+        {
+          frames: Number,
+          spread: { type: Number, default: null },
+          stable: Boolean,
+          landmarkConfidence: { type: Number, default: null },
+          issues: { type: [String], default: [] },
+        },
+        { _id: false }
+      ),
+      default: undefined,
+    },
   },
   { _id: false }
 );

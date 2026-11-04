@@ -53,6 +53,14 @@ export async function POST(req: NextRequest) {
     const patient = mongoose.isValidObjectId(patientId) ? await Patient.findById(patientId) : null;
     if (!patient) return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
 
+    // Idempotency: one assessment session = one share slug. A retried or
+    // double-submitted save returns the report already stored for this patient
+    // instead of creating a duplicate record (and a duplicate patient email).
+    if (typeof shareId === 'string' && shareId) {
+      const existing = await Report.findOne({ shareId, patient: patient._id }).populate('doctor', 'name');
+      if (existing) return NextResponse.json({ report: existing.toJSONSafe(), duplicate: true }, { status: 200 });
+    }
+
     const list = Array.isArray(findings) ? findings : [];
     const flaggedCount = list.filter((f: any) => f.severity && f.severity !== 'normal').length;
 

@@ -135,8 +135,13 @@ export default function ErgoCapture({ onComplete, onBack, onArItems }: Props) {
       const model = initializePoseLandmarker();
       model.catch(() => {}); // handled below; avoid an unhandled rejection
       // Object detector for live sizes — optional, never blocks posture capture.
-      initializeObjectDetector()
-        .then(() => { objectsReady.current = true; })
+      // Loaded AFTER the pose model: both are multi-MB downloads (≈9.4 MB pose,
+      // ≈7.3 MB detector) and sharing the bandwidth would delay posture tracking,
+      // which is the part the user is actually waiting for.
+      model
+        .catch(() => undefined)
+        .then(() => (disposed.current ? undefined : initializeObjectDetector()))
+        .then((d) => { if (d) objectsReady.current = true; })
         .catch((err) => console.warn('Object detector unavailable; live object sizes off.', err));
       const lens = getPreferredLens('user');
       setFacingMode(lens);

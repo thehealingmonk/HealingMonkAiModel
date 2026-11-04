@@ -4,10 +4,14 @@ import { initializePoseLandmarker, detectPose, Landmark, toIsotropic } from '@/l
 import { computePostureChain, PostureChain } from '@/lib/postureVisualizer';
 import { computeClinicalPlumbLine, drawClinicalPlumbLine, ClinicalPlumbLine } from '@/lib/plumbLine';
 import { computeGuidance, drawGuidanceOverlay, Guidance } from '@/lib/captureGuidance';
+import { assessVideoFrame, FRAME_ISSUE_TEXT } from '@/lib/measurement/imageQuality';
+import { robustStats } from '@/lib/measurement/validation';
+import { countEvent } from '@/lib/measurement/perfLog';
 import { speak, stopSpeech, initializeVoice } from '@/services/voice.service';
 import {
   ClinicalAssessment,
   AssessmentCapture,
+  CaptureQuality,
   ExtraShot,
   MeasureResult,
   SEVERITY_COLOR,
@@ -15,8 +19,67 @@ import {
 } from '@/lib/clinicalKnowledge';
 import {
   Camera, ChevronLeft, ChevronRight, CheckCircle2, RotateCcw, SwitchCamera, Plus, X, Images,
-  Volume2, VolumeX, ArrowLeft, ArrowRight, MoveHorizontal,
+  Volume2, VolumeX, ArrowLeft, ArrowRight, MoveHorizontal, AlertTriangle,
 } from 'lucide-react';
+
+// Multi-frame capture: the value saved is taken from the last ~1 s of frames,
+// not from the single frame under the shutter, so one landmark wobble can't
+// change the result. See pickCaptureValue below.
+const CAPTURE_WINDOW_MS = 1000;
+const MIN_STABLE_FRAMES = 5;
+/** Largest frame-to-frame spread (degrees) still treated as a steady capture. */
+const MAX_STABLE_SPREAD_DEG = 3;
+/** Below this mean landmark visibility the value is flagged as low confidence. */
+const MIN_LANDMARK_CONFIDENCE = 0.6;
+
+interface FrameSample {
+  t: number;
+  assessmentId: string;
+  result: MeasureResult;
+  confidence: number | null;
+}
+
+function landmarkConfidence(lm: Landmark[], points: number[]): number | null {
+  const v = points.map((i) => lm[i]?.visibility).filter((x): x is number => typeof x === 'number');
+  return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null;
+}
+
+/**
+ * Choose the capture value from recent frames. Returns the REAL frame whose
+ * value is closest to the median (so value and severity stay consistent —
+ * nothing is interpolated or invented) plus how steady the window was.
+ */
+function pickCaptureValue(samples: FrameSample[]): { result: MeasureResult | null; quality: CaptureQuality } {
+  const withValue = samples.filter((s) => s.result.value != null);
+  const stats = robustStats(withValue.map((s) => s.result.value));
+  const issues: string[] = [];
+  if (stats.n < MIN_STABLE_FRAMES) {
+    issues.push(`Only ${stats.n} steady frame(s) with the required body points — re-capture recommended`);
+  } else if ((stats.spread ?? 0) > MAX_STABLE_SPREAD_DEG) {
+    issues.push(`Value varied ±${stats.spread!.toFixed(1)}° during capture (patient moving) — re-capture recommended`);
+  }
+  let best: FrameSample | null = null;
+  if (stats.median != null) {
+    for (const s of withValue) {
+      if (!best || Math.abs(s.result.value! - stats.median) < Math.abs(best.result.value! - stats.median)) best = s;
+    }
+  }
+  const confs = withValue.map((s) => s.confidence).filter((c): c is number => c != null);
+  const conf = confs.length ? confs.reduce((a, b) => a + b, 0) / confs.length : null;
+  if (conf != null && conf < MIN_LANDMARK_CONFIDENCE) {
+    issues.push(`Low landmark confidence (${Math.round(conf * 100)}%) — check lighting and that the body part is clearly visible`);
+  }
+  return {
+    result: best?.result ?? null,
+    quality: {
+      frames: stats.n,
+      spread: stats.spread == null ? null : Math.round(stats.spread * 10) / 10,
+      stable: stats.n >= MIN_STABLE_FRAMES && (stats.spread ?? Infinity) <= MAX_STABLE_SPREAD_DEG,
+      landmarkConfidence: conf == null ? null : Math.round(conf * 100) / 100,
+      issues,
+    },
+  };
+}
 
 interface Props {
   assessments: ClinicalAssessment[];
@@ -83,6 +146,8 @@ export default function ClinicalCapture({ assessments, onComplete, onBack, exter
   const usingRvfc = useRef(false);
   const lastVideoTime = useRef(-1);
   const latestLandmarks = useRef<Landmark[] | null>(null);
+  // Recent per-frame measurements of the CURRENT assessment (multi-frame capture).
+  const samplesRef = useRef<FrameSample[]>([]);
   // Latest plumb-line result for the frame on screen, so a capture stores the
   // exact alignment the doctor saw (and the live verdict can read it).
   const latestPlumb = useRef<ClinicalPlumbLine | null>(null);
@@ -313,6 +378,17 @@ export default function ClinicalCapture({ assessments, onComplete, onBack, exter
           // overlay below keeps drawing the normalized landmarks.
           const measure = currentRef.current.measure(toIsotropic(result.landmarks, aspect));
           setLive(measure);
+          const nowMs = performance.now();
+          const buf = samplesRef.current.filter(
+            (s) => nowMs - s.t <= CAPTURE_WINDOW_MS && s.assessmentId === currentRef.current.id
+          );
+          buf.push({
+            t: nowMs,
+            assessmentId: currentRef.current.id,
+            result: measure,
+            confidence: landmarkConfidence(result.landmarks, measure.points),
+          });
+          samplesRef.current = buf;
           const chain = computePostureChain(result.landmarks, aspect);
           setLivePosture(chain);
           const plumb = computeClinicalPlumbLine(result.landmarks, currentRef.current.view, aspect);
@@ -326,6 +402,8 @@ export default function ClinicalCapture({ assessments, onComplete, onBack, exter
         } else {
           latestLandmarks.current = null;
           latestPlumb.current = null;
+          // Body lost — older frames must not leak into the next capture.
+          samplesRef.current = [];
           setBodyDetected(false);
           clearCanvas(canvas, video);
           if (guideCanvasRef.current) drawGuidanceOverlay(guideCanvasRef.current, video, null);
@@ -479,9 +557,20 @@ export default function ClinicalCapture({ assessments, onComplete, onBack, exter
     const video = videoRef.current!;
 
     const aspect = (video.videoWidth / video.videoHeight) || 16 / 9;
-    const measure = lm
-      ? current.measure(toIsotropic(lm, aspect))
-      : { value: null, severity: null, points: [], detail: 'N/A' };
+    const nowMs = performance.now();
+    const recent = samplesRef.current.filter(
+      (s) => nowMs - s.t <= CAPTURE_WINDOW_MS && s.assessmentId === current.id
+    );
+    const picked = pickCaptureValue(recent);
+    // Fall back to this exact frame only when no recent frame had a value.
+    const measure =
+      picked.result ??
+      (lm ? current.measure(toIsotropic(lm, aspect)) : { value: null, severity: null, points: [], detail: 'N/A' });
+    const quality = picked.quality;
+    const frameQ = assessVideoFrame(video);
+    if (frameQ) quality.issues.push(...frameQ.issues.map((i) => FRAME_ISSUE_TEXT[i]));
+    if (measure.value == null) quality.issues.unshift('Required body points were not visible — no value recorded');
+    if (quality.issues.length) countEvent('capture-unstable');
     const chain = lm ? computePostureChain(lm, aspect) : null;
     // Plumb line for this exact frame — the alignment verdict shown in the report.
     const plumb = latestPlumb.current ?? (lm ? computeClinicalPlumbLine(lm, current.view, aspect) : null);
@@ -515,6 +604,7 @@ export default function ClinicalCapture({ assessments, onComplete, onBack, exter
             })),
           }
         : undefined,
+      quality,
       timestamp: Date.now(),
     };
     setCaptures((prev) => ({ ...prev, [current.id]: capture }));
@@ -713,7 +803,15 @@ export default function ClinicalCapture({ assessments, onComplete, onBack, exter
                   title={a.name}
                 >
                   {cap ? (
-                    <img src={cap.imageData} alt={a.name} className="w-full h-full object-cover" />
+                    <span className="relative block w-full h-full">
+                      <img src={cap.imageData} alt={a.name} className="w-full h-full object-cover" />
+                      {cap.quality && cap.quality.issues.length > 0 && (
+                        <span
+                          className="absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-amber-400 ring-1 ring-black"
+                          aria-label="Capture has quality warnings"
+                        />
+                      )}
+                    </span>
                   ) : (
                     <div className="w-full h-full bg-gray-700 flex items-center justify-center text-[10px] text-gray-300 px-1 text-center">
                       {a.name.split(' ')[0]}
@@ -743,6 +841,20 @@ export default function ClinicalCapture({ assessments, onComplete, onBack, exter
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Reliability warnings for the capture of THIS pose — shown, never hidden. */}
+          {captured?.quality && captured.quality.issues.length > 0 && (
+            <div role="status" className="mb-3 rounded-lg bg-amber-500/15 border border-amber-400/40 px-3 py-2 text-xs text-amber-100">
+              <p className="flex items-center gap-1.5 font-semibold text-amber-200">
+                <AlertTriangle className="w-3.5 h-3.5" /> Check this capture
+              </p>
+              <ul className="mt-1 space-y-0.5 list-disc list-inside">
+                {captured.quality.issues.map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+              </ul>
             </div>
           )}
 

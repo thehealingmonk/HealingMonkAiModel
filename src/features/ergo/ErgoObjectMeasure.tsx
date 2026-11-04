@@ -9,6 +9,18 @@ import { buildFitReport, hasFitData } from '@/lib/ergo/furnitureFit';
 import ErgoPhotoMeasure, { MeasurePhoto, SavedMeasure } from './ErgoPhotoMeasure';
 import ErgoFitCompare from './ErgoFitCompare';
 import { ErgoCaptures, ErgoWorkstationCapture } from './ergoTypes';
+import { makeRecord } from '@/lib/measurement/schema';
+import { compareMeasurements, checkShoulderVsStature } from '@/lib/measurement/validation';
+import { countEvent } from '@/lib/measurement/perfLog';
+
+/** Typed tape-measure height: ±1 cm (reading + posture/shoes). */
+const TYPED_HEIGHT_ERR_CM = 1;
+
+interface StatureConflict {
+  typed: number;
+  measured: number;
+  message: string;
+}
 
 interface Props {
   workstation: ErgoWorkstationCapture | null;
@@ -57,6 +69,9 @@ export default function ErgoObjectMeasure({
   const [cal, setCal] = useState<ErgoCalibration>(initialCalibration);
   const [uploads, setUploads] = useState<string[]>([]);
   const [warn, setWarn] = useState('');
+  // A photo height that disagrees with the typed one waits here for the user's
+  // decision — it is never averaged or silently swapped in.
+  const [conflict, setConflict] = useState<StatureConflict | null>(null);
 
   const photos = useMemo<MeasurePhoto[]>(() => {
     const out: MeasurePhoto[] = [];
@@ -97,10 +112,26 @@ export default function ErgoObjectMeasure({
         );
         return;
       }
+      // Cross-check against a height the user typed from a tape measure.
+      if (person.statureMode === 'user-measured' && isPlausibleStature(person.statureCm)) {
+        const cmp = compareMeasurements(
+          makeRecord({ name: 'Height', value: person.statureCm, unit: 'cm', confidence: null, uncertainty: TYPED_HEIGHT_ERR_CM, source: 'user', calibration: 'user-measured' }),
+          makeRecord({ name: 'Height', value: m.cm, unit: 'cm', confidence: null, uncertainty: m.errCm, source: 'ergo-photo', calibration: 'calibrated' })
+        );
+        if (cmp.status === 'mismatch') {
+          countEvent('measurement-mismatch');
+          setConflict({ typed: person.statureCm, measured: m.cm, message: cmp.message });
+          return;
+        }
+      }
+      setConflict(null);
       setPerson((p) => ({ ...p, statureCm: m.cm, statureMode: 'calibrated' }));
       return;
     }
     if (m.target === 'shoulderWidth') {
+      const check = checkShoulderVsStature(m.cm, isPlausibleStature(person.statureCm) ? person.statureCm : null);
+      // The warning itself is rendered live under the Person section.
+      if (check.status === 'warning') countEvent('validation-warning');
       setPerson((p) => ({ ...p, shoulderWidthCm: m.cm, shoulderMode: 'calibrated' }));
       return;
     }
@@ -123,6 +154,14 @@ export default function ErgoObjectMeasure({
   };
 
   const report = useMemo(() => buildFitReport(person, inputs, items), [person, inputs, items]);
+  // Re-checked live, so typing a height after measuring shoulders still flags an implausible pair.
+  const shoulderCheck = useMemo(
+    () =>
+      person.shoulderWidthCm != null
+        ? checkShoulderVsStature(person.shoulderWidthCm, isPlausibleStature(person.statureCm) ? person.statureCm : null)
+        : { status: 'valid' as const, message: '' },
+    [person.shoulderWidthCm, person.statureCm]
+  );
   const showReport = hasFitData(inputs, person, items);
 
   const numOrNull = (v: string): number | null => (v === '' || Number(v) <= 0 ? null : Number(v));
@@ -186,10 +225,38 @@ export default function ErgoObjectMeasure({
               </select>
             </label>
           </div>
+          {conflict && (
+            <div role="alert" className="rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-xs text-amber-100 space-y-2">
+              <p className="font-semibold text-amber-200">Height mismatch — please choose</p>
+              <p>{conflict.message}</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConflict(null)}
+                  className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 font-medium text-slate-100 hover:bg-white/10"
+                >
+                  Keep typed {conflict.typed} cm
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPerson((p) => ({ ...p, statureCm: conflict.measured, statureMode: 'calibrated' }));
+                    setConflict(null);
+                  }}
+                  className="rounded-lg border border-amber-400/40 bg-amber-500/20 px-3 py-1.5 font-medium text-amber-50 hover:bg-amber-500/30"
+                >
+                  Use photo {conflict.measured} cm
+                </button>
+              </div>
+            </div>
+          )}
           {person.shoulderWidthCm != null && (
             <p className="text-xs text-slate-400">
               Shoulder width: <b className="text-slate-200">{person.shoulderWidthCm} cm</b> ({MEASUREMENT_MODE_LABEL[person.shoulderMode]})
             </p>
+          )}
+          {shoulderCheck.status === 'warning' && (
+            <p className="text-xs text-amber-400">⚠ {shoulderCheck.message}</p>
           )}
         </section>
 

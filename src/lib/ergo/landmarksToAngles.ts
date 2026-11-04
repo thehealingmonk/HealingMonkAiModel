@@ -32,7 +32,10 @@ const L = {
 } as const;
 
 const vis = (l?: Landmark) => l?.visibility ?? 0;
-const seen = (l?: Landmark) => vis(l) > 0.3;
+// Same bar the clinical capture uses for drawing/measuring (> 0.5). The old 0.3
+// let half-occluded far-side joints (which MediaPipe guesses) into RULA/REBA angles.
+export const ERGO_MIN_VISIBILITY = 0.5;
+const seen = (l?: Landmark) => vis(l) > ERGO_MIN_VISIBILITY;
 
 function mid(a: Landmark, b: Landmark): Landmark {
   return {

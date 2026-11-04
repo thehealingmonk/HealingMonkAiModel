@@ -1,6 +1,7 @@
 import type { PoseLandmarker as PoseLandmarkerInstance } from '@mediapipe/tasks-vision';
 import { PoseSmoother } from '@/lib/poseSmoothing';
 import { loadVisionFileset } from '@/lib/visionRuntime';
+import { startTimer, recordTiming } from '@/lib/measurement/perfLog';
 
 let poseLandmarker: PoseLandmarkerInstance | null = null;
 
@@ -27,6 +28,7 @@ export function initializePoseLandmarker(): Promise<PoseLandmarkerInstance> {
 }
 
 async function loadPoseLandmarker(): Promise<PoseLandmarkerInstance> {
+  const done = startTimer('pose-model-load');
   // Code-split MediaPipe chunk + shared, pinned WASM runtime (see visionRuntime).
   const [{ PoseLandmarker }, vision] = await Promise.all([
     import('@mediapipe/tasks-vision'),
@@ -54,6 +56,8 @@ async function loadPoseLandmarker(): Promise<PoseLandmarkerInstance> {
     console.warn('GPU pose delegate unavailable, falling back to CPU.', err);
     poseLandmarker = await create('CPU');
   }
+  done();
+  warmUp(poseLandmarker!);
 
   return poseLandmarker!;
 }
@@ -67,6 +71,33 @@ const LANDMARK_NAMES = [
   'left_knee', 'right_knee', 'left_ankle', 'right_ankle', 'left_heel',
   'right_heel', 'left_foot_index', 'right_foot_index'
 ];
+
+/**
+ * Run one inference on a blank frame right after loading. The first real
+ * detectForVideo call otherwise pays for GPU shader compilation / buffer setup
+ * (often several hundred ms), which shows up as a frozen first frame. Doing it
+ * here overlaps that cost with the camera opening. The result is discarded and
+ * never touches the landmark smoother.
+ */
+function warmUp(model: PoseLandmarkerInstance) {
+  if (typeof document === 'undefined') return;
+  try {
+    const done = startTimer('pose-warmup');
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 256;
+    const ctx = c.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#808080';
+      ctx.fillRect(0, 0, 256, 256);
+    }
+    lastTimestamp = Math.max(lastTimestamp + 1, performance.now());
+    model.detectForVideo(c, lastTimestamp);
+    done();
+  } catch {
+    /* warm-up is best-effort only */
+  }
+}
 
 export function getLandmarkName(index: number): string {
   return LANDMARK_NAMES[index] || `landmark_${index}`;
@@ -166,7 +197,9 @@ export async function detectPose(videoElement: HTMLVideoElement): Promise<PoseRe
 
   try {
     lastTimestamp = Math.max(lastTimestamp + 1, performance.now());
+    const t0 = performance.now();
     const result = poseLandmarker.detectForVideo(videoElement, lastTimestamp);
+    recordTiming('inference', performance.now() - t0);
     if (result.landmarks && result.landmarks.length > 0) {
       return {
         landmarks: smoother.smooth(result.landmarks[0], lastTimestamp),
