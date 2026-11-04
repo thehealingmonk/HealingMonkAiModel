@@ -21,7 +21,8 @@ import {
 } from '@/components/ui/ListControls';
 import ModalPortal from '@/components/common/ModalPortal';
 
-export default function PatientsList() {
+/** `profileBase` is the route prefix for a patient's profile (admin or reception). */
+export default function PatientsList({ profileBase = '/admin/patient' }: { profileBase?: string }) {
   const navigate = useNavigate();
   const [q, setQ] = useState('');
   // The live poll re-fetches with whatever the search box currently holds.
@@ -220,7 +221,7 @@ export default function PatientsList() {
               {patients.map((p) => (
                 <tr
                   key={p.id}
-                  onClick={() => navigate(`/admin/patient/${p.id}`)}
+                  onClick={() => navigate(`${profileBase}/${p.id}`)}
                   className={`cursor-pointer transition-colors ${sel.isSelected(p.id) ? 'bg-emerald-500/10' : 'hover:bg-white/5'}`}
                 >
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
@@ -242,7 +243,7 @@ export default function PatientsList() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/admin/patient/${p.id}`);
+                          navigate(`${profileBase}/${p.id}`);
                         }}
                         className="hm-lift inline-flex items-center gap-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-xs font-semibold py-1.5 px-3 rounded-lg"
                       >

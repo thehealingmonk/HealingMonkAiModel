@@ -7,8 +7,8 @@ import { sendMail, welcomeStaffEmail } from '@/lib/server/mailer';
 
 export const dynamic = 'force-dynamic';
 
-// List all users, optionally filtered by ?role=doctor. Admin and reception.
-// Reception never sees admin accounts.
+// List all users, optionally filtered by ?role=doctor. Admin and reception
+// (reception sees the same list as admin, but cannot modify admin accounts).
 export async function GET(req: NextRequest) {
   const { user, error } = await requireAuth(req);
   if (error) return error;
@@ -19,10 +19,6 @@ export async function GET(req: NextRequest) {
   const role = req.nextUrl.searchParams.get('role');
   const filter: Record<string, unknown> = {};
   if (role && (ROLES as string[]).includes(role)) filter.role = role;
-  if (user.role === 'reception') {
-    if (role === 'admin') return NextResponse.json({ users: [] });
-    if (!filter.role) filter.role = { $ne: 'admin' };
-  }
   const users = await User.find(filter).sort({ createdAt: -1 });
   return NextResponse.json({ users: users.map((u: any) => u.toSafeJSON()) });
 }

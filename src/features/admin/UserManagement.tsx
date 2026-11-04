@@ -60,11 +60,13 @@ interface Props {
 
 export default function UserManagement({ initialRole = 'all', patientBase = '/admin/patient' }: Props) {
   const { user: me } = useAuth();
-  // Reception gets the same page, minus anything to do with admin accounts
-  // (the API enforces this too).
+  // Reception sees every user (admins included), but admin accounts are
+  // read-only for them — only an admin can edit/disable/delete an admin (the
+  // API enforces this too).
   const isAdmin = me?.role === 'admin';
-  const roleTabs = isAdmin ? ROLE_TABS : ROLE_TABS.filter((t) => t.value !== 'admin');
-  const [filter, setFilter] = useState<Role | 'all'>(!isAdmin && initialRole === 'admin' ? 'all' : initialRole);
+  const roleTabs = ROLE_TABS;
+  const [filter, setFilter] = useState<Role | 'all'>(initialRole);
+  const canModify = (u: AuthUser) => isAdmin || u.role !== 'admin';
   const [q, setQ] = useState('');
   const [users, setUsers] = useState<AuthUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -189,7 +191,7 @@ export default function UserManagement({ initialRole = 'all', patientBase = '/ad
     : users;
 
   // ---- Multi-select (excludes your own account, which can't be deleted) ----
-  const selectableIds = shown.filter((u) => u.id !== me?.id).map((u) => u.id);
+  const selectableIds = shown.filter((u) => u.id !== me?.id && canModify(u)).map((u) => u.id);
   const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));
   const someSelected = selectableIds.some((id) => selectedIds.has(id));
 
@@ -423,6 +425,7 @@ export default function UserManagement({ initialRole = 'all', patientBase = '/ad
             <tbody className="divide-y divide-white/10">
               {shown.map((u) => {
                 const isSelf = me?.id === u.id;
+                const locked = !canModify(u);
                 return (
                   <tr key={u.id} className={selectedIds.has(u.id) ? 'bg-emerald-500/10' : 'hover:bg-white/5'}>
                     <td className="px-4 py-3">
@@ -430,8 +433,8 @@ export default function UserManagement({ initialRole = 'all', patientBase = '/ad
                         type="checkbox"
                         checked={selectedIds.has(u.id)}
                         onChange={() => toggleOne(u.id)}
-                        disabled={isSelf}
-                        title={isSelf ? 'You cannot delete your own account' : ''}
+                        disabled={isSelf || locked}
+                        title={isSelf ? 'You cannot delete your own account' : locked ? 'Only an admin can change admin accounts' : ''}
                         className="h-4 w-4 cursor-pointer accent-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
                         aria-label={`Select ${u.name}`}
                       />
@@ -453,6 +456,11 @@ export default function UserManagement({ initialRole = 'all', patientBase = '/ad
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
+                      {locked ? (
+                        <span className="text-xs text-slate-500" title="Only an admin can change admin accounts">
+                          View only
+                        </span>
+                      ) : (
                       <div className="inline-flex items-center gap-3">
                         <button
                           onClick={() => openEdit(u)}
@@ -489,6 +497,7 @@ export default function UserManagement({ initialRole = 'all', patientBase = '/ad
                           {deletingId === u.id ? 'Deleting…' : 'Delete'}
                         </button>
                       </div>
+                      )}
                     </td>
                   </tr>
                 );

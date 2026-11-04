@@ -68,7 +68,8 @@ const PAY_BADGE: Record<PaymentStatus, string> = {
 
 export default function PatientProfile({ patient, onBack, onStartAssessment }: Props) {
   const { hasRole } = useAuth();
-  const isAdmin = hasRole('admin');
+  // Admin and reception share the full desk view (record payment, patient login).
+  const isAdmin = hasRole('admin', 'reception');
   // Local copy so an inline edit reflects immediately without a round-trip up
   // to the routing parent (which also holds the record). Re-synced by id.
   const [current, setCurrent] = useState<Patient>(patient);
@@ -205,7 +206,7 @@ export default function PatientProfile({ patient, onBack, onStartAssessment }: P
 
       {/* Patient login — admin sets a password so the patient can sign in and
           see all their sessions & reports. */}
-      {hasRole('admin') && <PatientLoginCard patient={current} />}
+      {isAdmin && <PatientLoginCard patient={current} />}
 
       {/* Online meeting — S-Admin creates a secure video room; the assigned
           doctor sees & joins the same meeting. (Flow B: remote AI assessment.) */}

@@ -1,10 +1,8 @@
-import { useEffect, useState } from 'react';
 import { LayoutGrid, CalendarDays, Users, FileText, IndianRupee, UserCog, Video, CalendarCheck } from 'lucide-react';
-import { Routes, Route, Navigate, Outlet, NavLink, useNavigate, useSearchParams, useParams } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet, NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/store/auth.store';
 import DashboardShell, { dashNavCls } from '@/components/layout/DashboardShell';
-import { Role, Patient, getPatient } from '@/services/api';
-import { CLINICAL_ASSESSMENTS, AssessmentCapture } from '@/lib/clinicalKnowledge';
+import { Role } from '@/services/api';
 import AdminDashboard from '@/features/admin/AdminDashboard';
 import UserManagement from '@/features/admin/UserManagement';
 import PatientsList from '@/features/admin/PatientsList';
@@ -15,10 +13,7 @@ import PaymentsList from '@/features/admin/PaymentsList';
 import AttendanceDesk from '@/features/attendance/AttendanceDesk';
 import ReceptionDashboard from '@/features/reception/ReceptionDashboard';
 import BookAppointment from '@/features/reception/BookAppointment';
-import PatientProfile from '@/features/doctor/PatientProfile';
-import DoctorReportView from '@/features/doctor/DoctorReportView';
-import PositionSelect from '@/features/assessment/PositionSelect';
-import ClinicalCapture from '@/features/assessment/ClinicalCapture';
+import { usePatientFlow } from '@/features/admin/patientFlow';
 
 // Admin (s-admin) URL space:
 //   /admin              → overview (live totals)
@@ -66,105 +61,16 @@ function UsersRoute() {
   return <UserManagement initialRole={role} />;
 }
 
-interface FlowProps {
-  patient: Patient | null;
-  setPatient: (p: Patient) => void;
-}
-
-// Patient profile: loads the record by URL id if it isn't already in memory
-// (deep link / refresh), then shows the reports timeline + Start AI Assessment.
-function ProfileRoute({ patient, setPatient, onStart }: FlowProps & { onStart: (p: Patient) => void }) {
-  const { id } = useParams();
-  const navigate = useNavigate();
-  const match = patient && patient.id === id ? patient : null;
-  const [p, setP] = useState<Patient | null>(match);
-  const [loading, setLoading] = useState(!match);
-
-  useEffect(() => {
-    if (match) {
-      setP(match);
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    if (id) {
-      getPatient(id)
-        .then((r) => {
-          if (cancelled) return;
-          setP(r.patient);
-          setPatient(r.patient);
-          setLoading(false);
-        })
-        .catch(() => !cancelled && setLoading(false));
-    }
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
-
-  if (loading) return <div className="p-10 text-center text-gray-500">Loading patient…</div>;
-  if (!p) return <Navigate to="/admin/patients" replace />;
-  return <PatientProfile patient={p} onBack={() => navigate('/admin/patients')} onStartAssessment={() => onStart(p)} />;
-}
-
-// Pose selection (fullscreen). Ensures the patient is loaded so later steps have it.
-function AssessRoute({
-  patient,
-  setPatient,
-  initial,
-  onStart,
-}: FlowProps & { initial: string[]; onStart: (id: string, ids: string[]) => void }) {
-  const { id } = useParams();
-  const navigate = useNavigate();
-  useEffect(() => {
-    if ((!patient || patient.id !== id) && id) {
-      getPatient(id)
-        .then((r) => setPatient(r.patient))
-        .catch(() => {});
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
-  return (
-    <PositionSelect
-      initial={initial}
-      onBack={() => navigate(`/admin/patient/${id}`)}
-      onStart={(ids) => onStart(id!, ids)}
-    />
-  );
-}
-
-function RedirectToProfile() {
-  const { id } = useParams();
-  return <Navigate to={id ? `/admin/patient/${id}` : '/admin/patients'} replace />;
-}
-
 export default function AdminApp() {
   const navigate = useNavigate();
-  const [patient, setPatient] = useState<Patient | null>(null);
-  const [assessmentIds, setAssessmentIds] = useState<string[]>([]);
-  const [captures, setCaptures] = useState<AssessmentCapture[]>([]);
+  const { profileRoute, assessRoutes } = usePatientFlow('/admin');
 
   return (
     <Routes>
       <Route element={<Chrome />}>
         <Route index element={<AdminDashboard onNavigate={(p) => navigate(p)} />} />
         <Route path="patients" element={<PatientsList />} />
-        <Route
-          path="patient/:id"
-          element={
-            <ProfileRoute
-              patient={patient}
-              setPatient={setPatient}
-              onStart={(p) => {
-                setPatient(p);
-                setAssessmentIds([]);
-                setCaptures([]);
-                navigate(`/admin/patient/${p.id}/assess`);
-              }}
-            />
-          }
-        />
+        {profileRoute}
         <Route path="reports" element={<ReportsList />} />
         <Route path="meetings" element={<MeetingsScheduler />} />
         <Route path="appointments" element={<AppointmentsList />} />
@@ -179,51 +85,7 @@ export default function AdminApp() {
       </Route>
 
       {/* Fullscreen AI assessment flow (no chrome) */}
-      <Route
-        path="patient/:id/assess"
-        element={
-          <AssessRoute
-            patient={patient}
-            setPatient={setPatient}
-            initial={assessmentIds}
-            onStart={(id, ids) => {
-              setAssessmentIds(ids);
-              navigate(`/admin/patient/${id}/assess/capture`);
-            }}
-          />
-        }
-      />
-      <Route
-        path="patient/:id/assess/capture"
-        element={
-          patient && assessmentIds.length > 0 ? (
-            <ClinicalCapture
-              assessments={CLINICAL_ASSESSMENTS.filter((a) => assessmentIds.includes(a.id))}
-              onBack={() => navigate(`/admin/patient/${patient.id}/assess`)}
-              onComplete={(caps) => {
-                setCaptures(caps);
-                navigate(`/admin/patient/${patient.id}/assess/report`);
-              }}
-            />
-          ) : (
-            <RedirectToProfile />
-          )
-        }
-      />
-      <Route
-        path="patient/:id/assess/report"
-        element={
-          patient && captures.length > 0 ? (
-            <DoctorReportView
-              patient={patient}
-              captures={captures}
-              onDone={() => navigate(`/admin/patient/${patient.id}`)}
-            />
-          ) : (
-            <RedirectToProfile />
-          )
-        }
-      />
+      {assessRoutes}
 
       <Route path="*" element={<Navigate to="/admin" replace />} />
     </Routes>

@@ -6,11 +6,11 @@ import { requireAuth, requireRole } from '@/middleware/auth';
 
 export const dynamic = 'force-dynamic';
 
-// Add / update the doctor's notes on a report. Doctors/admin only.
+// Add / update the doctor's notes on a report. Doctors/admin/reception.
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const { user, error } = await requireAuth(req);
   if (error) return error;
-  const roleErr = requireRole(user, 'doctor', 'admin');
+  const roleErr = requireRole(user, 'doctor', 'admin', 'reception');
   if (roleErr) return roleErr;
 
   if (!mongoose.isValidObjectId(params.id)) {

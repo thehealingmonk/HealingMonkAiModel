@@ -16,7 +16,7 @@ function cleanPoses(v: unknown): string[] {
 export async function GET(req: NextRequest) {
   const { user, error } = await requireAuth(req);
   if (error) return error;
-  const roleErr = requireRole(user, 'doctor', 'admin');
+  const roleErr = requireRole(user, 'doctor', 'admin', 'reception');
   if (roleErr) return roleErr;
 
   await connectDB();
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const { user, error } = await requireAuth(req);
   if (error) return error;
-  const roleErr = requireRole(user, 'doctor', 'admin');
+  const roleErr = requireRole(user, 'doctor', 'admin', 'reception');
   if (roleErr) return roleErr;
 
   try {

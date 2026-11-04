@@ -9,12 +9,12 @@ import { sendMail, reportReadyEmail } from '@/lib/server/mailer';
 export const dynamic = 'force-dynamic';
 
 // Manually (re)send a report to the patient by email, including the public
-// no-login report link. Doctors/admin only. Optionally override the recipient
+// no-login report link. Doctors/admin/reception. Optionally override the recipient
 // via { to } in the body (defaults to the patient's stored email).
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const { user, error } = await requireAuth(req);
   if (error) return error;
-  const roleErr = requireRole(user, 'doctor', 'admin');
+  const roleErr = requireRole(user, 'doctor', 'admin', 'reception');
   if (roleErr) return roleErr;
 
   if (!mongoose.isValidObjectId(params.id)) {

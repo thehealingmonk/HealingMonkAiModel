@@ -1,4 +1,4 @@
-import { UserPlus, CalendarDays, IndianRupee, CalendarRange, CalendarCheck, UserCog } from 'lucide-react';
+import { UserPlus, CalendarDays, IndianRupee, CalendarRange, CalendarCheck, UserCog, Users } from 'lucide-react';
 import { Routes, Route, Navigate, Outlet, NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/store/auth.store';
 import DashboardShell, { dashNavCls } from '@/components/layout/DashboardShell';
@@ -10,6 +10,8 @@ import BookAppointment from '@/features/reception/BookAppointment';
 import PatientForm from '@/features/doctor/PatientForm';
 import AttendanceDesk from '@/features/attendance/AttendanceDesk';
 import UserManagement from '@/features/admin/UserManagement';
+import PatientsList from '@/features/admin/PatientsList';
+import { usePatientFlow } from '@/features/admin/patientFlow';
 
 // Reception URL space:
 //   /reception             → today's schedule
@@ -17,7 +19,9 @@ import UserManagement from '@/features/admin/UserManagement';
 //   /reception/book        → book appointment
 //   /reception/collections → all-time collections
 //   /reception/attendance  → monthly package attendance desk
-//   /reception/users       → user management (same as admin, minus admin accounts)
+//   /reception/patients    → all patients (same as admin's Patients tab)
+//   /reception/patient/:id → patient profile + Start AI Assessment (same as admin)
+//   /reception/users       → user management (same list as admin; admin accounts view-only)
 function Chrome() {
   const { user, logout } = useAuth();
   return (
@@ -33,6 +37,9 @@ function Chrome() {
           </NavLink>
           <NavLink to="/reception/calendar" className={dashNavCls}>
             <CalendarRange className="w-4 h-4" /> Calendar
+          </NavLink>
+          <NavLink to="/reception/patients" className={dashNavCls}>
+            <Users className="w-4 h-4" /> Patients
           </NavLink>
           <NavLink to="/reception/attendance" className={dashNavCls}>
             <CalendarCheck className="w-4 h-4" /> Attendance
@@ -59,6 +66,7 @@ export default function ReceptionApp() {
   // Booking opened from the calendar (?back=calendar) returns there afterwards.
   const [search] = useSearchParams();
   const bookReturn = search.get('back') === 'calendar' ? '/reception/calendar' : '/reception';
+  const { profileRoute, assessRoutes } = usePatientFlow('/reception');
   return (
     <Routes>
       <Route element={<Chrome />}>
@@ -74,15 +82,19 @@ export default function ReceptionApp() {
             />
           }
         />
-        <Route path="attendance" element={<AttendanceDesk />} />
+        <Route path="patients" element={<PatientsList profileBase="/reception/patient" />} />
+        {profileRoute}
+        <Route path="attendance" element={<AttendanceDesk profileBase="/reception/patient" />} />
         <Route path="collections" element={<ReceptionCollections />} />
         <Route path="billing" element={<ReceptionBilling />} />
-        <Route path="users" element={<UserManagement patientBase={null} />} />
+        <Route path="users" element={<UserManagement patientBase="/reception/patient" />} />
         <Route
           path="book"
           element={<BookAppointment onBack={() => navigate(bookReturn)} onBooked={() => navigate(bookReturn)} />}
         />
       </Route>
+      {/* Fullscreen AI assessment flow (no chrome) */}
+      {assessRoutes}
       <Route path="*" element={<Navigate to="/reception" replace />} />
     </Routes>
   );

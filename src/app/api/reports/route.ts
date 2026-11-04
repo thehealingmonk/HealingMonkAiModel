@@ -37,11 +37,11 @@ export async function GET(req: NextRequest) {
   });
 }
 
-// Create a report from a completed AI assessment. Doctors/admin only.
+// Create a report from a completed AI assessment. Doctors/admin/reception.
 export async function POST(req: NextRequest) {
   const { user, error } = await requireAuth(req);
   if (error) return error;
-  const roleErr = requireRole(user, 'doctor', 'admin');
+  const roleErr = requireRole(user, 'doctor', 'admin', 'reception');
   if (roleErr) return roleErr;
 
   try {
