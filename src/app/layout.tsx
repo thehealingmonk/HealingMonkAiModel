@@ -1,21 +1,24 @@
 import type { Metadata, Viewport } from 'next';
 import '@/styles/globals.css';
+// Mappingg design system (dashboards + public header) — loaded after Tailwind.
+import '@/styles/mappingg-theme.css';
 import {
+  SITE,
   SITE_URL,
   SITE_NAME,
   SITE_TAGLINE,
   SITE_DESCRIPTION,
-  absoluteUrl,
+  DEFAULT_OG_IMAGES,
+  organizationSchema,
+  websiteSchema,
+  jsonLd,
 } from '@/lib/seo';
-
-const OG_IMAGE =
-  'https://images.pexels.com/photos/3807517/pexels-photo-3807517.jpeg?auto=compress&cs=tinysrgb&w=1200';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: `${SITE_NAME} · ${SITE_TAGLINE}`,
-    template: `%s · ${SITE_NAME}`,
+    default: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    template: `%s — ${SITE_NAME}`,
   },
   description: SITE_DESCRIPTION,
   applicationName: SITE_NAME,
@@ -63,49 +66,32 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     siteName: SITE_NAME,
-    title: `${SITE_NAME} · ${SITE_TAGLINE}`,
+    locale: SITE.locale,
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
     description: SITE_DESCRIPTION,
     url: SITE_URL,
-    images: [{ url: OG_IMAGE, width: 1200, height: 800, alt: `${SITE_NAME} posture assessment` }],
+    images: DEFAULT_OG_IMAGES,
   },
   twitter: {
     card: 'summary_large_image',
-    title: `${SITE_NAME} · ${SITE_TAGLINE}`,
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
     description: SITE_DESCRIPTION,
-    images: [OG_IMAGE],
+    images: DEFAULT_OG_IMAGES,
   },
   formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#10b981',
+  themeColor: SITE.themeColor,
+  viewportFit: 'cover',
   width: 'device-width',
   initialScale: 1,
 };
 
-// Organization + WebSite structured data, rendered on the server so search
-// engines see it even though the app itself is a client-only SPA.
-const jsonLd = {
-  '@context': 'https://schema.org',
-  '@graph': [
-    {
-      '@type': 'Organization',
-      '@id': `${SITE_URL}/#organization`,
-      name: SITE_NAME,
-      url: SITE_URL,
-      logo: absoluteUrl('/icon-512.png'),
-      description: SITE_DESCRIPTION,
-    },
-    {
-      '@type': 'WebSite',
-      '@id': `${SITE_URL}/#website`,
-      name: SITE_NAME,
-      url: SITE_URL,
-      publisher: { '@id': `${SITE_URL}/#organization` },
-      inLanguage: 'en',
-    },
-  ],
-};
+// Organization + WebSite structured data (same builders as Mappingg's
+// lib/seo/schema.ts), rendered on the server so search engines see it even
+// though the app itself is a client-only SPA.
+const siteJsonLd = jsonLd(organizationSchema(), websiteSchema());
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -128,7 +114,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script
           type="application/ld+json"
           // eslint-disable-next-line react/no-danger
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+          dangerouslySetInnerHTML={{ __html: siteJsonLd }}
         />
       </head>
       <body>{children}</body>

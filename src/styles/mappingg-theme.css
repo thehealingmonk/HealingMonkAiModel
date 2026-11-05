@@ -1,0 +1,281 @@
+/* ==================================================================== *
+ * Mappingg design system, applied to HealingMonk (design only).
+ *
+ * Same tokens, shapes and components as the Mappingg super-admin
+ * (app/dashboard/s-admin/admin.css) and site header (site-header.css):
+ * white top bar, pill tab row with a forest-green active tab, soft
+ * rounded white cards, Inter type.
+ *
+ *  .hm-console  — every signed-in dashboard (admin, doctor, reception,
+ *                 patient) + the login form. The feature screens were
+ *                 written for a dark navy theme, so inside this scope
+ *                 their dark-theme utilities are remapped to the light
+ *                 Mappingg look instead of editing ~60 files.
+ *  .hm-site     — the public marketing pages (header, footer, CTAs).
+ * ==================================================================== */
+
+.hm-console,
+.hm-site {
+  --fg: #1b2a24;
+  --fg-2: #3d4a44;
+  --muted: #5f6964;
+  --line: #e6e2d8;
+  --bg: #f4f6f4;
+  --card: #fff;
+  --forest: #0f5c47;
+  --forest-deep: #0a4535;
+  --accent: #2f7a3c;
+  --accent-50: #e8f2e1;
+  --water: #2d6fa3;
+  --water-50: #e6f0f8;
+  --road: #c9861f;
+  --earth: #a9532d;
+  --gold: #b0924f;
+  --radius: 16px;
+  --shadow: 0 10px 30px -22px rgba(16, 36, 30, 0.5);
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* ------------------------------------------------------------------ *
+ * Dashboard chrome (DashboardShell) — mirrors .adm2-top / .adm2-tabs
+ * ------------------------------------------------------------------ */
+.hm-console {
+  font-family: var(--font);
+  color: var(--fg);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+body.hm-console { background: var(--bg); }
+
+.hmc-top {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  height: 62px; padding: 0 22px;
+  background: #fff; border-bottom: 1px solid var(--line);
+}
+.hmc-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.hmc-mark {
+  width: 36px; height: 36px; flex-shrink: 0; border-radius: 11px;
+  display: grid; place-items: center; color: #fff; background: var(--forest);
+  box-shadow: 0 8px 18px -10px rgba(15, 92, 71, 0.7);
+}
+.hmc-brand b { display: block; font-size: 18px; font-weight: 800; letter-spacing: -0.03em; color: #0b4a3b; line-height: 1.1; }
+.hmc-brand b em { font-style: normal; color: var(--gold); }
+.hmc-brand small { display: block; font-size: 10.5px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
+
+.hmc-right { position: relative; display: flex; align-items: center; gap: 10px; }
+.hmc-chip {
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px;
+  border-radius: 999px; background: #fff; border: 1px solid var(--line);
+  font: 600 12.5px var(--font); color: var(--fg); cursor: pointer;
+}
+.hmc-chip:hover { border-color: #cfd8d0; }
+.hmc-chip .who { width: 28px; height: 28px; border-radius: 50%; background: var(--forest); color: #fff; display: grid; place-items: center; font-size: 11px; font-weight: 700; }
+.hmc-chip .who-meta { text-align: left; line-height: 1.2; }
+.hmc-chip .who-meta b { display: block; font-size: 12.5px; }
+.hmc-chip .who-meta small { display: block; font-size: 10.5px; color: var(--muted); font-weight: 500; }
+.hmc-menu {
+  position: absolute; right: 0; top: calc(100% + 8px); min-width: 190px;
+  background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+  padding: 6px; display: flex; flex-direction: column; z-index: 50;
+}
+.hmc-menu button { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: none; background: none; font: 500 14px var(--font); color: var(--fg); border-radius: 9px; cursor: pointer; text-align: left; }
+.hmc-menu button:hover { background: var(--bg); }
+.hmc-menu button.danger { color: var(--earth); }
+.hmc-menu .sep { height: 1px; background: var(--line); margin: 4px 2px; }
+
+.hmc-tabs {
+  position: sticky; top: 62px; z-index: 30;
+  display: flex; gap: 4px; padding: 10px 16px;
+  background: rgba(244, 246, 244, 0.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none;
+}
+.hmc-tabs::-webkit-scrollbar { display: none; }
+.hmc-tabs-in { display: flex; gap: 4px; margin: 0 auto; width: 100%; }
+.hmc-tab {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px;
+  border-radius: 999px; border: 1px solid transparent; background: none;
+  font: 600 13.5px var(--font); color: var(--muted); cursor: pointer; transition: 0.15s; white-space: nowrap;
+}
+.hmc-tab:hover { background: #fff; color: var(--fg); }
+.hmc-tab.active { background: var(--forest); color: #fff; box-shadow: 0 8px 18px -10px rgba(15, 92, 71, 0.7); }
+.hmc-main { position: relative; z-index: 10; padding: 24px; }
+
+@media (max-width: 720px) {
+  .hmc-top { padding: 0 14px; }
+  .hmc-main { padding: 16px; }
+}
+@media (max-width: 560px) {
+  .hmc-chip .who-meta { display: none; }
+  .hmc-chip { padding: 4px; }
+}
+
+/* ------------------------------------------------------------------ *
+ * Mappingg cards: page heading, stat cards, panels.
+ * ------------------------------------------------------------------ */
+.hm-console .glass-dark,
+.hm-console .glass-light {
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.hm-console .glass-dark-lift:hover,
+.hm-console .glass-light-lift:hover {
+  background: var(--card);
+  border-color: #cfd8d0;
+  transform: translateY(-2px);
+  box-shadow: 0 18px 36px -24px rgba(16, 36, 30, 0.55);
+}
+.hm-console .hm-lift:hover { box-shadow: 0 18px 36px -24px rgba(16, 36, 30, 0.55); }
+.hm-console .hm-skeleton { background: #eceee9; }
+.hm-console h1, .hm-console h2 { letter-spacing: -0.02em; }
+
+/* ------------------------------------------------------------------ *
+ * Dark-theme utility remap (only inside .hm-console).
+ * ------------------------------------------------------------------ */
+
+/* Text on the old navy background → Mappingg ink / muted. */
+.hm-console .text-white,
+.hm-console .text-slate-100,
+.hm-console .text-slate-200,
+.hm-console .text-gray-100,
+.hm-console .text-amber-50 { color: var(--fg); }
+.hm-console .text-white\/80,
+.hm-console .text-white\/70,
+.hm-console .text-slate-300 { color: var(--fg-2); }
+.hm-console .text-slate-400 { color: var(--muted); }
+.hm-console .hover\:text-white:hover,
+.hm-console .hover\:text-slate-200:hover { color: var(--forest); }
+
+/* Pale accent text (made for navy) → readable deep tones on white. */
+.hm-console :is(.text-emerald-100, .text-emerald-200, .text-emerald-300, .text-emerald-300\/90, .text-teal-200, .text-teal-200\/90, .text-teal-300, .text-teal-300\/80, .text-teal-300\/70) { color: var(--forest); }
+.hm-console :is(.text-emerald-400, .text-green-400) { color: var(--accent); }
+.hm-console :is(.hover\:text-emerald-100, .hover\:text-emerald-200, .hover\:text-emerald-300):hover { color: var(--forest-deep); }
+.hm-console :is(.text-rose-200, .text-rose-300, .text-rose-400, .text-red-300, .text-red-400) { color: #be123c; }
+.hm-console :is(.hover\:text-rose-300, .hover\:text-red-300):hover { color: #9f1239; }
+.hm-console :is(.text-amber-100, .text-amber-100\/80, .text-amber-200, .text-amber-300, .text-amber-400) { color: #b45309; }
+.hm-console .hover\:text-amber-300:hover { color: #92400e; }
+.hm-console :is(.text-sky-200, .text-sky-300, .text-sky-400) { color: var(--water); }
+.hm-console :is(.hover\:text-sky-200, .hover\:text-sky-300):hover { color: #1d4f78; }
+.hm-console :is(.text-violet-300) { color: #6b4fbb; }
+.hm-console :is(.text-orange-300) { color: #b4540a; }
+.hm-console :is(.text-yellow-400) { color: #a16207; }
+
+/* Translucent-white surfaces → white cards / soft grey fills. */
+.hm-console :is(.bg-white\/5, .focus\:bg-white\/5:focus) { background-color: var(--card); }
+.hm-console .bg-white\/10 { background-color: #f1f4f1; }
+.hm-console :is(.bg-white\/15, .bg-white\/20, .bg-white\/25) { background-color: #e9eee9; }
+.hm-console :is(.hover\:bg-white\/5, .hover\:bg-white\/10):hover { background-color: var(--bg); }
+.hm-console :is(.hover\:bg-white\/20, .hover\:bg-white\/25):hover { background-color: #e3e9e3; }
+.hm-console :is(.bg-\[\#1f2b48\], .bg-\[\#1f2b48\]\/80, .bg-\[\#1f2b48\]\/70, .bg-\[\#1b2740\]) { background-color: var(--card); }
+
+/* Hairlines. */
+.hm-console :is(.border-white\/10, .border-white\/15, .border-white\/20, .border-white\/40, .border-white\/60) { border-color: var(--line); }
+.hm-console .divide-white\/10 > :not([hidden]) ~ :not([hidden]) { border-color: var(--line); }
+.hm-console :is(.ring-white\/5, .ring-white\/15) { --tw-ring-color: var(--line); }
+
+/* Brand actions: Mappingg uses one solid forest green, not a gradient. */
+.hm-console :is(.from-emerald-500.to-teal-500, .from-emerald-500.to-teal-600, .from-emerald-400.to-teal-500),
+.hm-site :is(.from-emerald-500.to-teal-500, .from-emerald-500.to-teal-600) {
+  background-image: none;
+  background-color: var(--forest);
+}
+.hm-console :is(.bg-emerald-500, .bg-emerald-600) { background-color: var(--forest); }
+.hm-console :is(.hover\:bg-emerald-600, .hover\:bg-emerald-700):hover { background-color: var(--forest-deep); }
+.hm-console :is(.shadow-emerald-500\/30, .shadow-emerald-500\/25, .shadow-emerald-500\/20) {
+  --tw-shadow-color: rgba(15, 92, 71, 0.35);
+  --tw-shadow: var(--tw-shadow-colored);
+}
+
+/* Anything sitting on a solid / dark fill keeps white text (buttons,
+   badges, video tiles, overlays). Higher specificity than the remap above. */
+.hm-console :is(
+  [class*="bg-gradient-to"], [class*="bg-black"], [class*="bg-slate-7"], [class*="bg-slate-8"], [class*="bg-slate-9"],
+  [class*="bg-gray-6"], [class*="bg-gray-7"], [class*="bg-gray-8"],
+  .bg-emerald-400, .bg-emerald-500, .bg-emerald-600, .bg-emerald-600\/90, .bg-emerald-700, .bg-teal-500, .bg-teal-600,
+  .bg-green-500, .bg-green-500\/90, .bg-green-600, .bg-green-700, .bg-red-500, .bg-red-600, .bg-red-700,
+  .bg-rose-500, .bg-rose-600, .bg-rose-600\/90, .bg-sky-500, .bg-sky-600, .bg-blue-500, .bg-blue-600,
+  .bg-amber-400, .bg-amber-500, .bg-amber-500\/90, .bg-yellow-500, .bg-yellow-600, .bg-violet-500, .bg-violet-600,
+  .bg-slate-600, .bg-gray-400, .bg-\[\#0f1830\]
+) :is(.text-white, .text-white\/80, .text-white\/70, .text-slate-100, .text-slate-200, .text-slate-300),
+.hm-console :is(
+  [class*="bg-gradient-to"], [class*="bg-black"], [class*="bg-slate-7"], [class*="bg-slate-8"], [class*="bg-slate-9"],
+  [class*="bg-gray-6"], [class*="bg-gray-7"], [class*="bg-gray-8"],
+  .bg-emerald-400, .bg-emerald-500, .bg-emerald-600, .bg-emerald-600\/90, .bg-emerald-700, .bg-teal-500, .bg-teal-600,
+  .bg-green-500, .bg-green-500\/90, .bg-green-600, .bg-green-700, .bg-red-500, .bg-red-600, .bg-red-700,
+  .bg-rose-500, .bg-rose-600, .bg-rose-600\/90, .bg-sky-500, .bg-sky-600, .bg-blue-500, .bg-blue-600,
+  .bg-amber-400, .bg-amber-500, .bg-amber-500\/90, .bg-yellow-500, .bg-yellow-600, .bg-violet-500, .bg-violet-600,
+  .bg-slate-600, .bg-gray-400, .bg-\[\#0f1830\]
+):is(.text-white, .text-white\/80, .text-white\/70, .text-slate-100, .text-slate-200, .text-slate-300, .hover\:text-white:hover) {
+  color: #fff;
+}
+/* Light gradients (from-green-50 etc.) are not dark — keep their dark text. */
+.hm-console :is([class*="from-green-50"], [class*="from-slate-50"], [class*="from-yellow-50"], [class*="from-red-50"]) .text-white { color: var(--fg); }
+
+/* ------------------------------------------------------------------ *
+ * Public site (.hm-site) — Mappingg header (.shd) + quieter backdrop.
+ * ------------------------------------------------------------------ */
+.hm-site { font-family: var(--font); }
+.hm-site .light-base {
+  background:
+    radial-gradient(55% 45% at 12% 6%, rgba(15, 92, 71, 0.07), transparent 70%),
+    radial-gradient(50% 45% at 88% 10%, rgba(45, 111, 163, 0.07), transparent 70%),
+    linear-gradient(180deg, #f7f8f6 0%, #fbfcfb 55%, #ffffff 100%);
+}
+
+.hms-head {
+  position: fixed; inset: 0 0 auto; z-index: 1000; font-family: var(--font);
+  background: rgba(255, 255, 255, 0.96); border-bottom: 1px solid #e9ece7;
+  backdrop-filter: blur(14px) saturate(160%); -webkit-backdrop-filter: blur(14px) saturate(160%);
+  transition: box-shadow 0.3s;
+}
+.hms-head.scrolled { box-shadow: 0 10px 30px -20px rgba(16, 36, 29, 0.35); }
+.hms-wrap { width: 100%; max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+.hms-bar { position: relative; height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.hms-brand { display: inline-flex; align-items: center; gap: 10px; }
+.hms-brand .hmc-mark { width: 38px; height: 38px; }
+.hms-brand b { font-weight: 800; font-size: 21px; letter-spacing: -0.03em; color: #0b4a3b; }
+.hms-brand b em { font-style: normal; color: var(--gold); }
+.hms-menu { display: flex; align-items: center; gap: 2px; }
+.hms-menu a { position: relative; display: inline-flex; align-items: center; font-size: 14px; font-weight: 600; color: #1d2b26; padding: 10px 13px; border-radius: 10px; transition: 0.2s; }
+.hms-menu a:hover, .hms-menu a.active { color: var(--forest); }
+.hms-menu a.active::after { content: ''; position: absolute; left: 13px; right: 13px; bottom: 2px; height: 2px; border-radius: 2px; background: var(--forest); }
+.hms-right { display: flex; align-items: center; gap: 8px; }
+.hms-btn {
+  display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 10px;
+  border: 1.5px solid transparent; font: 700 13.5px var(--font); cursor: pointer; transition: 0.2s; white-space: nowrap;
+}
+.hms-btn.primary { background: var(--forest); color: #fff; box-shadow: 0 12px 24px -12px rgba(15, 92, 71, 0.6); }
+.hms-btn.primary:hover { background: var(--forest-deep); transform: translateY(-1px); }
+.hms-btn.line { background: #fff; color: var(--forest); border-color: var(--forest); }
+.hms-btn.line:hover { background: var(--accent-50); }
+.hms-burger { display: none; width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: #fff; color: var(--forest); cursor: pointer; align-items: center; justify-content: center; }
+.hms-mobile {
+  position: absolute; left: 0; right: 0; top: 78px; padding: 10px; background: #fff;
+  border: 1px solid var(--line); border-radius: 22px; box-shadow: 0 40px 80px -40px rgba(29, 43, 38, 0.45);
+  display: flex; flex-direction: column; gap: 2px; max-height: calc(100dvh - 100px); overflow-y: auto;
+}
+.hms-mobile a { display: flex; align-items: center; gap: 12px; padding: 13px 14px; border-radius: 14px; font: 600 15px var(--font); color: #1d2b26; }
+.hms-mobile a:hover, .hms-mobile a.active { background: var(--accent-50); color: var(--forest); }
+.hms-mobile .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+.hms-mobile .row .hms-btn { width: 100%; justify-content: center; }
+
+@media (max-width: 1000px) {
+  .hms-menu { display: none; }
+  .hms-burger { display: inline-flex; }
+}
+@media (max-width: 720px) {
+  .hms-wrap { padding: 0 14px; }
+  .hms-bar { height: 64px; }
+  .hms-mobile { top: 70px; }
+  .hms-brand b { font-size: 19px; }
+  .hms-right > .hms-btn.line { display: none; }
+}
+@media (max-width: 400px) {
+  .hms-right > .hms-btn.primary { display: none; }
+}
+
+/* Footer brand mark + link hover in Mappingg green. */
+.hm-site footer .hover\:text-emerald-600:hover { color: var(--forest); }

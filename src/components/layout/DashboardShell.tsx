@@ -1,13 +1,16 @@
-import { ReactNode } from 'react';
-import { Activity, LogOut } from 'lucide-react';
-import AiBackdrop from '@/components/common/AiBackdrop';
+import { ReactNode, useEffect, useRef, useState } from 'react';
+import { Activity, ChevronDown, LogOut } from 'lucide-react';
 import PanelLockToggle from '@/components/common/PanelLockToggle';
 
 /**
- * Shared dark "AI scan" chrome for every signed-in console (admin, doctor,
- * reception, patient) — so the dashboards match the public site. Provides the
- * animated backdrop, a frosted glass header and an optional nav row. Content
- * renders through `children`.
+ * Shared chrome for every signed-in console (admin, doctor, reception,
+ * patient), in the Mappingg dashboard design: a white top bar with the brand
+ * and an account chip, then a sticky row of pill tabs. Content renders through
+ * `children`.
+ *
+ * The `.hm-console` class (src/styles/mappingg-theme.css) turns the screens'
+ * older dark-theme utilities into the light Mappingg look. It is also put on
+ * <body> while a console is open so modals portalled there match.
  */
 export default function DashboardShell({
   consoleName,
@@ -24,49 +27,96 @@ export default function DashboardShell({
   maxWidth?: string;
   children: ReactNode;
 }) {
-  return (
-    <div className="relative min-h-screen bg-[#1b2740] text-slate-100">
-      <AiBackdrop />
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-[#1f2b48]/80 backdrop-blur-xl">
-        <div className={`mx-auto flex h-16 items-center justify-between px-4 ${maxWidth}`}>
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/30">
-              <Activity className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <p className="font-bold leading-tight text-white">HealingMonk</p>
-              <p className="text-xs leading-tight text-teal-300/80">{consoleName}</p>
-            </div>
+  useEffect(() => {
+    document.body.classList.add('hm-console');
+    return () => document.body.classList.remove('hm-console');
+  }, []);
+
+  // Close the account menu on outside click / Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
+
+  const initials =
+    (userLabel || consoleName)
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase())
+      .join('') || 'HM';
+
+  return (
+    <div className="hm-console relative min-h-screen">
+      <header className="hmc-top">
+        <div className="hmc-brand">
+          <span className="hmc-mark" aria-hidden="true">
+            <Activity className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <b>
+              Healing<em>Monk</em>
+            </b>
+            <small className="truncate">{consoleName}</small>
           </div>
-          <div className="flex items-center gap-2 sm:gap-4">
-            {userLabel && <span className="hidden text-sm text-slate-300 md:inline">{userLabel}</span>}
-            <PanelLockToggle />
-            <button
-              onClick={onLogout}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-300 transition-colors hover:text-white"
-            >
-              <LogOut className="h-4 w-4" /> <span className="hidden sm:inline">Sign out</span>
-            </button>
-          </div>
+        </div>
+
+        <div className="hmc-right" ref={menuRef}>
+          <PanelLockToggle />
+          <button
+            type="button"
+            className="hmc-chip"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+          >
+            <span className="who" aria-hidden="true">{initials}</span>
+            <span className="who-meta">
+              <b>{userLabel || 'Account'}</b>
+              <small>{consoleName}</small>
+            </span>
+            <ChevronDown className="h-3 w-3 text-[color:var(--muted)]" aria-hidden="true" />
+          </button>
+          {menuOpen && (
+            <div className="hmc-menu" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                className="danger"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onLogout();
+                }}
+              >
+                <LogOut className="h-4 w-4" /> Sign out
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
       {nav && (
-        <div className="sticky top-16 z-20 border-b border-white/10 bg-[#1f2b48]/70 backdrop-blur-xl">
-          <div className={`mx-auto flex items-center gap-1.5 overflow-x-auto px-4 py-2 ${maxWidth}`}>{nav}</div>
-        </div>
+        <nav className="hmc-tabs" aria-label={`${consoleName} sections`}>
+          <div className={`hmc-tabs-in ${maxWidth}`}>{nav}</div>
+        </nav>
       )}
 
-      <main className="relative z-10 px-4 py-8">{children}</main>
+      <main className="hmc-main">{children}</main>
     </div>
   );
 }
 
-/** Shared nav-tab styling for console nav rows. */
-export const dashNavCls = ({ isActive }: { isActive: boolean }) =>
-  `inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
-    isActive
-      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-sm shadow-emerald-500/30'
-      : 'text-slate-300 hover:bg-white/10 hover:text-white'
-  }`;
+/** Shared nav-tab styling for console nav rows (Mappingg pill tabs). */
+export const dashNavCls = ({ isActive }: { isActive: boolean }) => `hmc-tab${isActive ? ' active' : ''}`;

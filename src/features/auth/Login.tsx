@@ -127,7 +127,7 @@ export default function Login({ onBack }: Props) {
   };
 
   return (
-    <div className="relative min-h-screen bg-[#1b2740] text-slate-100 lg:grid lg:grid-cols-2">
+    <div className="relative min-h-screen bg-[#f4f6f4] text-[#1b2a24] lg:grid lg:grid-cols-2">
       <AiBackdrop />
 
       {/* ---------- LEFT: dark AI-scan panel (desktop) ---------- */}
@@ -157,7 +157,7 @@ export default function Login({ onBack }: Props) {
       </aside>
 
       {/* ---------- RIGHT ---------- */}
-      <div className="relative z-10 flex min-h-screen flex-col lg:min-h-0">
+      <div className="hm-console relative z-10 flex min-h-screen flex-col lg:min-h-0">
         <div className="px-4 py-4 lg:hidden">
           <button
             onClick={back}

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import ClientApp from '@/app/[[...slug]]/ClientApp';
-import { ROUTE_META, PUBLIC_ROUTES, isAppPath, isIndexablePath, absoluteUrl } from '@/lib/seo';
+import { ROUTE_META, PUBLIC_ROUTES, isAppPath, isIndexablePath, buildRouteMetadata, pageSchemas, jsonLd } from '@/lib/seo';
 
 type Props = { params: { slug?: string[] } };
 
@@ -28,17 +28,7 @@ function pathOf(params: Props['params']): string {
 // (dashboards, reports, the paid flow, meeting rooms) is noindex.
 export function generateMetadata({ params }: Props): Metadata {
   const path = pathOf(params);
-  if (isIndexablePath(path)) {
-    const meta = ROUTE_META[path];
-    const url = absoluteUrl(path);
-    return {
-      title: { absolute: meta.title },
-      description: meta.description,
-      alternates: { canonical: url },
-      openGraph: { title: meta.title, description: meta.description, url },
-      twitter: { title: meta.title, description: meta.description },
-    };
-  }
+  if (isIndexablePath(path)) return buildRouteMetadata(path);
   return {
     robots: { index: false, follow: false, googleBot: { index: false, follow: false } },
   };
@@ -55,6 +45,11 @@ export default function Page({ params }: Props) {
   const meta = isIndexablePath(path) ? ROUTE_META[path] : null;
   return (
     <>
+      {/* WebPage + BreadcrumbList for this marketing page (Organization and
+          WebSite are in the root layout). */}
+      {meta && (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(...pageSchemas(path)) }} />
+      )}
       {/* SEO-02: the SPA is client-only, so without JavaScript a marketing page
           was an empty spinner. Crawlers/link previews that don't run JS now get
           the page's heading, summary and internal links — the same content the

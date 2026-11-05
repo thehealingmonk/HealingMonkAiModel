@@ -17,7 +17,7 @@ export default function MarketingLayout() {
   }, [pathname]);
 
   return (
-    <div className="light-base relative min-h-screen text-slate-800">
+    <div className="hm-site light-base relative min-h-screen text-slate-800">
       {/* Site-wide animated AI scan backdrop. */}
       <AiBackdrop />
 
