@@ -44,6 +44,11 @@ export const metadata: Metadata = {
     icon: '/icon.svg',
     apple: '/apple-icon.png',
   },
+  // Google Search Console ownership check — renders
+  // <meta name="google-site-verification" content="..."> in every page's <head>.
+  verification: {
+    google: 'SCP_r7DMj7G12kG-fiEpMBAWy6VrktfO8srLr3yqcAk',
+  },
   robots: {
     index: true,
     follow: true,
