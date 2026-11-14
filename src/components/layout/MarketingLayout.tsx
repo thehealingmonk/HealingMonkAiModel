@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import SiteNav from '@/components/layout/SiteNav';
 import SiteFooter from '@/components/layout/SiteFooter';
-import AiBackdrop from '@/components/common/AiBackdrop';
 
 /**
  * Shared chrome for every public marketing page: the light "AI body-scan"
@@ -18,9 +17,6 @@ export default function MarketingLayout() {
 
   return (
     <div className="hm-site light-base relative min-h-screen text-slate-800">
-      {/* Site-wide animated AI scan backdrop. */}
-      <AiBackdrop />
-
       <div className="relative z-10 flex min-h-screen flex-col">
         <SiteNav />
         <main className="flex-1">

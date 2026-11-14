@@ -77,7 +77,7 @@ const KEY = new Set([0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]);
 // the dot-build loop. Only these two landmarks use the alternate style.
 const EAR = new Set([7, 8]);
 
-export default function BodyVRMHero({ className }: { className?: string }) {
+export default function BodyVRMHero({ className, bare }: { className?: string; bare?: boolean }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
 
@@ -333,6 +333,21 @@ export default function BodyVRMHero({ className }: { className?: string }) {
       if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
     };
   }, []);
+
+  // `bare` renders only the transparent 3D canvas (fills its parent) so a page
+  // can wrap the model in its own card design (e.g. the Home "Posture Score" card).
+  if (bare) {
+    return (
+      <div className={`relative h-full w-full ${className ?? ''}`}>
+        <div ref={mountRef} className="absolute inset-0 h-full w-full" />
+        {status === 'loading' && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="h-9 w-9 animate-spin rounded-full border-4 border-teal-100 border-t-teal-600" />
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={`relative mx-auto w-full max-w-md ${className ?? ''}`}>

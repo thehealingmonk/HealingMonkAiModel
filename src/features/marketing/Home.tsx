@@ -1,273 +1,393 @@
 import { Link, useNavigate } from 'react-router-dom';
 import {
+  Accessibility,
   ArrowRight,
+  Bone,
+  CalendarDays,
   Camera,
-  Gauge,
-  ScanLine,
+  Check,
+  Cpu,
+  Dumbbell,
+  FileText,
+  HeartHandshake,
+  HeartPulse,
+  Play,
   ShieldCheck,
-  Sparkles,
+  Star,
+  Target,
+  Timer,
+  Trophy,
+  UserRound,
+  Users,
   Zap,
-  Activity,
-  CheckCircle2,
-  HardHat,
 } from 'lucide-react';
-import { CLINICAL_ASSESSMENTS } from '@/lib/clinicalKnowledge';
 import BodyVRMHero from '@/components/common/BodyVRMHero';
+import Leaf from '@/components/common/Leaf';
+
+// Physiotherapy services — each card links into the assessment library.
+const SERVICES = [
+  { title: 'Back & Neck\nPain Relief', icon: UserRound, tint: '#fde8dc', color: '#0f2340', dot: true },
+  { title: 'Sports\nPhysiotherapy', icon: Dumbbell, tint: '#dff1f4', color: '#0d6b6e' },
+  { title: 'Orthopedic\nPhysiotherapy', icon: Bone, tint: '#e2eef7', color: '#1d4f8a' },
+  { title: 'Geriatric\nPhysiotherapy', icon: Accessibility, tint: '#e3f1ef', color: '#0d6b6e' },
+  { title: "Women's Health\nPhysiotherapy", icon: HeartHandshake, tint: '#fde4ec', color: '#c2185b' },
+  { title: 'Posture\nWellness', icon: HeartPulse, tint: '#e3f6ec', color: '#0d6b6e' },
+];
 
 export default function Home() {
   const navigate = useNavigate();
-  // The AI assessment is now a subscription feature — CTAs lead to pricing.
-  const subscribe = () => navigate('/pricing');
-
-  const total = CLINICAL_ASSESSMENTS.length;
+  // The AI assessment is a subscription feature — booking CTAs lead to pricing.
+  const book = () => navigate('/pricing');
 
   return (
     <div>
-      {/* ---------- LIGHT AI-SCAN HERO (full bleed) ---------- */}
-      <section className="light-grid relative flex w-full items-center overflow-hidden md:min-h-[88vh]">
-        <div className="relative mx-auto grid w-full max-w-6xl items-center gap-10 px-6 pb-16 pt-28 md:grid-cols-2 md:gap-12 md:pb-20 md:pt-24">
-          {/* Copy */}
-          <div className="flex flex-col items-center text-center md:items-start md:text-left">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-1.5 text-xs font-medium text-emerald-700">
-              <Sparkles className="h-3.5 w-3.5 text-emerald-500" />
-              Powered by MediaPipe Pose · 33-point body tracking
+      {/* ================= HERO ================= */}
+      <section className="hk-hero">
+        <HeroWave />
+        <div className="hk-wrap">
+          <div className="hk-hero-grid">
+            {/* Copy */}
+            <div data-reveal="left">
+              <span className="hk-pill-wrap">
+                <span className="hk-pill">
+                  <Zap className="h-3.5 w-3.5" /> AI-Powered Physiotherapy Care
+                </span>
+              </span>
+
+              <h1 className="hk-h1">
+                Scan your posture &amp; movement in{' '}
+                <span className="hk-swoosh">
+                  minutes
+                  <svg viewBox="0 0 130 22" fill="none" aria-hidden="true">
+                    <path d="M3 15C40 4 92 3 127 10" stroke="#f7931e" strokeWidth="4" strokeLinecap="round" />
+                  </svg>
+                </span>
+              </h1>
+
+              <p className="hk-lead">
+                Smart AI that uses just your camera gives you instant insights about your posture, movement
+                and more.
+              </p>
+
+              <div className="hk-cta">
+                <button type="button" onClick={book} className="hk-btn orange lg">
+                  <CalendarDays className="h-5 w-5" /> Book a Health Scan <ArrowRight className="h-5 w-5" />
+                </button>
+                <Link to="/how-it-works" className="hk-btn outline lg">
+                  <span className="hk-play"><Play className="h-3 w-3 fill-current" /></span> Watch Demo
+                </Link>
+              </div>
+
+              <div className="hk-trust">
+                <TrustItem icon={<ShieldCheck className="h-6 w-6" />} title="95%+" sub="Accuracy" />
+                <TrustItem icon={<Zap className="h-6 w-6" />} title="In 2 Min" sub="Complete Scan" />
+                <TrustItem icon={<HeartPulse className="h-6 w-6" />} title="Better You" sub="Healthier Life" />
+              </div>
             </div>
 
-            <h1 className="text-4xl font-bold leading-[1.05] tracking-tight text-slate-900 sm:text-6xl">
-              Scan your posture &amp;{' '}
-              <span className="glow-text">movement in minutes</span>
-            </h1>
+            {/* Posture score card with the interactive 3D model */}
+            <div className="relative" data-reveal="scale">
+              <Leaf className="hk-leaf-a" />
+              <div className="hk-scan-card">
+                <div className="hk-scan-top">
+                  <div className="hk-score">
+                    <p>Posture Score</p>
+                    <b>
+                      84
+                      <span className="grid h-5 w-5 place-items-center rounded-full bg-[#1fa86b] text-white">
+                        <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                      </span>
+                    </b>
+                    <small>Good Posture</small>
+                  </div>
 
-            <p className="mt-6 max-w-xl text-base text-slate-600 sm:text-lg md:mx-0">
-              Stand in front of your camera and let our AI map 33 body landmarks in real time —
-              then get a clear, clinical-style report and a personalized program.
-            </p>
+                  <div className="hk-model">
+                    <BodyVRMHero bare />
+                  </div>
 
-            <div className="mt-9 flex flex-col items-center gap-3 sm:flex-row md:justify-start">
-              <button
-                onClick={subscribe}
-                className="group inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-7 py-3.5 text-base font-semibold text-white shadow-lg shadow-emerald-500/30 transition-transform hover:scale-[1.03]"
-              >
-                <Zap className="h-5 w-5" />
-                Subscribe &amp; Start Scan
-                <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-0.5" />
-              </button>
-              <Link
-                to="/technology"
-                className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-6 py-3.5 text-base font-medium text-slate-700 shadow-sm transition-colors hover:border-emerald-400 hover:text-emerald-700"
-              >
-                See how the AI works
+                  <div className="hk-checks">
+                    {['Shoulder Aligned', 'Back Straight', 'Balanced Posture'].map((c) => (
+                      <div key={c} className="hk-check">
+                        <i><Check className="h-3.5 w-3.5" strokeWidth={3} /></i>
+                        {c}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="hk-metrics">
+                  <Metric value={86} label="Balance" />
+                  <Metric value={74} label="Flexibility" />
+                  <Metric value={83} label="Mobility" />
+                </div>
+                <p className="hk-drag">Drag the model to rotate · 360° view</p>
+              </div>
+              <Leaf className="hk-leaf-b" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ================= SERVICES ================= */}
+      <section className="hk-section">
+        <span className="hk-dots" style={{ left: '3%', top: 40 }} />
+        <span className="hk-dots" style={{ right: '3%', top: 40 }} />
+        <div className="hk-wrap hk-center">
+          <span className="hk-eyebrow center" data-reveal="fade">Our Services</span>
+          <h2 className="hk-h2 mt-3" data-reveal="fade">
+            Comprehensive <span className="hk-orange">Physiotherapy</span> Solutions
+          </h2>
+          <p className="hk-sub" data-reveal="fade">
+            Personalized treatment plans for a healthier and more active life.
+          </p>
+
+          <div className="hk-services">
+            {SERVICES.map((s, i) => {
+              const Icon = s.icon;
+              return (
+                <div
+                  key={s.title}
+                  className="hk-service"
+                  data-reveal
+                  style={{ '--reveal-delay': `${i * 70}ms` } as React.CSSProperties}
+                >
+                  <span className="hk-service-ico relative" style={{ background: s.tint, color: s.color }}>
+                    <Icon className="h-8 w-8" strokeWidth={1.8} />
+                    {s.dot && (
+                      <span className="absolute right-3 top-6 h-3 w-3 rounded-full bg-[#ff6a00] shadow-[0_0_10px_3px_rgba(255,106,0,0.55)]" />
+                    )}
+                  </span>
+                  <h3 className="whitespace-pre-line">{s.title}</h3>
+                  <Link to="/assessments" className="hk-link">
+                    Learn More <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <Leaf className="hk-leaf-c" />
+      </section>
+
+      {/* ================= ABOUT ================= */}
+      <section className="hk-section">
+        <div className="hk-wrap">
+          <div className="hk-about">
+            <div className="hk-photo" data-reveal="left">
+              <div className="hk-photo-frame">
+                {/* Placeholder clinic photo — swap the src for your own image later. */}
+                <img
+                  src="https://images.unsplash.com/photo-1631217868264-e5b90bb7e133?auto=format&fit=crop&w=1200&q=80"
+                  alt="HealingMonk physiotherapist treating a patient"
+                  loading="lazy"
+                  onError={(e) => {
+                    e.currentTarget.style.visibility = 'hidden';
+                  }}
+                />
+              </div>
+              <div className="hk-trusted">
+                <i><Users className="h-5 w-5" /></i>
+                <span>
+                  Trusted by
+                  <b>5000+ Patients</b>
+                </span>
+              </div>
+            </div>
+
+            <div data-reveal="right">
+              <span className="hk-pill-wrap">
+                <span className="hk-pill">
+                  <HeartPulse className="h-3.5 w-3.5" /> About HealingMonk
+                </span>
+              </span>
+              <h2 className="hk-about-h">
+                Your <span className="hk-orange">Health,</span>
+                <br />
+                Our <span className="hk-orange">Priority</span>
+              </h2>
+              <p className="copy">
+                At HealingMonk, we combine advanced physiotherapy techniques with compassionate care to help you
+                recover faster and live a healthier, happier life.
+              </p>
+              <ul className="hk-ticks">
+                {['Expert & Experienced Therapists', 'Personalized Treatment Plans', 'Modern & Safe Facility'].map(
+                  (t) => (
+                    <li key={t}>
+                      <i><Check className="h-3.5 w-3.5" strokeWidth={3} /></i>
+                      {t}
+                    </li>
+                  ),
+                )}
+              </ul>
+              <Link to="/about" className="hk-btn orange mt-7">
+                Learn More <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
 
-            {/* NEW — ErgoAI workplace ergonomic assessment (test entry point).
-                Separate, free-to-try flow; the existing scan flow above is
-                unchanged. */}
-            <Link
-              to="/ergo"
-              className="group mt-4 inline-flex items-center gap-2 rounded-full border border-emerald-300 bg-emerald-50 px-5 py-2.5 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
-            >
-              <HardHat className="h-4 w-4" />
-              Try ErgoAI — workplace ergonomic assessment
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </Link>
-
-            <span className="mt-4 block text-sm text-slate-500">
-              Plans from ₹499 · Runs privately in your browser
-            </span>
-          </div>
-
-          {/* Scan visual — interactive 3D girl (VRM), drag to rotate 360° */}
-          <div data-reveal="scale">
-            <BodyVRMHero />
+            <div className="hk-stats-col" data-reveal="right">
+              <StatCard icon={<Trophy className="h-9 w-9" />} value="15+" label="Years Experience" />
+              <StatCard icon={<Users className="h-9 w-9" />} value="5000+" label="Happy Patients" />
+              <StatCard icon={<Star className="h-9 w-9 fill-current" />} value="98%" label="Success Rate" />
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ---------- BODY ---------- */}
-      <div className="mx-auto max-w-6xl px-6">
-      {/* Feature grid */}
-      <section className="grid gap-4 py-14 md:grid-cols-2 lg:grid-cols-4">
-        <Feature i={0} icon={<ScanLine className="h-5 w-5" />} title="AI-Powered Analysis" desc="33-point pose detection scores your alignment frame by frame." />
-        <Feature i={1} icon={<Zap className="h-5 w-5" />} title="Instant Results" desc="Get posture, mobility, and stability scores in seconds." />
-        <Feature i={2} icon={<Gauge className="h-5 w-5" />} title="Personalized Programs" desc="Targeted routines matched to your specific findings." />
-        <Feature i={3} icon={<ShieldCheck className="h-5 w-5" />} title="Private by Design" desc="Pose analysis runs on-device in your browser — your live video is never uploaded." />
-      </section>
-
-      {/* Clinic showcase — image on the left, description on the right */}
-      <section className="mb-14 grid items-center gap-8 md:grid-cols-2">
-        {/* Image slides in from the left; hover lifts the card and zooms the photo */}
-        <div
-          data-reveal="left"
-          className="hm-lift group relative overflow-hidden rounded-2xl shadow-xl ring-1 ring-slate-200"
-        >
-          {/* Ambient glow that pulses behind the card */}
-          <div className="scan-halo pointer-events-none absolute -inset-4 -z-10 rounded-[2rem] bg-[radial-gradient(circle_at_50%_50%,rgba(16,185,129,0.25),transparent_65%)] blur-2xl" />
-
-          {/* Placeholder clinic photo — swap the src for your own image later. */}
-          <img
-            src="https://images.unsplash.com/photo-1631217868264-e5b90bb7e133?auto=format&fit=crop&w=1200&q=80"
-            alt="HealingMonk physiotherapy clinic"
-            loading="lazy"
-            onError={(e) => {
-              e.currentTarget.onerror = null;
-              e.currentTarget.src = '/image.png';
-            }}
-            className="aspect-[4/3] h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
-          />
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-emerald-900/25 via-transparent to-transparent" />
-
-          {/* Scan sweep — a soft beam that runs down the photo on hover */}
-          <div className="pose-sweep pointer-events-none absolute inset-x-0 top-0 h-20 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-            <div className="h-full w-full bg-[linear-gradient(180deg,transparent,rgba(45,212,191,0.35))]" />
-            <div className="h-px w-full bg-emerald-300 shadow-[0_0_16px_3px_rgba(16,185,129,0.7)]" />
-          </div>
-
-          <div className="absolute bottom-4 left-4 rounded-xl border border-white/40 bg-white/80 px-4 py-2 backdrop-blur transition-transform duration-300 group-hover:-translate-y-1">
-            <p className="text-[10px] font-medium uppercase tracking-widest text-emerald-600">HealingMonk</p>
-            <p className="text-sm font-semibold text-slate-900">AI-assisted physiotherapy clinic</p>
-          </div>
-        </div>
-
-        {/* Copy slides in from the right */}
-        <div data-reveal="right">
-          <p className="text-sm font-medium uppercase tracking-widest text-emerald-600">Our clinic</p>
-          <h2 className="mt-3 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-            Where AI precision meets hands-on care
+      {/* ================= HOW IT WORKS ================= */}
+      <section className="hk-section pt-6">
+        <div className="hk-wrap hk-center">
+          <span className="hk-eyebrow center" data-reveal="fade">How It Works</span>
+          <h2 className="hk-h2 mt-2" style={{ fontSize: 'clamp(22px, 2.4vw, 28px)' }} data-reveal="fade">
+            From Camera to Clarity in <span className="hk-orange">Three Steps</span>
           </h2>
-          <p className="mt-4 text-slate-600">
-            At HealingMonk, every assessment pairs on-device AI movement analysis with experienced
-            physiotherapists. From your first scan to a personalized recovery program, your care is
-            guided by data and delivered with a human touch.
-          </p>
-          <ul className="mt-6 space-y-3">
-            {[
-              'Certified physiotherapists on staff',
-              'AI-guided posture & movement screening',
-              'Personalized recovery programs built around you',
-              'Clinical-grade reports you can share with any doctor',
-            ].map((item, i) => (
-              <li
-                key={item}
-                data-reveal="left"
-                style={{ '--reveal-delay': `${i * 90}ms` } as React.CSSProperties}
-                className="group flex items-start gap-3 rounded-lg px-2 py-1.5 text-slate-700 transition-colors hover:bg-emerald-50"
-              >
-                <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-500 transition-transform duration-200 group-hover:scale-125" />
-                <span className="transition-transform duration-200 group-hover:translate-x-1">{item}</span>
-              </li>
-            ))}
-          </ul>
-          <Link
-            to="/about"
-            className="hm-lift group mt-8 inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:border-emerald-400 hover:text-emerald-700"
-          >
-            Learn more about us
-            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-          </Link>
-        </div>
-      </section>
 
-      {/* Assessment library teaser */}
-      <section data-reveal="zoom" className="glass-light mb-14 overflow-hidden rounded-2xl">
-        <div className="grid gap-0 md:grid-cols-2">
-          <div className="p-8 sm:p-10">
-            <p className="text-sm font-medium uppercase tracking-widest text-emerald-600">Assessment library</p>
-            <h2 className="mt-3 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-              {total}+ clinical assessments, measured automatically
-            </h2>
-            <p className="mt-3 text-slate-600">
-              Posture screens, range-of-motion tests, and functional movement checks — each mapped to a clinical
-              measurement with normal → severe ranges, pain correlation, and recommended exercises.
-            </p>
-            <Link
-              to="/assessments"
-              className="group mt-6 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition-transform hover:scale-[1.03]"
-            >
-              Explore all assessments
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </Link>
-          </div>
-          <div className="grid grid-cols-2 gap-3 bg-slate-50/60 p-8 sm:p-10">
-            {['Posture Assessment', 'Range of Motion', 'Functional Movement', 'Symmetry & Balance'].map((c) => (
-              <div key={c} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-4 text-sm font-medium text-slate-700 shadow-sm">
-                <Activity className="h-4 w-4 flex-shrink-0 text-emerald-500" />
-                {c}
-              </div>
-            ))}
+          <div className="hk-steps text-left">
+            <Step n="01" icon={<Camera className="h-6 w-6" />} title="Selfie or Camera" desc="Take a quick photo or video with your phone." />
+            <ArrowRight className="hk-step-arrow h-6 w-6" />
+            <Step n="02" icon={<Cpu className="h-6 w-6" />} title="AI Analysis" desc="Our AI analyzes your posture and movement." />
+            <ArrowRight className="hk-step-arrow h-6 w-6" />
+            <Step n="03" icon={<FileText className="h-6 w-6" />} title="Get Your Report" desc="Receive instant insights and personalized tips." />
           </div>
         </div>
       </section>
 
-      {/* How it works */}
-      <section className="border-t border-slate-200 py-16">
-        <h2 data-reveal="fade" className="text-center text-3xl font-bold tracking-tight text-slate-900">From camera to clarity in three steps</h2>
-        <div className="mt-12 grid gap-6 md:grid-cols-3">
-          <Step i={0} n="01" icon={<Camera className="h-5 w-5" />} title="Set up your camera" desc="Position yourself in frame — we guide you to the right distance and lighting." />
-          <Step i={1} n="02" icon={<ScanLine className="h-5 w-5" />} title="Hold the pose" desc="The model tracks 33 body landmarks in real time and analyzes your alignment." />
-          <Step i={2} n="03" icon={<Gauge className="h-5 w-5" />} title="Get your report" desc="See your scores, findings, and a personalized program to improve." />
+      {/* ================= MODEL BANNER ================= */}
+      <section className="pb-4">
+        <div className="hk-wrap">
+          <div className="hk-banner" data-reveal="zoom">
+            <div>
+              <small>
+                <Zap className="h-3.5 w-3.5 text-[#f7931e]" /> The HealingMonk Model
+              </small>
+              <h2>
+                Clinical-grade movement assessment, running entirely <span className="hk-orange">in the browser</span>
+              </h2>
+            </div>
+            <span className="hk-banner-div" />
+            <div className="hk-banner-stats">
+              <BannerStat icon={<Timer className="h-9 w-9" />} value="33" label="Body landmarks tracked" />
+              <BannerStat icon={<Target className="h-9 w-9" />} value="60ms" label="Response Time" />
+              <BannerStat icon={<ShieldCheck className="h-9 w-9" />} value="100%" label="Privacy Focus" />
+              <Runner />
+            </div>
+          </div>
         </div>
       </section>
+    </div>
+  );
+}
 
-      {/* CTA */}
-      <section data-reveal="zoom" className="glass-light relative my-8 overflow-hidden rounded-2xl px-8 py-12 text-center">
-        <div className="pointer-events-none absolute -top-24 left-1/2 h-64 w-64 -translate-x-1/2 rounded-full bg-emerald-400/20 blur-[100px]" />
-        <p className="relative text-sm font-medium uppercase tracking-widest text-emerald-600">The HealingMonk Model</p>
-        <h2 className="relative mx-auto mt-3 max-w-2xl text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-          Clinical-grade movement assessment, running entirely in the browser
-        </h2>
-        <div className="relative mt-8 grid gap-6 sm:grid-cols-3">
-          <Stat value="33" label="Body landmarks tracked" />
-          <Stat value="~60ms" label="Per-frame latency" />
-          <Stat value="100%" label="On-device pose analysis" />
-        </div>
-        <button
-          onClick={subscribe}
-          className="relative mt-10 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition-transform hover:scale-[1.03]"
-        >
-          View plans
-          <ArrowRight className="h-4 w-4" />
-        </button>
-      </section>
+function TrustItem({ icon, title, sub }: { icon: React.ReactNode; title: string; sub: string }) {
+  return (
+    <div className="hk-trust-item">
+      <span className="hk-trust-ico">{icon}</span>
+      <div>
+        <b>{title}</b>
+        <span>{sub}</span>
       </div>
     </div>
   );
 }
 
-function Feature({ i = 0, icon, title, desc }: { i?: number; icon: React.ReactNode; title: string; desc: string }) {
+function Metric({ value, label }: { value: number; label: string }) {
   return (
-    <div
-      data-reveal
-      style={{ '--reveal-delay': `${i * 90}ms` } as React.CSSProperties}
-      className="glass-light glass-light-lift group rounded-2xl p-6"
-    >
-      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200 transition-transform group-hover:scale-110">{icon}</div>
-      <h3 className="mt-4 font-semibold text-slate-900">{title}</h3>
-      <p className="mt-1.5 text-sm text-slate-500">{desc}</p>
+    <div className="hk-metric">
+      <b>{value}</b>
+      <span>{label}</span>
     </div>
   );
 }
 
-function Step({ i = 0, n, icon, title, desc }: { i?: number; n: string; icon: React.ReactNode; title: string; desc: string }) {
+function StatCard({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
   return (
-    <div
-      data-reveal
-      style={{ '--reveal-delay': `${i * 110}ms` } as React.CSSProperties}
-      className="glass-light glass-light-lift relative rounded-2xl p-6"
-    >
-      <span className="absolute right-5 top-5 font-mono text-sm text-slate-300">{n}</span>
-      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200">{icon}</div>
-      <h3 className="mt-4 font-semibold text-slate-900">{title}</h3>
-      <p className="mt-1.5 text-sm text-slate-500">{desc}</p>
+    <div className="hk-stat-card">
+      <i>{icon}</i>
+      <div>
+        <b>{value}</b>
+        <span>{label}</span>
+      </div>
     </div>
   );
 }
 
-function Stat({ value, label }: { value: string; label: string }) {
+function Step({ n, icon, title, desc }: { n: string; icon: React.ReactNode; title: string; desc: string }) {
   return (
-    <div data-reveal="scale">
-      <p className="glow-text text-3xl font-bold sm:text-4xl">{value}</p>
-      <p className="mt-1 text-sm text-slate-500">{label}</p>
+    <div className="hk-step" data-reveal>
+      <span className="hk-step-n">{n}</span>
+      <span className="hk-step-ico">{icon}</span>
+      <div>
+        <h3>{title}</h3>
+        <p>{desc}</p>
+      </div>
     </div>
+  );
+}
+
+function BannerStat({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
+  return (
+    <div className="hk-bstat">
+      <i>{icon}</i>
+      <b>{value}</b>
+      <span>{label}</span>
+    </div>
+  );
+}
+
+/** Teal wave + soft glow behind the hero card (top-right of the page). */
+function HeroWave() {
+  return (
+    <svg className="hk-hero-wave" viewBox="0 0 600 640" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="hkWave" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#bfe6df" />
+          <stop offset="0.55" stopColor="#5cb8aa" />
+          <stop offset="1" stopColor="#0d6b6e" />
+        </linearGradient>
+        <linearGradient id="hkWave2" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#e3f5f1" />
+          <stop offset="1" stopColor="#c9ebe4" stopOpacity="0.4" />
+        </linearGradient>
+      </defs>
+      <path d="M140 0H600V640H420C300 600 330 470 250 380C170 290 60 250 110 120C130 70 120 30 140 0Z" fill="url(#hkWave2)" />
+      <path d="M260 0H600V420C520 360 470 300 420 220C370 140 300 90 260 0Z" fill="url(#hkWave)" opacity="0.9" />
+    </svg>
+  );
+}
+
+/** Glowing "AI skeleton" runner for the model banner. */
+function Runner() {
+  const pts: Record<string, [number, number]> = {
+    head: [88, 22], neck: [84, 38], sh: [80, 44], el: [62, 58], wr: [50, 44],
+    el2: [98, 62], wr2: [112, 52], hip: [72, 84], kn: [92, 104], an: [86, 134],
+    kn2: [56, 104], an2: [36, 116], toe: [98, 136], toe2: [30, 106],
+  };
+  const bones: [string, string][] = [
+    ['neck', 'sh'], ['sh', 'el'], ['el', 'wr'], ['sh', 'el2'], ['el2', 'wr2'], ['sh', 'hip'],
+    ['hip', 'kn'], ['kn', 'an'], ['an', 'toe'], ['hip', 'kn2'], ['kn2', 'an2'], ['an2', 'toe2'],
+  ];
+  return (
+    <svg className="hk-runner" viewBox="0 0 140 150" aria-hidden="true">
+      <defs>
+        <filter id="hkGlow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2.4" result="b" />
+          <feMerge>
+            <feMergeNode in="b" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+      <g filter="url(#hkGlow)" strokeLinecap="round">
+        {bones.map(([a, b]) => (
+          <line key={a + b} x1={pts[a][0]} y1={pts[a][1]} x2={pts[b][0]} y2={pts[b][1]} stroke="#7dd3fc" strokeWidth="7" opacity="0.55" />
+        ))}
+        {bones.map(([a, b]) => (
+          <line key={'c' + a + b} x1={pts[a][0]} y1={pts[a][1]} x2={pts[b][0]} y2={pts[b][1]} stroke="#e0f2fe" strokeWidth="2" />
+        ))}
+        <circle cx={pts.head[0]} cy={pts.head[1]} r="10" fill="#38bdf8" opacity="0.7" />
+        {['sh', 'el', 'el2', 'hip', 'kn', 'kn2', 'an', 'an2'].map((k) => (
+          <circle key={k} cx={pts[k][0]} cy={pts[k][1]} r="3.6" fill="#ff8a00" />
+        ))}
+      </g>
+    </svg>
   );
 }

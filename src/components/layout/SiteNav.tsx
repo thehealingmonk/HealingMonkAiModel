@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { Activity, Menu, X, ArrowRight } from 'lucide-react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowRight, CalendarDays, Menu, X } from 'lucide-react';
+import BrandLogo from '@/components/common/BrandLogo';
 
-/** Primary marketing navigation, in the Mappingg site-header design: a solid
- *  white bar with the brand, centred links (active one underlined in forest
- *  green), and outline + solid buttons. It gains a soft shadow once scrolled.
- *  Styles: .hms-* in src/styles/mappingg-theme.css. */
+/** Public marketing navigation — HealingMonk teal/orange design: lotus logo,
+ *  pill links (active = solid teal), "Try Demo" outline + "Book Appointment"
+ *  orange buttons. Styles: .hk-* in src/styles/healingmonk-site.css. */
 const LINKS = [
   { to: '/', label: 'Home', end: true },
   { to: '/technology', label: 'Technology' },
-  { to: '/assessments', label: 'Assessments' },
-  { to: '/how-it-works', label: 'How it works' },
+  { to: '/about', label: 'About Us' },
+  { to: '/how-it-works', label: 'How It Works' },
   { to: '/pricing', label: 'Pricing' },
-  { to: '/about', label: 'About' },
+  { to: '/assessments', label: 'Assessments' },
 ];
 
 export default function SiteNav() {
@@ -32,38 +32,38 @@ export default function SiteNav() {
   useEffect(() => setOpen(false), [pathname]);
 
   const linkCls = ({ isActive }: { isActive: boolean }) => (isActive ? 'active' : '');
+  const toContact = () => {
+    setOpen(false);
+    document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   return (
-    <header className={`hms-head${scrolled || open ? ' scrolled' : ''}`}>
-      <div className="hms-wrap">
-        <div className="hms-bar">
-          <Link to="/" className="hms-brand" aria-label="HealingMonk home">
-            <span className="hmc-mark" aria-hidden="true">
-              <Activity className="h-5 w-5" />
-            </span>
-            <b>
-              Healing<em>Monk</em>
-            </b>
-          </Link>
+    <header className={`hk-head${scrolled || open ? ' scrolled' : ''}`}>
+      <div className="hk-wrap">
+        <div className="hk-bar">
+          <BrandLogo />
 
-          <nav className="hms-menu" aria-label="Main">
+          <nav className="hk-menu" aria-label="Main">
             {LINKS.map((l) => (
               <NavLink key={l.to} to={l.to} end={l.end} className={linkCls}>
                 {l.label}
               </NavLink>
             ))}
+            <a href="#contact" onClick={(e) => { e.preventDefault(); toContact(); }}>
+              Contact
+            </a>
           </nav>
 
-          <div className="hms-right">
-            <button type="button" className="hms-btn line" onClick={() => navigate('/login')}>
-              Sign in
+          <div className="hk-right">
+            <button type="button" className="hk-btn outline sm" onClick={() => navigate('/ergo')}>
+              Try Demo
             </button>
-            <button type="button" className="hms-btn primary" onClick={() => navigate('/pricing')}>
-              Subscribe <ArrowRight className="h-4 w-4" />
+            <button type="button" className="hk-btn orange sm" onClick={() => navigate('/pricing')}>
+              <CalendarDays className="h-4 w-4" /> Book Appointment <ArrowRight className="h-4 w-4" />
             </button>
             <button
               type="button"
-              className="hms-burger"
+              className="hk-burger"
               onClick={() => setOpen((v) => !v)}
               aria-label="Toggle menu"
               aria-expanded={open}
@@ -73,18 +73,24 @@ export default function SiteNav() {
           </div>
 
           {open && (
-            <div className="hms-mobile">
+            <div className="hk-mobile">
               {LINKS.map((l) => (
                 <NavLink key={l.to} to={l.to} end={l.end} className={linkCls}>
                   {l.label}
                 </NavLink>
               ))}
+              <a href="#contact" onClick={(e) => { e.preventDefault(); toContact(); }}>
+                Contact
+              </a>
+              <NavLink to="/login" className={linkCls}>
+                Clinic sign in
+              </NavLink>
               <div className="row">
-                <button type="button" className="hms-btn line" onClick={() => navigate('/login')}>
-                  Sign in
+                <button type="button" className="hk-btn outline sm" onClick={() => navigate('/ergo')}>
+                  Try Demo
                 </button>
-                <button type="button" className="hms-btn primary" onClick={() => navigate('/pricing')}>
-                  Subscribe
+                <button type="button" className="hk-btn orange sm" onClick={() => navigate('/pricing')}>
+                  Book Now
                 </button>
               </div>
             </div>
