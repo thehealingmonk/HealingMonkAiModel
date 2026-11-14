@@ -307,6 +307,10 @@ export interface ReportFinding {
     landmarkConfidence: number | null;
     issues: string[];
   };
+  /** Body parts not visible to the camera during the scan. Absent = full body seen. */
+  missingBodyParts?: string[];
+  /** Set when the patient was not in the required position during the scan. */
+  positionIssue?: string;
 }
 
 export interface ReportExercise {

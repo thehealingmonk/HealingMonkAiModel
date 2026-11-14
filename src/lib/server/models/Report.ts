@@ -28,6 +28,10 @@ const findingSchema = new mongoose.Schema(
       ),
       default: undefined,
     },
+    // Body parts the camera could not see during the scan (empty = full body seen).
+    missingBodyParts: { type: [String], default: undefined },
+    // Set when the patient was not in the required position during the scan.
+    positionIssue: { type: String, default: undefined },
   },
   { _id: false }
 );

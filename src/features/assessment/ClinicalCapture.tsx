@@ -3,7 +3,14 @@ import { openCamera, getPreferredLens } from '@/lib/camera';
 import { initializePoseLandmarker, detectPose, Landmark, toIsotropic } from '@/lib/poseDetection';
 import { computePostureChain, PostureChain } from '@/lib/postureVisualizer';
 import { computeClinicalPlumbLine, drawClinicalPlumbLine, ClinicalPlumbLine } from '@/lib/plumbLine';
-import { computeGuidance, drawGuidanceOverlay, Guidance } from '@/lib/captureGuidance';
+import {
+  computeGuidance,
+  drawGuidanceOverlay,
+  detectMissingBodyParts,
+  Guidance,
+  MissingBodyPart,
+} from '@/lib/captureGuidance';
+import { detectBodyPosition, checkPosition, PositionStabilizer, PositionCheck } from '@/lib/positionCheck';
 import { assessVideoFrame, FRAME_ISSUE_TEXT } from '@/lib/measurement/imageQuality';
 import { robustStats } from '@/lib/measurement/validation';
 import { countEvent } from '@/lib/measurement/perfLog';
@@ -31,12 +38,36 @@ const MIN_STABLE_FRAMES = 5;
 const MAX_STABLE_SPREAD_DEG = 3;
 /** Below this mean landmark visibility the value is flagged as low confidence. */
 const MIN_LANDMARK_CONFIDENCE = 0.6;
+/** Consecutive frames a new guidance state must persist before it is shown. */
+const GUIDANCE_STABLE_FRAMES = 4;
 
 interface FrameSample {
   t: number;
   assessmentId: string;
   result: MeasureResult;
   confidence: number | null;
+  /** Body parts not visible in this frame. */
+  missing: MissingBodyPart[];
+}
+
+/**
+ * Body parts that were missing during the capture window. A part counts only if
+ * it was hidden in at least half of the recent frames, so a single-frame
+ * tracking blip is not reported as "not visible".
+ */
+function aggregateMissing(samples: FrameSample[]): MissingBodyPart[] {
+  if (!samples.length) return [];
+  const counts = new Map<string, { part: MissingBodyPart; n: number }>();
+  for (const s of samples) {
+    for (const p of s.missing) {
+      const e = counts.get(p.id);
+      if (e) e.n++;
+      else counts.set(p.id, { part: p, n: 1 });
+    }
+  }
+  return Array.from(counts.values())
+    .filter((e) => e.n / samples.length >= 0.5)
+    .map((e) => e.part);
 }
 
 function landmarkConfidence(lm: Landmark[], points: number[]): number | null {
@@ -151,6 +182,10 @@ export default function ClinicalCapture({ assessments, onComplete, onBack, exter
   // Latest plumb-line result for the frame on screen, so a capture stores the
   // exact alignment the doctor saw (and the live verdict can read it).
   const latestPlumb = useRef<ClinicalPlumbLine | null>(null);
+  // Is the patient in the position this assessment needs (front/side/back,
+  // standing/sitting/lying)? Smoothed over recent frames.
+  const positionStab = useRef(new PositionStabilizer());
+  const latestPosition = useRef<PositionCheck | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   const [index, setIndex] = useState(0);
@@ -174,6 +209,7 @@ export default function ClinicalCapture({ assessments, onComplete, onBack, exter
   const voiceOnRef = useRef(voiceOn);
   voiceOnRef.current = voiceOn;
   const lastStatusRef = useRef<string>('');
+  const pendingRef = useRef<{ key: string; n: number }>({ key: '', n: 0 });
   const lastSpeakRef = useRef(0);
   const spokenPoseRef = useRef<number>(-1);
 
@@ -310,8 +346,19 @@ export default function ClinicalCapture({ assessments, onComplete, onBack, exter
   // React to a change in positioning status: update the banner and, if voice is
   // on, speak the cue (throttled so it never chatters frame-to-frame).
   const handleGuidance = (g: Guidance) => {
-    if (g.status === lastStatusRef.current) return;
-    lastStatusRef.current = g.status;
+    // Key includes WHICH parts are missing so the alert updates when that changes.
+    const key = `${g.status}|${g.en}|${(g.missingParts ?? []).map((p) => p.id).join(',')}`;
+    if (key === lastStatusRef.current) {
+      pendingRef.current = { key: '', n: 0 };
+      return;
+    }
+    // Require a few consecutive frames before switching, so the banner/voice
+    // don't flicker when a landmark hovers around the visibility threshold.
+    if (pendingRef.current.key === key) pendingRef.current.n++;
+    else pendingRef.current = { key, n: 1 };
+    if (pendingRef.current.n < GUIDANCE_STABLE_FRAMES && g.status !== 'no-body') return;
+    pendingRef.current = { key: '', n: 0 };
+    lastStatusRef.current = key;
     setGuidance(g);
     if (voiceOnRef.current) {
       const now = performance.now();
@@ -387,6 +434,7 @@ export default function ClinicalCapture({ assessments, onComplete, onBack, exter
             assessmentId: currentRef.current.id,
             result: measure,
             confidence: landmarkConfidence(result.landmarks, measure.points),
+            missing: detectMissingBodyParts(result.landmarks, currentRef.current.view),
           });
           samplesRef.current = buf;
           const chain = computePostureChain(result.landmarks, aspect);
@@ -396,12 +444,20 @@ export default function ClinicalCapture({ assessments, onComplete, onBack, exter
           drawScene(canvas, video, result.landmarks, measure, plumb);
 
           // Live positioning coach: arrow overlay + spoken cue.
-          const g = computeGuidance(result.landmarks, plumb);
+          const iso = toIsotropic(result.landmarks, aspect);
+          const pos = checkPosition(
+            positionStab.current.push(detectBodyPosition(iso), currentRef.current.id),
+            currentRef.current
+          );
+          latestPosition.current = pos;
+          const g = computeGuidance(result.landmarks, plumb, currentRef.current.view, pos);
           if (guideCanvasRef.current) drawGuidanceOverlay(guideCanvasRef.current, video, g);
           handleGuidance(g);
         } else {
           latestLandmarks.current = null;
           latestPlumb.current = null;
+          latestPosition.current = null;
+          positionStab.current.reset();
           // Body lost — older frames must not leak into the next capture.
           samplesRef.current = [];
           setBodyDetected(false);
@@ -570,6 +626,23 @@ export default function ClinicalCapture({ assessments, onComplete, onBack, exter
     const frameQ = assessVideoFrame(video);
     if (frameQ) quality.issues.push(...frameQ.issues.map((i) => FRAME_ISSUE_TEXT[i]));
     if (measure.value == null) quality.issues.unshift('Required body points were not visible — no value recorded');
+    // Which body parts the camera could NOT see while this pose was scanned.
+    const missingParts = recent.length
+      ? aggregateMissing(recent)
+      : detectMissingBodyParts(lm, current.view);
+    if (missingParts.length) {
+      quality.issues.unshift(
+        `Full body not visible during scan — not seen: ${missingParts.map((p) => p.en).join(', ')}`
+      );
+    }
+    // Was the patient in the right position for this assessment?
+    const pos = latestPosition.current;
+    const wrongPosition = pos && !pos.correct && pos.problem ? pos : null;
+    if (wrongPosition) {
+      quality.issues.unshift(
+        `${wrongPosition.problem!.en} — correct position: ${wrongPosition.suggestion.en}`
+      );
+    }
     if (quality.issues.length) countEvent('capture-unstable');
     const chain = lm ? computePostureChain(lm, aspect) : null;
     // Plumb line for this exact frame — the alignment verdict shown in the report.
@@ -605,6 +678,15 @@ export default function ClinicalCapture({ assessments, onComplete, onBack, exter
           }
         : undefined,
       quality,
+      missingBodyParts: missingParts.map((p) => ({ id: p.id, en: p.en, hi: p.hi })),
+      ...(wrongPosition
+        ? {
+            positionIssue: {
+              problem: wrongPosition.problem!,
+              suggestion: wrongPosition.suggestion,
+            },
+          }
+        : {}),
       timestamp: Date.now(),
     };
     setCaptures((prev) => ({ ...prev, [current.id]: capture }));
@@ -660,7 +742,11 @@ export default function ClinicalCapture({ assessments, onComplete, onBack, exter
         <div className="absolute top-32 left-1/2 -translate-x-1/2 z-20 pointer-events-none max-w-[92%]">
           <div
             className={`px-4 py-2 rounded-full flex items-center gap-2 shadow-lg text-sm font-bold text-white ${
-              guidance.ready ? 'bg-green-600' : 'bg-amber-500'
+              guidance.ready
+                ? 'bg-green-600'
+                : guidance.status === 'body-incomplete' || guidance.status === 'wrong-position'
+                  ? 'bg-red-600'
+                  : 'bg-amber-500'
             }`}
           >
             {guidance.arrow === 'left' ? (
@@ -676,6 +762,40 @@ export default function ClinicalCapture({ assessments, onComplete, onBack, exter
           </div>
         </div>
       )}
+
+      {/* Wrong-position alert: what is wrong + the correct position to take. */}
+      {bodyDetected && guidance?.status === 'wrong-position' && guidance.position?.problem ? (
+        <div
+          role="alert"
+          className="absolute top-44 left-1/2 -translate-x-1/2 z-20 pointer-events-none w-[min(92%,26rem)] rounded-xl bg-red-600/90 text-white shadow-lg px-4 py-3"
+        >
+          <p className="flex items-center gap-1.5 text-sm font-bold">
+            <AlertTriangle className="w-4 h-4" /> {guidance.position.problem.en}
+          </p>
+          <p className="text-xs text-red-100 mt-0.5">{guidance.position.problem.hi}</p>
+          <div className="mt-2 rounded-lg bg-white/15 px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wide text-red-100">Correct position / सही पोज़िशन</p>
+            <p className="text-sm font-semibold">{guidance.position.suggestion.en}</p>
+            <p className="text-xs text-red-50">{guidance.position.suggestion.hi}</p>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Full-body alert: names exactly which body parts the camera can't see. */}
+      {bodyDetected && guidance?.status === 'body-incomplete' && guidance.missingParts?.length ? (
+        <div
+          role="alert"
+          className="absolute top-44 left-1/2 -translate-x-1/2 z-20 pointer-events-none w-[min(92%,26rem)] rounded-xl bg-red-600/90 text-white shadow-lg px-4 py-3"
+        >
+          <p className="flex items-center gap-1.5 text-sm font-bold">
+            <AlertTriangle className="w-4 h-4" /> Your full body is not visible
+          </p>
+          <p className="text-xs text-red-100 mt-0.5">आपका पूरा शरीर कैमरे में नहीं दिख रहा है</p>
+          <p className="text-xs mt-1.5">
+            Not visible: <span className="font-semibold">{guidance.missingParts.map((p) => p.en).join(', ')}</span>
+          </p>
+        </div>
+      ) : null}
 
       {/* Body detection indicator */}
       <div className="absolute top-24 right-4 z-20 flex items-center gap-2">

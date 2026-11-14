@@ -39,6 +39,8 @@ export interface ClinicalAssessment {
   bodyRegion: string;
   category: string;
   view: View;
+  /** For side views that need a specific side towards the camera (person's left/right). */
+  sideFacing?: 'left' | 'right';
   patientPosition: string;
   /** What the therapist asks the patient to do. */
   instruction: string;
@@ -132,6 +134,13 @@ export interface AssessmentCapture {
   plumbLine?: CapturedPlumbLine;
   /** Reliability of `value` (multi-frame stability, image quality, landmark confidence). */
   quality?: CaptureQuality;
+  /** Body parts the camera could not see during this capture (absent/empty = full body visible). */
+  missingBodyParts?: { id: string; en: string; hi: string }[];
+  /** Set when the patient was NOT in the required position at capture time. */
+  positionIssue?: {
+    problem: { en: string; hi: string };
+    suggestion: { en: string; hi: string };
+  };
   timestamp: number;
 }
 
@@ -273,6 +282,7 @@ export const CLINICAL_ASSESSMENTS: ClinicalAssessment[] = [
     bodyRegion: 'Full Body',
     category: 'Posture Assessment',
     view: 'side',
+    sideFacing: 'left',
     patientPosition: 'Standing',
     instruction: 'Stand with your LEFT side to the camera, full body in frame, look straight ahead.',
     instructionHi: 'कैमरे की ओर अपनी बाईं ओर करके खड़े हों, पूरा शरीर फ्रेम में रखें, सीधे आगे देखें।',
@@ -300,6 +310,7 @@ export const CLINICAL_ASSESSMENTS: ClinicalAssessment[] = [
     bodyRegion: 'Full Body',
     category: 'Posture Assessment',
     view: 'side',
+    sideFacing: 'right',
     patientPosition: 'Standing',
     instruction: 'Stand with your RIGHT side to the camera, full body in frame, look straight ahead.',
     instructionHi: 'कैमरे की ओर अपनी दाईं ओर करके खड़े हों, पूरा शरीर फ्रेम में रखें, सीधे आगे देखें।',

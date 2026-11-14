@@ -39,6 +39,14 @@ export function buildReportPayload(
           },
         }
       : {}),
+    ...(capture.missingBodyParts?.length
+      ? { missingBodyParts: capture.missingBodyParts.map((p) => p.en) }
+      : {}),
+    ...(capture.positionIssue
+      ? {
+          positionIssue: `${capture.positionIssue.problem.en} — correct position: ${capture.positionIssue.suggestion.en}`,
+        }
+      : {}),
   }));
 
   const totalPenalty = paired.reduce(

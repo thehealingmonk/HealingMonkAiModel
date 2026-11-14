@@ -1,5 +1,6 @@
 import { Landmark } from '@/lib/poseDetection';
 import type { ClinicalPlumbLine } from '@/lib/plumbLine';
+import type { PositionCheck } from '@/lib/positionCheck';
 
 /**
  * Live positioning coach for the camera screen. Looks at the tracked body and
@@ -11,6 +12,8 @@ import type { ClinicalPlumbLine } from '@/lib/plumbLine';
 
 export type GuidanceStatus =
   | 'no-body'
+  | 'wrong-position'
+  | 'body-incomplete'
   | 'move-left'
   | 'move-right'
   | 'step-back'
@@ -26,13 +29,121 @@ export interface Guidance {
   arrow: 'left' | 'right' | null;
   /** true when the user is well-positioned and can hold still / capture. */
   ready: boolean;
+  /** Body parts the camera cannot see in this frame (empty = full body visible). */
+  missingParts?: MissingBodyPart[];
+  /** Set when the patient is not in the position this assessment needs. */
+  position?: PositionCheck;
+}
+
+// ---------- Full-body visibility check ----------
+
+export interface MissingBodyPart {
+  /** Stable id, e.g. "left-knee" / "knee" (side view). */
+  id: string;
+  en: string;
+  hi: string;
+  /** Coarse region, used for the short on-screen summary. */
+  region: BodyRegion;
+}
+
+export type BodyRegion = 'head' | 'torso' | 'arms' | 'legs';
+
+const REGION_TEXT: Record<BodyRegion, { en: string; hi: string }> = {
+  head: { en: 'Head', hi: 'सिर' },
+  torso: { en: 'Shoulders / hips', hi: 'कंधे / कूल्हे' },
+  arms: { en: 'Arms / hands', hi: 'हाथ' },
+  legs: { en: 'Legs / feet', hi: 'पैर' },
+};
+
+interface PartDef {
+  id: string;
+  en: string;
+  hi: string;
+  region: BodyRegion;
+  left?: number[];
+  right?: number[];
+  /** Midline parts (head) — visible if ANY of these points is visible. */
+  any?: number[];
+}
+
+// MediaPipe Pose indices. "left/right" = the PERSON's left/right.
+const BODY_PARTS: PartDef[] = [
+  { id: 'head', en: 'Head', hi: 'सिर', region: 'head', any: [0, 2, 5, 7, 8] },
+  { id: 'shoulder', en: 'shoulder', hi: 'कंधा', region: 'torso', left: [11], right: [12] },
+  { id: 'elbow', en: 'elbow', hi: 'कोहनी', region: 'arms', left: [13], right: [14] },
+  { id: 'wrist', en: 'wrist / hand', hi: 'कलाई / हाथ', region: 'arms', left: [15], right: [16] },
+  { id: 'hip', en: 'hip', hi: 'कूल्हा', region: 'torso', left: [23], right: [24] },
+  { id: 'knee', en: 'knee', hi: 'घुटना', region: 'legs', left: [25], right: [26] },
+  { id: 'ankle', en: 'ankle', hi: 'टखना', region: 'legs', left: [27], right: [28] },
+  { id: 'foot', en: 'foot', hi: 'पंजा', region: 'legs', left: [29, 31], right: [30, 32] },
+];
+
+const PART_VIS_MIN = 0.4;
+const EDGE = 0.01;
+
+/** A landmark counts as seen only if the model is confident AND it lies inside the frame. */
+function pointSeen(l?: Landmark): boolean {
+  if (!l) return false;
+  if ((l.visibility ?? 1) < PART_VIS_MIN) return false;
+  return l.x >= -EDGE && l.x <= 1 + EDGE && l.y >= -EDGE && l.y <= 1 + EDGE;
+}
+const groupSeen = (lm: Landmark[], idx: number[]) => idx.some((i) => pointSeen(lm[i]));
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * Which body parts are NOT visible in this frame. In a side view the far-side
+ * limb is naturally hidden behind the body, so left/right are merged and a part
+ * is only reported missing when NEITHER side can be seen.
+ */
+export function detectMissingBodyParts(
+  lm: Landmark[] | null | undefined,
+  view: 'front' | 'side' | 'back' = 'front'
+): MissingBodyPart[] {
+  const out: MissingBodyPart[] = [];
+  for (const p of BODY_PARTS) {
+    if (p.any) {
+      // From behind the face points get low visibility even when the head is in
+      // shot, so for a back view only require the head to be inside the frame.
+      const seen =
+        !!lm &&
+        (view === 'back'
+          ? p.any.some((i) => lm[i] && lm[i].y >= -EDGE && lm[i].y <= 1 + EDGE && lm[i].x >= -EDGE && lm[i].x <= 1 + EDGE)
+          : groupSeen(lm, p.any));
+      if (!seen) out.push({ id: p.id, en: p.en, hi: p.hi, region: p.region });
+      continue;
+    }
+    const l = !!lm && groupSeen(lm, p.left!);
+    const r = !!lm && groupSeen(lm, p.right!);
+    if (view === 'side') {
+      if (!l && !r) out.push({ id: p.id, en: cap(p.en), hi: p.hi, region: p.region });
+    } else {
+      if (!l) out.push({ id: `left-${p.id}`, en: `Left ${p.en}`, hi: `बायां ${p.hi}`, region: p.region });
+      if (!r) out.push({ id: `right-${p.id}`, en: `Right ${p.en}`, hi: `दायां ${p.hi}`, region: p.region });
+    }
+  }
+  return out;
+}
+
+/** Short region summary for the live alert, e.g. "Legs / feet, Arms / hands". */
+export function summarizeMissing(parts: MissingBodyPart[]): { en: string; hi: string } {
+  const regions = Array.from(new Set(parts.map((p) => p.region)));
+  return {
+    en: regions.map((r) => REGION_TEXT[r].en).join(', '),
+    hi: regions.map((r) => REGION_TEXT[r].hi).join(', '),
+  };
 }
 
 // Key body points used to gauge framing: nose, shoulders, hips, knees, ankles.
 const KEY = [0, 11, 12, 23, 24, 25, 26, 27, 28];
 const vv = (l?: Landmark) => l?.visibility ?? 1;
 
-export function computeGuidance(lm: Landmark[], plumb: ClinicalPlumbLine | null): Guidance {
+export function computeGuidance(
+  lm: Landmark[],
+  plumb: ClinicalPlumbLine | null,
+  view: 'front' | 'side' | 'back' = plumb?.view ?? 'front',
+  position: PositionCheck | null = null
+): Guidance {
   const pts = KEY.map((i) => lm[i]).filter((p) => p && vv(p) > 0.3);
   if (pts.length < 4) {
     return {
@@ -50,11 +161,37 @@ export function computeGuidance(lm: Landmark[], plumb: ClinicalPlumbLine | null)
   const maxY = Math.max(...ys);
   const bodyH = maxY - minY;
   const centerX = (Math.min(...xs) + Math.max(...xs)) / 2;
-  const anklesVisible = vv(lm[27]) > 0.3 || vv(lm[28]) > 0.3;
 
-  // Whole body must be in frame: head not clipped at the top, feet visible, and
-  // the body not so large it overflows the edges.
-  if (!anklesVisible || minY < 0.04 || bodyH > 0.92) {
+  // Wrong pose for this assessment (e.g. facing front when a side view is
+  // needed): say what is wrong AND how to stand instead.
+  if (position && !position.correct && position.problem) {
+    return {
+      status: 'wrong-position',
+      en: `${position.problem.en}. ${position.suggestion.en}`,
+      hi: `${position.problem.hi}। ${position.suggestion.hi}`,
+      arrow: null,
+      ready: false,
+      position,
+    };
+  }
+
+  // Whole body must be visible: every body part (head, arms, legs, feet) seen.
+  // Name exactly what is missing so the user knows what to fix.
+  const missing = detectMissingBodyParts(lm, view);
+  if (missing.length) {
+    const s = summarizeMissing(missing);
+    return {
+      status: 'body-incomplete',
+      en: `Full body not visible — ${s.en} not in view. Step back`,
+      hi: `पूरा शरीर नहीं दिख रहा — ${s.hi} नहीं दिख रहे। थोड़ा पीछे हटें`,
+      arrow: null,
+      ready: false,
+      missingParts: missing,
+    };
+  }
+
+  // Head not clipped at the top and the body not so large it overflows the edges.
+  if (minY < 0.04 || bodyH > 0.92) {
     return {
       status: 'step-back',
       en: 'Step back — fit your whole body in the frame',

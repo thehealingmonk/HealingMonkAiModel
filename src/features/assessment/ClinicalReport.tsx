@@ -562,6 +562,33 @@ function FindingCard({
             </div>
           )}
 
+          {/* Patient was not in the required position when this photo was taken. */}
+          {capture.positionIssue && (
+            <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+              <p className="font-semibold">⚠ Incorrect position during this scan</p>
+              <p className="mt-0.5">
+                {capture.positionIssue.problem.en}. <span className="font-medium">Correct position:</span>{' '}
+                {capture.positionIssue.suggestion.en}
+              </p>
+              <p className="mt-0.5 text-red-700/80">
+                {capture.positionIssue.problem.hi}। सही पोज़िशन: {capture.positionIssue.suggestion.hi}
+              </p>
+            </div>
+          )}
+
+          {/* Body parts the camera could not see while this pose was scanned. */}
+          {capture.missingBodyParts && capture.missingBodyParts.length > 0 && (
+            <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+              <p className="font-semibold">⚠ Full body was not visible during this scan</p>
+              <p className="mt-0.5">
+                Not visible: <span className="font-medium">{capture.missingBodyParts.map((p) => p.en).join(', ')}</span>
+              </p>
+              <p className="mt-0.5 text-red-700/80">
+                स्कैन के समय ये हिस्से नहीं दिख रहे थे: {capture.missingBodyParts.map((p) => p.hi).join(', ')}
+              </p>
+            </div>
+          )}
+
           {/* Ideal vs Your value */}
           <div className="flex items-end gap-6 mt-3">
             <div>
