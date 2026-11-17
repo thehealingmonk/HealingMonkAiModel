@@ -1,4 +1,4 @@
-import { Users, FileText, CalendarDays, IndianRupee, Stethoscope, ClipboardList, ArrowRight, TrendingUp } from 'lucide-react';
+import { Users, FileText, CalendarDays, IndianRupee, Stethoscope, ClipboardList, ArrowRight, TrendingUp, Globe } from 'lucide-react';
 import { getAdminStats } from '@/services/api';
 import { formatMoney } from '@/utils/formatter';
 import { useLiveData } from '@/hooks/useLiveData';
@@ -40,6 +40,30 @@ export default function AdminDashboard({ onNavigate }: Props) {
 
       {error && (
         <div className="mb-4 rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-200" data-reveal="fade">{error}</div>
+      )}
+
+      {/* New website bookings waiting for a doctor (the online lead inbox). */}
+      {!!stats?.onlineNew && (
+        <button
+          type="button"
+          onClick={() => onNavigate('/admin/appointments')}
+          className="mb-6 flex w-full flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-5 py-4 text-left"
+        >
+          <span className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500 text-white">
+              <Globe className="h-5 w-5" />
+            </span>
+            <span>
+              <span className="block font-semibold text-white">
+                {stats.onlineNew} new online booking{stats.onlineNew > 1 ? 's' : ''}
+              </span>
+              <span className="block text-sm text-slate-400">Assign a doctor and start the video meeting.</span>
+            </span>
+          </span>
+          <span className="inline-flex items-center gap-1 text-sm font-semibold text-amber-300">
+            Review bookings <ArrowRight className="h-4 w-4" />
+          </span>
+        </button>
       )}
 
       {/* Live totals */}

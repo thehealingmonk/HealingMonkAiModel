@@ -11,8 +11,10 @@ import {
   FileText,
   HeartHandshake,
   HeartPulse,
+  Lock,
   Play,
   ShieldCheck,
+  Sparkles,
   Star,
   Target,
   Timer,
@@ -36,8 +38,8 @@ const SERVICES = [
 
 export default function Home() {
   const navigate = useNavigate();
-  // The AI assessment is a subscription feature — booking CTAs lead to pricing.
-  const book = () => navigate('/pricing');
+  // Booking CTAs open the online booking form.
+  const book = () => navigate('/book');
 
   return (
     <div>
@@ -71,10 +73,21 @@ export default function Home() {
 
               <div className="hk-cta">
                 <button type="button" onClick={book} className="hk-btn orange lg">
-                  <CalendarDays className="h-5 w-5" /> Book a Health Scan <ArrowRight className="h-5 w-5" />
+                  <CalendarDays className="h-5 w-5" /> Book Appointment <ArrowRight className="h-5 w-5" />
                 </button>
                 <Link to="/how-it-works" className="hk-btn outline lg">
                   <span className="hk-play"><Play className="h-3 w-3 fill-current" /></span> Watch Demo
+                </Link>
+              </div>
+
+              {/* The two AI entry points: the full AI posture scan (needs sign-in /
+                  plan) and the free ErgoAI demo that opens directly. */}
+              <div className="hk-ai-row">
+                <Link to="/assessment" className="hk-btn outline sm">
+                  <Lock className="h-4 w-4" /> AI Posture Scan <span className="hk-tag">Sign in</span>
+                </Link>
+                <Link to="/ergo" className="hk-btn ghost sm">
+                  <Sparkles className="h-4 w-4" /> Free AI Demo <span className="hk-tag">No login</span>
                 </Link>
               </div>
 

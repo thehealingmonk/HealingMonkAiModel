@@ -24,6 +24,7 @@ const Assessments = lazy(() => import('@/features/marketing/Assessments'));
 const HowItWorks = lazy(() => import('@/features/marketing/HowItWorks'));
 const About = lazy(() => import('@/features/marketing/About'));
 const Pricing = lazy(() => import('@/features/marketing/Pricing'));
+const BookAppointment = lazy(() => import('@/features/marketing/BookAppointment'));
 const PatientIntake = lazy(() => import('@/features/assessment/PatientIntake'));
 const PositionSelect = lazy(() => import('@/features/assessment/PositionSelect'));
 const ClinicalCapture = lazy(() => import('@/features/assessment/ClinicalCapture'));
@@ -260,6 +261,7 @@ export default function PublicApp() {
             <Route path="how-it-works" element={<HowItWorks />} />
             <Route path="about" element={<About />} />
             <Route path="pricing" element={<Pricing />} />
+            <Route path="book" element={<BookAppointment />} />
           </Route>
 
           {/* Focused assessment flow */}

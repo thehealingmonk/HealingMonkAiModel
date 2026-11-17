@@ -36,7 +36,7 @@ export default function PageShell({
       <header className={`relative z-10 mx-auto flex ${maxWidth} items-center justify-between px-6 py-5`}>
         <div className="flex items-center gap-2">
           <LotusMark size={38} />
-          <span className="font-[Poppins] text-xl font-bold tracking-tight text-[#0b4f57]">
+          <span className="font-[Poppins] text-xl font-extrabold tracking-tight text-[#0f2340]">
             Healing<span className="text-[#f7931e]">Monk</span>
           </span>
         </div>

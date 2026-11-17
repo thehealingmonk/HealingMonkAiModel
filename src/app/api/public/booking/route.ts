@@ -26,6 +26,10 @@ export async function POST(req: NextRequest) {
     const email = str(body.email, 254);
     const complaint = str(body.complaint, 2000);
     const preferredAt = str(body.preferredAt, 40);
+    const mode = body.mode === 'video' ? 'video' : 'clinic';
+    const gender = ['Male', 'Female', 'Other'].includes(body.gender) ? body.gender : '';
+    const ageNum = Number(body.age);
+    const age = Number.isFinite(ageNum) && ageNum > 0 && ageNum <= 130 ? Math.round(ageNum) : undefined;
     const painAreas: string[] = Array.isArray(body.painAreas)
       ? body.painAreas.filter((a: unknown): a is string => typeof a === 'string').map((a: string) => a.slice(0, 60)).slice(0, 20)
       : [];
@@ -34,6 +38,12 @@ export async function POST(req: NextRequest) {
     }
     if (!mobile && !email) {
       return NextResponse.json({ error: 'Please provide a mobile number or email' }, { status: 400 });
+    }
+    if (mobile && !/^[+\d][\d\s-]{6,18}$/.test(mobile)) {
+      return NextResponse.json({ error: 'Please enter a valid mobile number' }, { status: 400 });
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json({ error: 'Please enter a valid email address' }, { status: 400 });
     }
 
     // Find-or-create the patient by mobile/email to avoid duplicates.
@@ -49,9 +59,14 @@ export async function POST(req: NextRequest) {
         email: cleanEmail,
         complaint: complaint || '',
         painAreas,
+        gender,
+        ...(age !== undefined ? { age } : {}),
       });
       await patient.save();
     }
+    // An existing record is never modified here: this endpoint is anonymous, so
+    // letting it change a matched patient's email would let a stranger redirect
+    // that patient's invites. Staff update contact details from the console.
 
     let appointment: any = null;
     const when = preferredAt ? new Date(preferredAt) : null;
@@ -60,7 +75,9 @@ export async function POST(req: NextRequest) {
       appointment = new Appointment({
         patient: patient._id,
         scheduledAt: when,
-        reason: complaint || 'Online booking request',
+        reason: complaint || (mode === 'video' ? 'Online video consultation request' : 'Online booking request'),
+        source: 'online',
+        mode,
       });
       await appointment.save();
 

@@ -4,6 +4,8 @@ import { connectDB } from '@/lib/server/db';
 import { Appointment, APPOINTMENT_STATUSES } from '@/lib/server/models/Appointment';
 import { Patient } from '@/lib/server/models/Patient';
 import { User } from '@/lib/server/models/User';
+// Registers the OnlineMeeting model so `.populate('meeting')` works in this route.
+import '@/lib/server/models/OnlineMeeting';
 import { requireAuth, requireRole } from '@/middleware/auth';
 import { sendMail, appointmentBookedEmail } from '@/lib/server/mailer';
 
@@ -73,6 +75,7 @@ export async function GET(req: NextRequest) {
       populate: { path: 'assignedDoctor', select: 'name' },
     })
     .populate('doctor', 'name')
+    .populate('meeting', 'roomToken status')
     .sort({ scheduledAt: 1 })
     .limit(ranged ? 2000 : 300);
   // Enrich each row with the patient's code/mobile and their currently-assigned

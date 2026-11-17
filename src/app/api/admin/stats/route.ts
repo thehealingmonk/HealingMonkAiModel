@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
   try {
     await connectDB();
-    const [patients, reports, appointments, usersByRole, paidAgg, apptByStatus] = await Promise.all([
+    const [patients, reports, appointments, usersByRole, paidAgg, apptByStatus, onlineNew] = await Promise.all([
       Patient.countDocuments(),
       Report.countDocuments(),
       Appointment.countDocuments(),
@@ -28,6 +28,8 @@ export async function GET(req: NextRequest) {
         { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
       ]),
       Appointment.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+      // Website bookings still waiting for a doctor (the "new leads" inbox).
+      Appointment.countDocuments({ source: 'online', status: 'scheduled', doctor: null }),
     ]);
 
     const roleCounts: Record<string, number> = { admin: 0, doctor: 0, reception: 0, patient: 0 };
@@ -49,6 +51,7 @@ export async function GET(req: NextRequest) {
         apptStatus,
         revenuePaise: paidAgg[0]?.total || 0,
         paidCount: paidAgg[0]?.count || 0,
+        onlineNew,
       },
     });
   } catch (err) {

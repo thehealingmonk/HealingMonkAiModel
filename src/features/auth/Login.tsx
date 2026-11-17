@@ -141,7 +141,7 @@ export default function Login({ onBack }: Props) {
       {/* ---------- LEFT: teal brand panel (desktop) — the home page banner ---------- */}
       <aside className="hmc-login-aside sticky top-0 hidden h-screen flex-col justify-between p-10 lg:flex">
         <div className="flex items-center justify-between gap-4">
-          <BrandLogo />
+          <BrandLogo light />
           <button
             onClick={back}
             className="inline-flex w-fit items-center gap-1.5 rounded-full border border-white/40 px-4 py-2 text-sm font-medium !text-white transition-colors hover:!bg-white/10"

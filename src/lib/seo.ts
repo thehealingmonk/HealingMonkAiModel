@@ -71,6 +71,7 @@ export const PUBLIC_ROUTES: { path: string; changefreq: string; priority: number
   { path: '/assessments', changefreq: 'monthly', priority: 0.8 },
   { path: '/how-it-works', changefreq: 'monthly', priority: 0.7 },
   { path: '/pricing', changefreq: 'monthly', priority: 0.9 },
+  { path: '/book', changefreq: 'monthly', priority: 0.9 },
   { path: '/about', changefreq: 'monthly', priority: 0.6 },
 ];
 
@@ -100,6 +101,11 @@ export const ROUTE_META: Record<string, { title: string; description: string }> 
     description:
       'Simple pricing for the HealingMonk AI posture assessment and clinic platform. Subscribe to unlock full assessments and personalized programs.',
   },
+  '/book': {
+    title: `Book Appointment — ${SITE_NAME}`,
+    description:
+      'Book a physiotherapy appointment online — an in-clinic visit or a video consultation with a HealingMonk physiotherapist, at a time that suits you.',
+  },
   '/about': {
     title: `About — ${SITE_NAME}`,
     description:
@@ -112,7 +118,7 @@ export const ROUTE_META: Record<string, { title: string; description: string }> 
 // silently redirect unknown URLs to "/" — a soft-404 that search engines punish).
 const APP_PATH_PATTERNS: RegExp[] = [
   /^\/$/,
-  /^\/(technology|assessments|how-it-works|about|pricing|login|ergo)$/,
+  /^\/(technology|assessments|how-it-works|about|pricing|book|login|ergo)$/,
   /^\/assessment(\/(positions|capture|report))?$/,
   /^\/assessment\/report\/[^/]+$/,
   /^\/r\/[^/]+$/,
@@ -141,6 +147,7 @@ const ROUTE_LABEL: Record<string, string> = {
   '/assessments': 'Assessments',
   '/how-it-works': 'How it works',
   '/pricing': 'Pricing',
+  '/book': 'Book Appointment',
   '/about': 'About',
 };
 

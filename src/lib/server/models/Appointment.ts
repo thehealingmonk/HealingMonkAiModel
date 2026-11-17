@@ -14,6 +14,12 @@ const appointmentSchema = new mongoose.Schema(
     notes: { type: String, default: '' },
     // Reception/doctor/admin who booked it.
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    // Where the booking came from: the public website form ('online') or staff ('clinic').
+    source: { type: String, enum: ['clinic', 'online'], default: 'clinic', index: true },
+    // Visit type requested: in-clinic visit or online video consultation.
+    mode: { type: String, enum: ['clinic', 'video'], default: 'clinic' },
+    // The online meeting created for this booking (video consultations).
+    meeting: { type: mongoose.Schema.Types.ObjectId, ref: 'OnlineMeeting', default: null },
   },
   { timestamps: true }
 );
@@ -35,6 +41,14 @@ appointmentSchema.methods.toJSONSafe = function toJSONSafe(this: any) {
     status: this.status,
     notes: this.notes || '',
     createdAt: this.createdAt,
+    source: this.source || 'clinic',
+    mode: this.mode || 'clinic',
+    meeting:
+      this.meeting == null
+        ? null
+        : this.meeting._id
+          ? { id: this.meeting._id.toString(), roomToken: this.meeting.roomToken, status: this.meeting.status }
+          : { id: this.meeting.toString() },
   };
 };
 

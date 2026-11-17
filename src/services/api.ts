@@ -511,6 +511,25 @@ export interface Appointment {
   patientMobile?: string | null;
   /** The patient's currently-assigned doctor — a fallback when the appointment has none. */
   assignedDoctorName?: string | null;
+  /** 'online' = booked from the public website form; 'clinic' = booked by staff. */
+  source?: 'clinic' | 'online';
+  /** Requested visit type. */
+  mode?: 'clinic' | 'video';
+  /** Online meeting linked to this booking (video consultations). */
+  meeting?: { id: string; roomToken?: string; status?: string } | null;
+}
+
+/** Admin/reception: route a booking (lead) to a doctor, or clear it with null. */
+export async function assignAppointmentDoctor(id: string, doctorId: string | null): Promise<{ appointment: Appointment }> {
+  return request(`/appointments/${id}/assign`, { method: 'PATCH', body: JSON.stringify({ doctorId }) });
+}
+
+/** Admin/doctor: create (or reuse) the video meeting for a booking and email the invite. */
+export async function startAppointmentMeeting(
+  id: string,
+  opts: { sendEmail?: boolean } = {}
+): Promise<{ meeting: OnlineMeeting; reused: boolean }> {
+  return request(`/appointments/${id}/meeting`, { method: 'POST', body: JSON.stringify(opts) });
 }
 
 export async function listAppointments(
@@ -576,6 +595,10 @@ export async function bookPublic(payload: {
   complaint?: string;
   painAreas?: string[];
   preferredAt?: string;
+  /** In-clinic visit or online video consultation. */
+  mode?: 'clinic' | 'video';
+  age?: number;
+  gender?: 'Male' | 'Female' | 'Other' | '';
 }): Promise<{ ok: boolean; appointmentRequested: boolean }> {
   return request('/public/booking', { method: 'POST', body: JSON.stringify(payload) });
 }
@@ -776,6 +799,8 @@ export interface AdminStats {
   apptStatus: Partial<Record<AppointmentStatus, number>>;
   revenuePaise: number;
   paidCount: number;
+  /** Website bookings still waiting for a doctor. */
+  onlineNew?: number;
 }
 
 export async function getAdminStats(): Promise<{ stats: AdminStats }> {

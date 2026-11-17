@@ -75,7 +75,7 @@ export default function SiteFooter() {
           <div className="hk-book">
             <h4><CalendarDays className="h-5 w-5" /> Book Appointment</h4>
             <p>Take the first step towards a pain-free life.</p>
-            <button type="button" className="hk-btn white sm" onClick={() => navigate('/pricing')}>
+            <button type="button" className="hk-btn white sm" onClick={() => navigate('/book')}>
               Book Now <ArrowRight className="h-4 w-4" />
             </button>
           </div>

@@ -81,7 +81,7 @@ body.hm-console { background-color: var(--bg); }
 }
 .hmc-brand { display: flex; align-items: center; gap: 10px; min-width: 0; color: inherit; }
 .hmc-brand svg { flex-shrink: 0; }
-.hmc-brand b { display: block; font: 700 21px/1.05 var(--head); letter-spacing: -0.02em; color: var(--forest-deep); }
+.hmc-brand b { display: block; font: 800 21px/1.05 var(--head); letter-spacing: -0.02em; color: var(--fg); }
 .hmc-brand b em { font-style: normal; color: var(--orange); }
 .hmc-brand small {
   display: inline-flex; align-items: center; gap: 6px; margin-top: 4px;
