@@ -1,15 +1,16 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
-import { Activity, ChevronDown, LogOut } from 'lucide-react';
+import { ChevronDown, LogOut } from 'lucide-react';
 import PanelLockToggle from '@/components/common/PanelLockToggle';
+import { LotusMark } from '@/components/common/BrandLogo';
 
 /**
  * Shared chrome for every signed-in console (admin, doctor, reception,
- * patient), in the Mappingg dashboard design: a white top bar with the brand
- * and an account chip, then a sticky row of pill tabs. Content renders through
- * `children`.
+ * patient), in the same design as the public home page: a frosted top bar
+ * with the lotus logo and an account chip, then a sticky row of teal pill
+ * tabs. Content renders through `children`.
  *
  * The `.hm-console` class (src/styles/mappingg-theme.css) turns the screens'
- * older dark-theme utilities into the light Mappingg look. It is also put on
+ * older dark-theme utilities into the light HealingMonk look. It is also put on
  * <body> while a console is open so modals portalled there match.
  */
 export default function DashboardShell({
@@ -62,9 +63,7 @@ export default function DashboardShell({
     <div className="hm-console relative min-h-screen">
       <header className="hmc-top">
         <div className="hmc-brand">
-          <span className="hmc-mark" aria-hidden="true">
-            <Activity className="h-5 w-5" />
-          </span>
+          <LotusMark size={42} />
           <div className="min-w-0">
             <b>
               Healing<em>Monk</em>
@@ -118,5 +117,5 @@ export default function DashboardShell({
   );
 }
 
-/** Shared nav-tab styling for console nav rows (Mappingg pill tabs). */
+/** Shared nav-tab styling for console nav rows (home-page teal pill tabs). */
 export const dashNavCls = ({ isActive }: { isActive: boolean }) => `hmc-tab${isActive ? ' active' : ''}`;

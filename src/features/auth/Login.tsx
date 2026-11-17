@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Activity,
   Mail,
   Lock,
   User as UserIcon,
@@ -15,7 +14,17 @@ import {
 import { useAuth } from '@/store/auth.store';
 import { Role } from '@/services/api';
 import BodyVRMHero from '@/components/common/BodyVRMHero';
-import AiBackdrop from '@/components/common/AiBackdrop';
+import BrandLogo, { LotusMark } from '@/components/common/BrandLogo';
+
+// Warm the chosen panel's code while the user types their password, so the
+// dashboard appears instantly after a successful sign-in (same chunks the
+// router lazy-loads — webpack dedupes them).
+const PREFETCH: Record<Role, () => Promise<unknown>> = {
+  admin: () => import('@/features/admin/AdminApp'),
+  doctor: () => import('@/features/doctor/DoctorApp'),
+  reception: () => import('@/features/reception/ReceptionApp'),
+  patient: () => import('@/features/patient/PatientHome'),
+};
 
 interface Props {
   /** Return to the public home page. Defaults to navigating to "/". */
@@ -42,8 +51,8 @@ const PORTALS: Portal[] = [
     label: 'User / Patient',
     desc: 'View your reports, scans & appointments',
     icon: <UserIcon className="h-6 w-6" />,
-    accent: 'from-emerald-500 to-teal-500',
-    ring: 'hover:border-emerald-400/50 hover:shadow-emerald-500/20',
+    accent: 'from-[#138a86] to-[#0b4f57]',
+    ring: 'hover:border-[#bfe3d6] hover:shadow-[#0d6b6e]/20',
     canSignup: true,
   },
   {
@@ -51,24 +60,24 @@ const PORTALS: Portal[] = [
     label: 'Doctor',
     desc: 'Assess patients & manage reports',
     icon: <Stethoscope className="h-6 w-6" />,
-    accent: 'from-cyan-500 to-sky-500',
-    ring: 'hover:border-cyan-400/50 hover:shadow-cyan-500/20',
+    accent: 'from-[#2bb673] to-[#1a8a5a]',
+    ring: 'hover:border-[#bfe3d6] hover:shadow-[#1fa86b]/20',
   },
   {
     role: 'reception',
     label: 'Reception',
     desc: 'Appointments, billing & collections',
     icon: <Headset className="h-6 w-6" />,
-    accent: 'from-violet-500 to-fuchsia-500',
-    ring: 'hover:border-violet-400/50 hover:shadow-violet-500/20',
+    accent: 'from-[#2a4a72] to-[#0f2340]',
+    ring: 'hover:border-[#c9d5e6] hover:shadow-[#0f2340]/20',
   },
   {
     role: 'admin',
     label: 'Super Admin',
     desc: 'Full clinic console & user management',
     icon: <ShieldCheck className="h-6 w-6" />,
-    accent: 'from-amber-500 to-orange-500',
-    ring: 'hover:border-amber-400/50 hover:shadow-amber-500/20',
+    accent: 'from-[#ff9a1f] to-[#f57c00]',
+    ring: 'hover:border-[#ffd9b0] hover:shadow-[#f57c00]/20',
   },
 ];
 
@@ -94,6 +103,7 @@ export default function Login({ onBack }: Props) {
 
   const choose = (p: Portal) => {
     setPortal(p);
+    PREFETCH[p.role]().catch(() => {});
     setMode('signin');
     setError('');
   };
@@ -127,38 +137,40 @@ export default function Login({ onBack }: Props) {
   };
 
   return (
-    <div className="relative min-h-screen bg-[#f4f6f4] text-[#1b2a24] lg:grid lg:grid-cols-2">
-      <AiBackdrop />
-
-      {/* ---------- LEFT: dark AI-scan panel (desktop) ---------- */}
-      <aside className="scan-hero scan-grid relative hidden flex-col justify-between overflow-hidden p-10 lg:flex">
-        <button
-          onClick={back}
-          className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-slate-300 transition-colors hover:text-white"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to site
-        </button>
+    <div className="hm-console relative min-h-screen lg:grid lg:grid-cols-2">
+      {/* ---------- LEFT: teal brand panel (desktop) — the home page banner ---------- */}
+      <aside className="hmc-login-aside sticky top-0 hidden h-screen flex-col justify-between p-10 lg:flex">
+        <div className="flex items-center justify-between gap-4">
+          <BrandLogo />
+          <button
+            onClick={back}
+            className="inline-flex w-fit items-center gap-1.5 rounded-full border border-white/40 px-4 py-2 text-sm font-medium !text-white transition-colors hover:!bg-white/10"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back to site
+          </button>
+        </div>
 
         <div className="relative flex flex-1 flex-col items-center justify-center py-8">
           <BodyVRMHero className="max-w-xs" />
         </div>
 
         <div>
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-teal-200">
-            <ScanLine className="h-3.5 w-3.5 text-emerald-400" /> HealingMonk Clinic OS
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-[rgba(255,255,255,0.15)] px-3 py-1 text-xs font-semibold !text-white">
+            <ScanLine className="h-3.5 w-3.5 !text-[#ffb35c]" /> HealingMonk Clinic OS
           </div>
-          <p className="max-w-sm text-lg font-semibold leading-snug text-white">
+          <p className="max-w-sm font-[Poppins] text-2xl font-bold leading-snug !text-white">
             One workspace for your scans, reports, appointments &amp; payments.
           </p>
-          <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-400">
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" /> Secure, role-based access for patients &amp; staff
+          <p className="mt-3 inline-flex items-center gap-1.5 text-sm !text-[#d8f1ec]">
+            <ShieldCheck className="h-4 w-4 !text-[#ffb35c]" /> Secure, role-based access for patients &amp; staff
           </p>
         </div>
       </aside>
 
       {/* ---------- RIGHT ---------- */}
-      <div className="hm-console relative z-10 flex min-h-screen flex-col lg:min-h-0">
-        <div className="px-4 py-4 lg:hidden">
+      <div className="relative z-10 flex min-h-screen flex-col">
+        <div className="flex items-center justify-between gap-3 px-4 py-4 lg:hidden">
+          <BrandLogo />
           <button
             onClick={back}
             className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-300 hover:text-white"
@@ -172,10 +184,10 @@ export default function Login({ onBack }: Props) {
             /* ---- Portal picker ---- */
             <div className="hm-page-enter w-full max-w-md">
               <div className="mb-8 text-center">
-                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/30">
-                  <Activity className="h-7 w-7 text-white" />
+                <div className="mx-auto mb-3 flex w-fit items-center justify-center">
+                  <LotusMark size={60} />
                 </div>
-                <h1 className="text-2xl font-bold tracking-tight text-white">Choose your login</h1>
+                <h1 className="text-[28px] font-bold tracking-tight text-white">Choose your login</h1>
                 <p className="mt-1 text-sm text-slate-400">Select the portal that matches your role.</p>
               </div>
 
@@ -184,7 +196,7 @@ export default function Login({ onBack }: Props) {
                   <button
                     key={p.role}
                     onClick={() => choose(p)}
-                    className={`glass-dark group flex flex-col items-start gap-3 rounded-2xl p-5 text-left shadow-lg shadow-black/20 transition-all hover:-translate-y-0.5 ${p.ring}`}
+                    className={`glass-dark group flex flex-col items-start gap-3 rounded-[22px] p-5 text-left transition-all duration-200 hover:-translate-y-1 hover:shadow-xl ${p.ring}`}
                   >
                     <span
                       className={`flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${p.accent} text-white shadow-md transition-transform group-hover:scale-110`}
@@ -192,7 +204,7 @@ export default function Login({ onBack }: Props) {
                       {p.icon}
                     </span>
                     <span>
-                      <span className="block font-semibold text-white">{p.label}</span>
+                      <span className="block font-[Poppins] font-semibold text-white">{p.label}</span>
                       <span className="mt-0.5 block text-xs leading-snug text-slate-400">{p.desc}</span>
                     </span>
                     <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-teal-300">
@@ -204,7 +216,7 @@ export default function Login({ onBack }: Props) {
             </div>
           ) : (
             /* ---- Themed form for the chosen portal ---- */
-            <div className="hm-page-enter glass-dark w-full max-w-sm rounded-3xl p-8 shadow-2xl shadow-black/40">
+            <div className="hm-page-enter glass-dark w-full max-w-sm rounded-[26px] p-8">
               <button
                 onClick={() => {
                   setPortal(null);
@@ -271,11 +283,7 @@ export default function Login({ onBack }: Props) {
                   </div>
                 )}
 
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className={`hm-lift w-full rounded-lg bg-gradient-to-r ${portal.accent} px-4 py-2.5 font-semibold text-white shadow-lg disabled:opacity-60`}
-                >
+                <button type="submit" disabled={loading} className="hmc-btn w-full">
                   {loading ? 'Please wait…' : mode === 'signup' ? 'Sign up' : 'Sign in'}
                 </button>
               </form>
@@ -287,7 +295,7 @@ export default function Login({ onBack }: Props) {
                       setMode(mode === 'signup' ? 'signin' : 'signup');
                       setError('');
                     }}
-                    className="text-sm font-medium text-emerald-400 hover:text-emerald-300"
+                    className="text-sm font-semibold text-[color:var(--forest)] hover:text-[color:var(--orange-2)]"
                   >
                     {mode === 'signup'
                       ? 'Already have an account? Sign in'
@@ -308,7 +316,7 @@ export default function Login({ onBack }: Props) {
 }
 
 const inputCls =
-  'w-full pl-10 pr-4 py-2 rounded-lg border border-white/15 bg-white/5 text-white placeholder-slate-500 focus:ring-2 focus:ring-emerald-400/60 focus:border-transparent transition-shadow';
+  'w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/15 bg-white/5 text-white placeholder-slate-500 focus:ring-2 focus:ring-emerald-400/60 focus:border-transparent transition-shadow';
 
 function Field({
   icon,

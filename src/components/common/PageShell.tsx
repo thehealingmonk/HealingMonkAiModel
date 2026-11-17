@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Activity } from 'lucide-react';
+import { LotusMark } from '@/components/common/BrandLogo';
 
 /**
  * The shared light "soft emerald" backdrop used across the public assessment
@@ -19,21 +19,26 @@ export default function PageShell({
   maxWidth?: string;
 }) {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#f6faf8] text-slate-900">
-      {/* Ambient soft glows — light and airy, not heavy. */}
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-40 left-1/2 h-[480px] w-[480px] -translate-x-1/2 rounded-full bg-emerald-300/25 blur-[120px]" />
-        <div className="absolute top-1/3 -left-32 h-[360px] w-[360px] rounded-full bg-teal-200/30 blur-[120px]" />
-        <div className="absolute bottom-0 right-0 h-[420px] w-[420px] rounded-full bg-cyan-200/25 blur-[140px]" />
-      </div>
+    <div className="relative min-h-screen overflow-hidden bg-[#f4f9f8] text-[#0f2340]">
+      {/* Ambient soft glows — the home page's teal / mint tints. Plain radial
+          gradients (no blur filter) so low-end phones scroll smoothly. */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(45% 35% at 50% 0%, rgba(19,138,134,0.14), transparent 70%),' +
+            'radial-gradient(35% 30% at 0% 40%, rgba(31,168,107,0.10), transparent 70%),' +
+            'radial-gradient(40% 35% at 100% 100%, rgba(247,147,30,0.08), transparent 70%)',
+        }}
+      />
 
       {/* Brand header */}
       <header className={`relative z-10 mx-auto flex ${maxWidth} items-center justify-between px-6 py-5`}>
         <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-sm shadow-emerald-500/30">
-            <Activity className="h-5 w-5 text-white" />
-          </div>
-          <span className="text-lg font-semibold tracking-tight text-slate-900">HealingMonk</span>
+          <LotusMark size={38} />
+          <span className="font-[Poppins] text-xl font-bold tracking-tight text-[#0b4f57]">
+            Healing<span className="text-[#f7931e]">Monk</span>
+          </span>
         </div>
         {step && (
           <span className="rounded-full border border-slate-200 bg-white/70 px-3 py-1 text-xs font-medium text-slate-500 backdrop-blur">
